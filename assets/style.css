@@ -1,0 +1,543 @@
+/* Hide admin bar but keep it more specific */
+body #wpadminbar {
+  display: none !important;
+}
+
+/* Stick toggle switch to the top-right */
+#voice-toggle-container {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  padding: 8px 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Replace the checkbox switch styles with these new toggle styles */
+.toggle {
+  width: 50px;
+  height: 25px;
+  border-radius: 25px;
+  background-color: #ccc;
+  position: relative;
+  cursor: pointer;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 10px;
+  transition: background-color 0.3s;
+}
+
+.toggle.active {
+  background-color: #007bff;
+}
+
+.toggle-handle {
+  width: 21px;
+  height: 21px;
+  background-color: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+}
+
+.toggle.active .toggle-handle {
+  transform: translateX(25px);
+}
+
+/* Modal/Popup Styles */
+#voice-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.voice-popup-content {
+  background: white;
+  padding: 20px;
+  border-radius: 15px;
+  position: relative;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 300px;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  width: 90%;
+}
+
+#close-voice,
+#close-text,
+#close-dev,
+#close-popup {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #666;
+  padding: 5px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+#close-voice:hover,
+#close-text:hover,
+#close-dev:hover,
+#close-popup:hover {
+  opacity: 1;
+}
+
+#mic-button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #007bff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20px auto;
+  transition: all 0.3s ease;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+#mic-button:hover {
+  transform: scale(1.05);
+}
+
+#mic-button.listening {
+  background-color: #dc3545;
+  transform: scale(1.1);
+}
+
+#mic-button img {
+  width: 40px;
+  height: 40px;
+  filter: brightness(0) invert(1);
+  position: relative;
+  z-index: 2;
+}
+
+#mic-button span {
+  display: none; /* Hide the text */
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+  }
+}
+
+#content-display::-webkit-scrollbar {
+  width: 8px;
+}
+
+#content-display::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+#content-display::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+#content-display::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+#transcript-container {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  min-height: 60px;
+  max-height: 150px;
+  overflow-y: auto;
+  text-align: left;
+  font-size: 14px;
+}
+
+#content-display {
+  max-height: 150px !important;
+  font-size: 10px !important;
+  margin-top: 10px !important;
+}
+
+.voice-popup-content ol {
+  padding-left: 20px;
+  margin: 10px 0;
+  color: #555;
+}
+
+.voice-popup-content ol li {
+  margin-bottom: 8px;
+}
+
+.voice-popup-content p {
+  margin-bottom: 5px;
+  color: #333;
+}
+
+/* Add these styles for the transcript */
+.transcript-line {
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.transcript-line strong {
+  color: #007bff; /* User color */
+  margin-right: 5px;
+}
+
+.transcript-line:nth-child(even) strong {
+  color: #28a745; /* AI color */
+}
+
+.button-container {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+}
+
+#stop-speech {
+  padding: 8px 16px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: none;
+}
+
+#stop-speech:hover {
+  background-color: #c82333;
+}
+
+/* Interaction Chooser */
+#interaction-chooser {
+  position: fixed;
+  top: 55px;
+  right: 10px;
+  z-index: 9998;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+  display: none;
+  width: 200px;
+  border: 1px solid #e0e0e0;
+}
+
+.interaction-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.interaction-option:hover {
+  background-color: #f5f5f5;
+}
+
+.interaction-option img {
+  width: 24px;
+  height: 24px;
+}
+
+/* Interface Panels */
+.interface-panel {
+  position: fixed;
+  top: 55px;
+  right: 10px;
+  z-index: 9997;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 500px;
+  display: none;
+  border: 1px solid #e0e0e0;
+  padding: 15px;
+}
+
+.interface-content {
+  padding: 15px;
+}
+
+/* Dev Panel */
+#dev-panel {
+  position: fixed;
+  top: 60px;
+  left: 10px;
+  z-index: 9996;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 300px;
+  max-height: 400px; /* Set maximum height */
+  display: none;
+  padding: 15px;
+  overflow: auto; /* Enable scrolling */
+}
+
+/* Style the JSON container inside dev panel */
+#json-container {
+  width: 100%;
+  overflow: auto;
+}
+
+#json-container pre {
+  margin: 0;
+  white-space: pre-wrap; /* Preserve whitespace and wrap */
+  word-wrap: break-word; /* Break long words */
+  background: #f5f5f5;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* Add scrollbar styling */
+#dev-panel::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#dev-panel::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+#dev-panel::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+#dev-panel::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+#dev-toggle {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 9999;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  padding: 8px 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Recording waves animation */
+.voice-status-container {
+  text-align: center;
+  margin: 5px 0;
+  height: 30px;
+}
+
+.recording-waves {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+}
+
+.recording-waves.active {
+  display: flex;
+}
+
+.wave {
+  width: 3px;
+  height: 20px;
+  background: #007bff;
+  animation: wave 1s ease-in-out infinite;
+  border-radius: 2px;
+}
+
+.wave:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.wave:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.ai-speaking-indicator {
+  display: none;
+  color: #28a745;
+  font-weight: 500;
+}
+
+.ai-speaking-indicator.active {
+  display: block;
+}
+
+/* Chat Interface Styling */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 400px;
+  width: 450px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f8f9fa;
+}
+
+.chat-input-container {
+  display: flex;
+  padding: 20px;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  gap: 15px;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 15px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 25px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.3s;
+  min-height: 50px;
+}
+
+#chat-input:focus {
+  border-color: #007bff;
+}
+
+#send-message {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  padding: 0 30px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: background-color 0.3s;
+  height: 50px;
+}
+
+#send-message:hover {
+  background: #0056b3;
+}
+
+/* Message Styles */
+.message {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.message.user {
+  align-items: flex-end;
+}
+
+.message.ai {
+  align-items: flex-start;
+}
+
+.message-content {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 15px;
+  font-size: 14px;
+  line-height: 1.4;
+  position: relative;
+  min-height: 20px;
+}
+
+.message.user .message-content {
+  background: #007bff;
+  color: white;
+  border-bottom-right-radius: 5px;
+}
+
+.message.ai .message-content {
+  background: #e9ecef;
+  color: #212529;
+  border-bottom-left-radius: 5px;
+}
+
+.message-time {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 5px;
+}
+
+/* Add loading animation for AI messages */
+.message.ai .message-content.loading {
+  position: relative;
+  min-width: 40px;
+}
+
+.message.ai .message-content.loading::after {
+  content: "...";
+  animation: loading 1.5s infinite;
+  position: absolute;
+  left: 12px;
+}
+
+@keyframes loading {
+  0% {
+    content: ".";
+  }
+  33% {
+    content: "..";
+  }
+  66% {
+    content: "...";
+  }
+}
+
+/* Remove the waves and AI speaking indicator */
+.recording-waves,
+.ai-speaking-indicator {
+  display: none !important;
+}
