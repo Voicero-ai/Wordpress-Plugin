@@ -13,20 +13,20 @@ if (!defined('ABSPATH')) {
 /* ------------------------------------------------------------------------
    1. ADMIN PAGE TO DISPLAY PAGES IN JSON
 ------------------------------------------------------------------------ */
-add_action('admin_menu', 'my_first_plugin_add_admin_page');
-function my_first_plugin_add_admin_page() {
+add_action('admin_menu', 'ai_website_add_admin_page');
+function ai_website_add_admin_page() {
     add_menu_page(
         'AI-Website',         // Page <title>
         'AI-Website',         // Menu label
-        'manage_options',         // Capability required
+        'manage_options',     // Capability required
         'ai-website-admin',   // Menu slug (unique ID)
-        'my_first_plugin_render_admin_page', // Callback that renders the page
-        'dashicons-analytics',    // Icon (dashicons)
-        100                       // Position in the menu
+        'ai_website_render_admin_page', // Callback that renders the page
+        'dashicons-analytics',// Icon (dashicons)
+        100                   // Position in the menu
     );
 }
 
-function my_first_plugin_render_admin_page() {
+function ai_website_render_admin_page() {
     // Check if refresh button was clicked
     if (isset($_POST['refresh_content']) && check_admin_referer('refresh_content_nonce')) {
         // We'll add a success message
@@ -59,10 +59,18 @@ function my_first_plugin_render_admin_page() {
     // Format pages
     $formatted_pages = [];
     foreach ($all_pages as $page) {
+        // Clean up the content by:
+        // 1. Removing extra whitespace and newlines
+        // 2. Converting multiple spaces to single space
+        // 3. Trimming whitespace from start/end
+        $clean_content = wp_strip_all_tags($page->post_content);  // First strip HTML
+        $clean_content = preg_replace('/\s+/', ' ', $clean_content);  // Replace multiple spaces/newlines with single space
+        $clean_content = trim($clean_content);  // Remove leading/trailing whitespace
+
         $formatted_pages[] = [
             'id'      => $page->ID,
             'title'   => $page->post_title,
-            'content' => wp_strip_all_tags($page->post_content),
+            'content' => $clean_content,
             'url'     => get_permalink($page->ID),
         ];
     }
@@ -70,10 +78,14 @@ function my_first_plugin_render_admin_page() {
     // Format posts
     $formatted_posts = [];
     foreach ($all_posts as $post) {
+        $clean_content = wp_strip_all_tags($post->post_content);
+        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+        $clean_content = trim($clean_content);
+
         $formatted_posts[] = [
             'id'      => $post->ID,
             'title'   => $post->post_title,
-            'content' => wp_strip_all_tags($post->post_content),
+            'content' => $clean_content,
             'url'     => get_permalink($post->ID),
         ];
     }
@@ -81,6 +93,14 @@ function my_first_plugin_render_admin_page() {
     // Format products
     $formatted_products = [];
     foreach ($all_products as $product) {
+        $clean_description = wp_strip_all_tags($product->get_description());
+        $clean_description = preg_replace('/\s+/', ' ', $clean_description);
+        $clean_description = trim($clean_description);
+
+        $clean_short_description = wp_strip_all_tags($product->get_short_description());
+        $clean_short_description = preg_replace('/\s+/', ' ', $clean_short_description);
+        $clean_short_description = trim($clean_short_description);
+
         $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'names']);
         
         $attributes = [];
@@ -97,8 +117,8 @@ function my_first_plugin_render_admin_page() {
             'price'       => $product->get_price(),
             'sale_price'  => $product->get_sale_price(),
             'regular_price' => $product->get_regular_price(),
-            'content'     => wp_strip_all_tags($product->get_description()),
-            'short_description' => wp_strip_all_tags($product->get_short_description()),
+            'content'     => $clean_description,
+            'short_description' => $clean_short_description,
             'link'        => get_permalink($product->get_id()),
             'image'       => wp_get_attachment_url($product->get_image_id()),
             'categories'  => $categories,
@@ -443,23 +463,6 @@ function my_first_plugin_add_toggle_button() {
                     <button id="send-message">Send</button>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Dev Panel -->
-    <div id="dev-panel">
-        <div class="dev-panel-content">
-            <button id="close-dev">×</button>
-            <h3>Development Data</h3>
-            <div id="json-container"></div>
-        </div>
-    </div>
-
-    <!-- Dev Toggle -->
-    <div id="dev-toggle">
-        <span>Show Dev Data</span>
-        <div class="toggle">
-            <div class="toggle-handle"></div>
         </div>
     </div>
 
