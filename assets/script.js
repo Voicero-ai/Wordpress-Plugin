@@ -79,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       voiceInterface.style.display = "none";
       textInterface.style.display = "none";
     } else {
-      // If turned OFF
+      // If turned OFF - only cleanup if we're actually stopping everything
       console.log("Turning off main toggle, cleaning up...");
 
       // Hide interfaces
@@ -87,65 +87,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       voiceInterface.style.display = "none";
       textInterface.style.display = "none";
 
-      // Stop everything if we are currently listening
+      // Only cleanup if we were actually listening
       if (isListening) {
-        // Stop recorder
-        if (recorder) {
-          try {
-            recorder.stopRecording();
-            await new Promise((resolve) => {
-              recorder.destroy(() => {
-                console.log("Recorder destroyed");
-                resolve();
-              });
-            });
-            recorder = null;
-          } catch (e) {
-            console.error("Error stopping recorder:", e);
-          }
-        }
-
-        // Stop recognition
-        if (recognition) {
-          try {
-            recognition.stop();
-            recognition = null;
-            console.log("Recognition stopped");
-          } catch (e) {
-            console.error("Error stopping recognition:", e);
-          }
-        }
-
-        // Close audio context
-        if (audioContext) {
-          try {
-            await audioContext.close();
-            audioContext = null;
-            console.log("Audio context closed");
-          } catch (e) {
-            console.error("Error closing audio context:", e);
-          }
-        }
-
-        // Stop media stream
-        if (mediaStream) {
-          mediaStream.getTracks().forEach((track) => {
-            track.stop();
-            console.log("Media track stopped");
-          });
-          mediaStream = null;
-        }
-
-        // Reset state
-        isListening = false;
-        micButton.classList.remove("listening");
-        micButton.disabled = false;
-        micButton.style.opacity = "1";
-
-        // Full cleanup
         cleanupRecording(true);
       }
-
       console.log("Main toggle cleanup complete");
     }
   });
@@ -180,8 +125,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("Starting new recording session");
         await startRecording();
       } else {
-        console.log("Stopping current recording session");
-        cleanupRecording(false);
+        console.log("Mic already active - ignoring click");
+        // Remove cleanupRecording() call here - we don't want to stop an active session
       }
     } catch (error) {
       console.error("Error in mic button handler:", error);
@@ -198,6 +143,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("close-voice").addEventListener("click", () => {
     voiceInterface.style.display = "none";
     mainToggle.classList.remove("active");
+    // Only cleanup if we're actually stopping the voice interface
     cleanupRecording(true);
   });
 
@@ -205,6 +151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("close-text").addEventListener("click", () => {
     textInterface.style.display = "none";
     mainToggle.classList.remove("active");
+    // No need to call cleanupRecording() for text interface
   });
 
   /* Voice popup toggle (if you have a popup to show site content) */
@@ -256,7 +203,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (e.target === popup) {
         popup.style.display = "none";
         if (voicePopupToggle) voicePopupToggle.classList.remove("active");
-        cleanupRecording();
+        // Remove cleanupRecording() - don't stop recording just because popup closed
       }
     });
   }
@@ -266,7 +213,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     closeButton.addEventListener("click", () => {
       popup.style.display = "none";
       if (voicePopupToggle) voicePopupToggle.classList.remove("active");
-      cleanupRecording();
+      // Remove cleanupRecording() - don't stop recording just because popup closed
     });
   }
 
@@ -405,6 +352,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       const aiResponse = parsed.response;
       const aiRedirect = parsed.redirect_url;
 
+      // Display AI response in transcript
+      const aiResponseElement = document.querySelector(
+        ".transcript-line.ai-response span"
+      );
+      if (aiResponseElement) {
+        aiResponseElement.textContent = aiResponse;
+      }
+
       // 4) Display the AI response and send to TTS
       await sendToTTS(aiResponse);
 
@@ -412,12 +367,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (typeof aiRedirect === "string" && aiRedirect.trim()) {
         console.log("➡️ [sendToGemini] Redirecting to:", aiRedirect);
         window.location.href = aiRedirect;
-      }
+      } else {
+        // Only auto-restart if we're not redirecting
+        if (mainToggle.classList.contains("active")) {
+          console.log(
+            "✅ [sendToGemini] TTS done. Preparing to restart mic..."
+          );
 
-      // If the user hasn't turned AI off, auto-restart mic
-      if (mainToggle.classList.contains("active") && isListening) {
-        console.log("✅ [sendToGemini] TTS done. Auto-restart mic...");
-        startRecording();
+          // Just reset UI state
+          micButton.classList.remove("listening");
+          recordingWaves.classList.remove("active");
+
+          // Small delay before starting new recording
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          try {
+            console.log("🎤 [sendToGemini] Starting new recording session...");
+            await startRecording();
+            console.log("🎤 [sendToGemini] Mic restarted successfully");
+          } catch (error) {
+            console.error("❌ [sendToGemini] Error restarting mic:", error);
+            cleanupRecording();
+          }
+        }
       }
     } catch (error) {
       console.error("❌ [sendToGemini] Error:", error);
@@ -425,28 +397,99 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  /****************************************************************************
+   * script.js (FIXED SECTION ONLY)
+   ****************************************************************************/
+
+  /**
+   * stopRecording()
+   * Called by silence detection or manual triggers
+   */
+  function stopRecording() {
+    console.log("🛑 [Recording] Stopping...", {
+      recorder: !!recorder,
+      isListening,
+      recognition: !!recognition,
+      audioContextState: audioContext?.state,
+    });
+
+    if (!recorder) {
+      console.warn("stopRecording called but recorder does not exist.");
+      return;
+    }
+
+    // Set state first
+    isListening = false;
+
+    // Stop RecordRTC first and wait for it
+    recorder.stopRecording(async () => {
+      console.log("🛑 [Recording] Stopped, sending audio to server...");
+      const audioBlob = recorder.getBlob();
+      console.log("📦 [Recording] Audio blob size:", audioBlob.size);
+
+      try {
+        // Send audio before any cleanup
+        await sendAudioToServer(audioBlob);
+      } catch (error) {
+        console.error("Error sending audio to server:", error);
+      }
+
+      // Don't cleanup here - let startRecording handle it
+    });
+
+    // Stop recognition last
+    if (recognition) {
+      try {
+        recognition.stop();
+        console.log("🎤 [Recording] Recognition stopped");
+      } catch (e) {
+        console.error("[Recording] Error stopping recognition:", e);
+      }
+    }
+  }
+
   /**
    * startRecording()
-   * Gets user mic, starts RecordRTC, sets up speech recognition & silence detection
    */
   async function startRecording() {
     console.log("🎤 [Recording] Starting...");
     try {
+      // Reset state first
+      isListening = false;
+
+      // Clean up any existing instances - with small delays between operations
+      if (recognition) {
+        try {
+          recognition.stop();
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        } catch (e) {
+          console.error("[Recording] Error stopping old recognition:", e);
+        }
+        recognition = null;
+      }
+
+      if (audioContext) {
+        await audioContext.close();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        audioContext = null;
+      }
+
+      if (recorder) {
+        recorder.destroy();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        recorder = null;
+      }
+
+      // Update UI
       micButton.classList.add("listening");
       recordingWaves.classList.add("active");
       emptyTranscriptionCount = 0;
 
-      if (recorder) {
-        recorder.destroy();
-        recorder = null;
-      }
-
-      // Ask for mic access
+      // Get fresh mic access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log("🎤 [Recording] Got media stream");
       mediaStream = stream;
 
-      // Create a new RecordRTC instance
+      // Create new RecordRTC instance
       recorder = new RecordRTC(stream, {
         type: "audio",
         mimeType: "audio/wav",
@@ -455,39 +498,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         numberOfAudioChannels: 1,
       });
 
+      // Small delay before starting recording
+      await new Promise((resolve) => setTimeout(resolve, 50));
       recorder.startRecording();
       console.log("🎤 [Recording] RecordRTC started");
 
-      // Setup webkitSpeechRecognition
+      // Setup webkitSpeechRecognition (if supported)
       if ("webkitSpeechRecognition" in window) {
-        if (recognition) {
-          try {
-            recognition.stop();
-            recognition = null;
-          } catch (e) {
-            console.error("[Recording] Error stopping old recognition:", e);
-          }
-        }
-
-        // Create a new recognition instance
+        // Create fresh recognition instance
         recognition = new webkitSpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
         setupRecognitionHandlers(recognition);
 
-        try {
-          isListening = true;
-          await recognition.start();
-          console.log("🎤 [Recording] Recognition started");
+        // Now we are actively listening
+        isListening = true;
 
-          // Setup silence detection
-          setupSilenceDetection(stream);
-          console.log("🎤 [Recording] Setup complete");
-        } catch (e) {
-          console.error("[Recording] Error in recognition setup:", e);
-          cleanupRecording();
-          throw e;
-        }
+        // Small delay before starting recognition
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await recognition.start();
+        console.log("🎤 [Recording] Recognition started");
+
+        // Setup silence detection
+        setupSilenceDetection(stream);
+        console.log("🎤 [Recording] Setup complete");
       }
     } catch (error) {
       console.error("❌ [Recording] Error starting recording:", error);
@@ -495,44 +529,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       cleanupRecording();
       throw error;
     }
-  }
-
-  /**
-   * stopRecording()
-   * Called by silence detection or manual triggers
-   */
-  function stopRecording() {
-    console.log("🛑 [Recording] Stopping...");
-    if (!recorder || !isListening) return;
-
-    isListening = false;
-
-    if (recognition) {
-      try {
-        recognition.stop();
-      } catch (e) {
-        console.error("[Recording] Error stopping recognition:", e);
-      }
-      recognition = null;
-    }
-
-    // Stop RecordRTC
-    recorder.stopRecording(async () => {
-      console.log("🛑 [Recording] Stopped, sending audio to server...");
-      const audioBlob = recorder.getBlob();
-      await sendAudioToServer(audioBlob);
-
-      // Cleanup
-      if (recorder) {
-        recorder.destroy();
-        recorder = null;
-      }
-      if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-      }
-      micButton.classList.remove("listening");
-    });
   }
 
   /**
@@ -632,19 +628,72 @@ document.addEventListener("DOMContentLoaded", async () => {
    * 6) SILENCE DETECTION
    **************************************************************************/
   function setupSilenceDetection(stream) {
-    audioContext = new AudioContext();
-    analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(stream);
+    console.log("🎤 [Silence] Setting up detection...");
 
-    analyser.fftSize = 512;
-    dataArray = new Uint8Array(analyser.fftSize);
+    // Only setup if we're actually listening
+    if (!isListening) {
+      console.log("🎤 [Silence] Skipping setup - not listening");
+      return;
+    }
 
-    source.connect(analyser);
-    checkSilence();
+    // Close any existing audio context
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+
+    try {
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 512;
+      dataArray = new Uint8Array(analyser.fftSize);
+
+      source.connect(analyser);
+
+      // Clear any existing silence timer
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
+
+      console.log("🎤 [Silence] Starting detection loop");
+      // Start checking silence after a short delay to avoid false triggers
+      setTimeout(() => {
+        if (isListening && recorder && recognition) {
+          checkSilence();
+        }
+      }, 500);
+    } catch (error) {
+      console.error("❌ [Silence] Setup error:", error);
+    }
   }
 
   function checkSilence() {
-    if (!isListening) return;
+    // More thorough state check
+    if (
+      !isListening ||
+      !analyser ||
+      !audioContext ||
+      !recorder ||
+      !recognition
+    ) {
+      console.log("🔇 [Silence] Detection stopped - missing required state", {
+        isListening,
+        hasAnalyser: !!analyser,
+        hasAudioContext: !!audioContext,
+        hasRecorder: !!recorder,
+        hasRecognition: !!recognition,
+      });
+      return;
+    }
+
+    // Check audio context state
+    if (audioContext.state !== "running") {
+      console.log("🔇 [Silence] Audio context not running");
+      return;
+    }
 
     analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
@@ -657,28 +706,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (rms < SILENCE_THRESHOLD) {
       // Start a timer if not already running
       if (!silenceTimer) {
+        console.log("🔇 [Silence] Detected, starting timer...");
         silenceTimer = setTimeout(() => {
-          console.log("🔇 [Silence Detection] Stopping after silence...");
-          stopRecording();
+          // Double check state before stopping
+          if (isListening && recorder && recognition) {
+            console.log("🔇 [Silence] Timer complete, stopping recording...");
+            stopRecording();
+          } else {
+            console.log(
+              "🔇 [Silence] Timer complete but state changed - not stopping"
+            );
+          }
         }, SILENCE_DURATION);
       }
     } else {
       // If there's noise, reset timer
       if (silenceTimer) {
+        console.log("🔊 [Silence] Noise detected, resetting timer");
         clearTimeout(silenceTimer);
         silenceTimer = null;
       }
     }
 
-    // Keep checking
-    requestAnimationFrame(checkSilence);
+    // Only continue checking if everything is still valid
+    if (
+      isListening &&
+      recorder &&
+      recognition &&
+      audioContext?.state === "running"
+    ) {
+      requestAnimationFrame(checkSilence);
+    } else {
+      console.log("🔇 [Silence] Detection loop ended - state changed");
+    }
   }
 
   /**************************************************************************
    * 7) CLEANUP
    **************************************************************************/
   function cleanupRecording(clearHistory = false) {
-    console.log("♻️ [Cleanup] Recording...");
+    console.trace("🟠 [Cleanup] Called from:");
+    console.log("♻️ [Cleanup] Recording...", {
+      clearHistory,
+      isListening,
+      hasRecorder: !!recorder,
+      hasRecognition: !!recognition,
+      hasAudioContext: !!audioContext,
+    });
+
     isListening = false;
 
     micButton.classList.remove("listening");
@@ -909,6 +984,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let isRestarting = false;
 
     recognitionInstance.onresult = (event) => {
+      if (!isListening) return; // Skip if we're not supposed to be listening
+
       interimTranscript = "";
       let finalTranscript = "";
 
@@ -920,68 +997,101 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // Show partial + final transcripts
-      transcriptContainer.innerHTML = "";
-
-      const lastAIMessage = chatHistory.findLast(
-        (msg) => msg.role === "assistant"
+      // Update transcript display
+      const userTranscriptElement = document.querySelector(
+        ".transcript-line .transcript-text"
       );
-      if (lastAIMessage) {
-        const aiLine = document.createElement("div");
-        aiLine.className = "transcript-line ai-response";
-        aiLine.innerHTML = `<strong>AI:</strong> <span>${lastAIMessage.content}</span>`;
-        transcriptContainer.appendChild(aiLine);
+      if (userTranscriptElement) {
+        userTranscriptElement.textContent = finalTranscript + interimTranscript;
       }
 
-      const userLine = document.createElement("div");
-      userLine.className = "transcript-line";
-      userLine.innerHTML = `<strong>User:</strong> <span>${finalTranscript}<span style="color: #666;">${interimTranscript}</span></span>`;
-      transcriptContainer.appendChild(userLine);
+      // Keep AI's previous response visible
+      const aiResponseElement = document.querySelector(
+        ".transcript-line.ai-response span"
+      );
+      if (aiResponseElement && !aiResponseElement.textContent) {
+        aiResponseElement.textContent = "Listening...";
+      }
+    };
 
-      transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+    recognitionInstance.onstart = () => {
+      console.log("🎤 [Recognition] Started listening");
+      if (isListening) {
+        micButton.classList.add("listening");
+        recordingWaves.classList.add("active");
+      }
     };
 
     recognitionInstance.onend = () => {
-      console.log("[Recognition] ended. isListening:", isListening);
-      // Auto-restart if we're still listening
-      if (isListening && recognitionInstance && !isRestarting) {
+      console.log("🎤 [Recognition] Ended.", {
+        isListening,
+        isRestarting,
+        hasRecorder: !!recorder,
+        hasRecognition: !!recognition,
+        audioContextState: audioContext?.state,
+      });
+
+      // Only auto-restart if we're still in a valid state
+      if (
+        isListening &&
+        !isRestarting &&
+        recorder &&
+        audioContext?.state === "running"
+      ) {
         try {
           isRestarting = true;
           setTimeout(() => {
-            if (isListening) {
-              recognitionInstance.start();
-              console.log("[Recognition] restarted");
+            if (
+              isListening &&
+              recognition &&
+              recorder &&
+              audioContext?.state === "running"
+            ) {
+              recognition.start();
+              console.log("🎤 [Recognition] Restarted");
+            } else {
+              console.log("🎤 [Recognition] Not restarting - state changed", {
+                isListening,
+                hasRecognition: !!recognition,
+                hasRecorder: !!recorder,
+                audioContextState: audioContext?.state,
+              });
             }
             isRestarting = false;
           }, 100);
         } catch (e) {
-          console.error("[Recognition] restart error:", e);
+          console.error("❌ [Recognition] Restart error:", e);
           isRestarting = false;
-
-          // If we still want to be listening, recreate the instance
-          if (isListening) {
-            recognition = new webkitSpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            setupRecognitionHandlers(recognition);
-            try {
-              recognition.start();
-            } catch (err) {
-              console.error("[Recognition] Error starting new instance:", err);
-            }
-          }
+          // Never call cleanupRecording() here - let silence detection handle stopping
         }
       } else {
-        console.log(
-          "[Recognition] Not restarting. Either turned off or in process."
-        );
+        console.log("🎤 [Recognition] Not restarting - conditions not met", {
+          isListening,
+          isRestarting,
+          hasRecorder: !!recorder,
+          audioContextState: audioContext?.state,
+        });
+        // Don't modify UI state here - let other code handle that
       }
     };
 
     recognitionInstance.onerror = (event) => {
-      console.error("[Recognition] error:", event.error);
-      if (event.error === "no-speech") {
-        console.log("[Recognition] No speech detected");
+      console.error("❌ [Recognition] Error:", event.error, {
+        isListening,
+        hasRecorder: !!recorder,
+        audioContextState: audioContext?.state,
+      });
+
+      // Only cleanup on truly fatal errors
+      if (
+        ["not-allowed", "service-not-allowed", "audio-capture"].includes(
+          event.error
+        )
+      ) {
+        console.error("❌ [Recognition] Fatal permission error - cleaning up");
+        cleanupRecording();
+      } else {
+        console.log("🎤 [Recognition] Non-fatal error - continuing");
       }
     };
   }
