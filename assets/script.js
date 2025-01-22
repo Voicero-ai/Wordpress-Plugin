@@ -8,6 +8,73 @@ function stripHtml(html) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // ======================
+  // 0) LOCALSTORAGE UTILS
+  // ======================
+  function saveStateToLocalStorage() {
+    // Gather relevant AI / UI state
+    const state = {
+      // main toggle on/off
+      isAIActive: mainToggle.classList.contains("active"),
+      // whether voice interface is shown
+      isVoiceInterface: voiceInterface.style.display === "block",
+      // whether text interface is shown
+      isTextInterface: textInterface.style.display === "block",
+      // keep chat messages
+      chatHistory,
+    };
+    localStorage.setItem("aiAssistantState", JSON.stringify(state));
+  }
+
+  function loadStateFromLocalStorage() {
+    const saved = localStorage.getItem("aiAssistantState");
+    if (!saved) return;
+    try {
+      const state = JSON.parse(saved);
+      if (state.isAIActive) {
+        // Turn the main toggle on
+        mainToggle.classList.add("active");
+        // Hide the interaction chooser because the AI is already on
+        interactionChooser.style.display = "none";
+
+        // Show whichever interface was active
+        if (state.isVoiceInterface) {
+          voiceInterface.style.display = "block";
+        }
+        if (state.isTextInterface) {
+          textInterface.style.display = "block";
+        }
+
+        // Restore chat history
+        if (Array.isArray(state.chatHistory)) {
+          chatHistory = state.chatHistory;
+        }
+
+        // Refresh the text chat interface with stored messages
+        chatMessages.innerHTML = "";
+        chatHistory.forEach((msg) => {
+          // Map "assistant" role to "ai" for proper styling
+          const displayRole = msg.role === "assistant" ? "ai" : msg.role;
+          addMessageToChat(displayRole, msg.content);
+        });
+
+        // If voice interface was active, attempt to re-initialize mic
+        if (state.isVoiceInterface) {
+          try {
+            startRecording();
+          } catch (err) {
+            console.error("Error restarting recording after load:", err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load AI assistant state:", err);
+    }
+  }
+
+  // ======================
+  // 1) GLOBAL VARIABLES
+  // ======================
   window.siteContent = await collectSiteContent();
   console.log("Site content loaded on page load:", window.siteContent);
 
@@ -17,8 +84,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   let analyser = null;
   let dataArray = null;
   let silenceTimer = null;
-  let mediaRecorder = null;
-  let interimTranscript = "";
   let recognition = null;
   let chatHistory = [];
   const MAX_HISTORY_LENGTH = 5;
@@ -36,7 +101,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const textInterface = document.getElementById("text-interface");
   const voicePopupToggle = document.querySelector("#voice-popup-toggle");
   const popup = document.getElementById("voice-popup");
-  const closeButton = document.getElementById("close-popup");
   const micButton = document.getElementById("mic-button");
   const transcriptContainer = document.getElementById("transcript-container");
   const transcriptText = transcriptContainer.querySelector(".transcript-text");
@@ -46,16 +110,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   const sendButton = document.getElementById("send-message");
   const chatMessages = document.getElementById("chat-messages");
 
+  // =========================================
+  // 2) LOAD ANY PREVIOUS STATE FROM localStorage
+  // =========================================
+  loadStateFromLocalStorage();
+
   // ======================
-  // 4) UI HANDLERS
+  // 3) UI HANDLERS
   // ======================
   mainToggle.addEventListener("click", async () => {
     mainToggle.classList.toggle("active");
     if (mainToggle.classList.contains("active")) {
+      // Toggle turned on => show interaction choices
       interactionChooser.style.display = "block";
       voiceInterface.style.display = "none";
       textInterface.style.display = "none";
     } else {
+      // Toggle turned off => hide everything
       console.log("Turning off main toggle, cleaning up...");
       interactionChooser.style.display = "none";
       voiceInterface.style.display = "none";
@@ -64,6 +135,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (isListening) cleanupRecording(true);
       console.log("Main toggle cleanup complete");
     }
+    // Save changes in localStorage
+    saveStateToLocalStorage();
   });
 
   document
@@ -75,6 +148,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       mainToggle.classList.add("active");
 
       voiceInterface.classList.add("compact-interface");
+
+      // Save changes
+      saveStateToLocalStorage();
     });
 
   document
@@ -85,6 +161,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       interactionChooser.style.display = "none";
 
       voiceInterface.classList.remove("compact-interface");
+
+      // Save changes
+      saveStateToLocalStorage();
     });
 
   micButton.addEventListener("click", async () => {
@@ -114,11 +193,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     voiceInterface.style.display = "none";
     mainToggle.classList.remove("active");
     cleanupRecording(true);
+    saveStateToLocalStorage();
   });
 
   document.getElementById("close-text").addEventListener("click", () => {
     textInterface.style.display = "none";
     mainToggle.classList.remove("active");
+    // We might or might not want to do a full cleanup
+    // cleanupRecording(true);
+    saveStateToLocalStorage();
   });
 
   if (voicePopupToggle) {
@@ -171,13 +254,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  if (closeButton) {
-    closeButton.addEventListener("click", () => {
-      popup.style.display = "none";
-      if (voicePopupToggle) voicePopupToggle.classList.remove("active");
-    });
-  }
-
   chatInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -188,7 +264,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   sendButton.addEventListener("click", sendMessage);
 
   // ======================
-  // 5) RECORDING & TTS
+  // 4) RECORDING & TTS
   // ======================
   async function sendToGemini(text) {
     try {
@@ -196,15 +272,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (chatHistory.length > MAX_HISTORY_LENGTH * 2) {
         chatHistory = chatHistory.slice(-MAX_HISTORY_LENGTH * 2);
       }
+      // Save updated state
+      saveStateToLocalStorage();
 
       const pages = window.siteContent.pages || [];
       const posts = window.siteContent.posts || [];
       const products = window.siteContent.products || [];
 
+      // Get current page info
+      const currentPageUrl = window.location.href;
+      const currentPageTitle = document.title;
+
       console.log("🔎 [sendToGemini] Using raw data:", {
         pages,
         posts,
         products,
+        currentPage: { url: currentPageUrl, title: currentPageTitle },
       });
 
       const response = await fetch(
@@ -217,6 +300,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             context: `
             You are a friendly voice assistant helping someone navigate this website.
             Keep responses brief and conversational.
+
+            CURRENT PAGE:
+            URL: ${currentPageUrl}
+            TITLE: ${currentPageTitle}
 
             Previous conversation:
             ${chatHistory
@@ -305,10 +392,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       await sendToTTS(aiResponse);
 
+      // If there's a redirect, save state and redirect
       if (typeof aiRedirect === "string" && aiRedirect.trim()) {
         console.log("➡️ [sendToGemini] Redirecting to:", aiRedirect);
+        saveStateToLocalStorage(); // ensure we know the AI is still ON
         window.location.href = aiRedirect;
       } else {
+        // If no redirect, remain on page
         if (mainToggle.classList.contains("active")) {
           console.log("✅ [sendToGemini] TTS done. Restart mic...");
           micButton.classList.remove("listening");
@@ -518,7 +608,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================
-  // 6) SILENCE DETECTION
+  // 5) SILENCE DETECTION
   // ======================
   function setupSilenceDetection(stream) {
     console.log("🎤 [Silence] Setting up detection...");
@@ -614,7 +704,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================
-  // 7) CLEANUP
+  // 6) CLEANUP
   // ======================
   function cleanupRecording(clearHistory = false) {
     console.log("♻️ [Cleanup] Recording...", {
@@ -669,10 +759,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
       mediaStream = null;
     }
+
+    // After cleaning up, save the new state (which might be "off" or cleared)
+    saveStateToLocalStorage();
   }
 
   // ======================
-  // 8) TRANSCRIPT DISPLAY
+  // 7) TRANSCRIPT DISPLAY
   // ======================
   function updateTranscriptDisplay() {
     transcriptContainer.innerHTML = "";
@@ -693,7 +786,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================
-  // 9) TEXT CHAT
+  // 8) TEXT CHAT
   // ======================
   async function sendMessage() {
     const text = chatInput.value.trim();
@@ -707,6 +800,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (chatHistory.length > MAX_HISTORY_LENGTH * 2) {
         chatHistory = chatHistory.slice(-MAX_HISTORY_LENGTH * 2);
       }
+      saveStateToLocalStorage(); // updated chat
 
       const loadingMessage = addMessageToChat("ai", "...");
 
@@ -785,13 +879,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       let parsed;
       let aiResp;
       try {
-        // If rawText is already JSON string, parse it
+        // If rawText is JSON, parse it
         if (rawText.trim().startsWith("{")) {
           parsed = JSON.parse(rawText);
           aiResp = parsed.response || rawText;
           console.log("Parsed JSON response:", aiResp);
         } else {
-          // If rawText is plain text, use it directly
+          // If rawText is plain text, use directly
           aiResp = rawText;
           console.log("Using raw text:", aiResp);
         }
@@ -806,17 +900,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       addMessageToChat("ai", aiResp);
       chatHistory.push({ role: "assistant", content: aiResp });
+      saveStateToLocalStorage();
 
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
+        // If in voice mode, do TTS then redirect
         if (voiceInterface.style.display === "block") {
           console.log("🗣️ [sendMessage] TTS before redirect...");
           await sendToTTS(aiResp);
         } else {
-          // Add 2 second delay for text mode redirects
-          console.log("⏳ [sendMessage] Waiting 1 seconds before redirect...");
+          // Add 1 second delay for text mode
+          console.log("⏳ [sendMessage] Waiting 1 second before redirect...");
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         console.log("➡️ [sendMessage] Now redirecting to:", aiRedirect);
+
+        // Save state before leaving
+        saveStateToLocalStorage();
         window.location.href = aiRedirect;
       } else if (voiceInterface.style.display === "block") {
         await sendToTTS(aiResp);
@@ -829,12 +928,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       addMessageToChat("ai", errorMessage);
       chatHistory.push({ role: "assistant", content: errorMessage });
+      saveStateToLocalStorage();
     }
   }
 
   function addMessageToChat(role, content) {
     const messageDiv = document.createElement("div");
-    messageDiv.className = `message ${role}`;
+    messageDiv.className = `message ${role === "assistant" ? "ai" : role}`;
 
     const messageContent = document.createElement("div");
     messageContent.className = "message-content";
@@ -862,7 +962,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     recognitionInstance.onresult = (event) => {
       if (!isListening) return;
 
-      interimTranscript = "";
+      let interimTranscript = "";
       let finalTranscript = "";
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {

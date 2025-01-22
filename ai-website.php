@@ -469,8 +469,6 @@ function my_first_plugin_add_toggle_button() {
     <!-- Hidden Popup (Content Collection) -->
     <div id="voice-popup">
       <div class="voice-popup-content">
-        <button id="close-popup">×</button>
-        <h2>Debug / Collected Content</h2>
       </div>
     </div>
     ';
