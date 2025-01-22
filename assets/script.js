@@ -1,4 +1,3 @@
-
 /**
  * Strip HTML and CSS from text
  */
@@ -777,31 +776,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await response.json();
       console.log("📥 [sendMessage] Gemini response:", data);
 
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      // Remove markdown code block if present
+      rawText = rawText.replace(/```json\n|\n```/g, "").trim();
+      console.log("Raw text from Gemini:", rawText);
       loadingMessage.remove();
 
       let parsed;
+      let aiResp;
       try {
-        parsed = JSON.parse(rawText);
+        // If rawText is already JSON string, parse it
+        if (rawText.trim().startsWith("{")) {
+          parsed = JSON.parse(rawText);
+          aiResp = parsed.response || rawText;
+          console.log("Parsed JSON response:", aiResp);
+        } else {
+          // If rawText is plain text, use it directly
+          aiResp = rawText;
+          console.log("Using raw text:", aiResp);
+        }
       } catch (err) {
         console.warn(
           "[sendMessage] Parsing AI text as JSON failed. Fallback to plain text."
         );
-        parsed = { response: rawText, redirect_url: null };
+        aiResp = rawText;
       }
 
-      const aiResp = parsed.response || rawText;
-      const aiRedirect = parsed.redirect_url || null;
+      const aiRedirect = parsed?.redirect_url || null;
 
       addMessageToChat("ai", aiResp);
       chatHistory.push({ role: "assistant", content: aiResp });
 
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
-        console.log("🗣️ [sendMessage] TTS before redirect...");
-        await sendToTTS(aiResp);
+        if (voiceInterface.style.display === "block") {
+          console.log("🗣️ [sendMessage] TTS before redirect...");
+          await sendToTTS(aiResp);
+        } else {
+          // Add 2 second delay for text mode redirects
+          console.log("⏳ [sendMessage] Waiting 1 seconds before redirect...");
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
         console.log("➡️ [sendMessage] Now redirecting to:", aiRedirect);
         window.location.href = aiRedirect;
-      } else {
+      } else if (voiceInterface.style.display === "block") {
         await sendToTTS(aiResp);
         console.log("ℹ️ [sendMessage] No redirect.");
       }
