@@ -4,44 +4,23 @@
   bottom: 15px;
   right: 10px;
   z-index: 9999;
-
-  background-color: #e6e6fa;
-  border: 1px solid #e0e0e0;
-  padding: 8px 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
-.toggle {
-  width: 50px;
-  height: 25px;
-  border-radius: 25px;
-  background-color: #cbc3e3;
-  position: relative;
-  cursor: pointer;
-  display: inline-block;
-  margin-left: 10px;
-  transition: background-color 0.3s;
-}
-.toggle.active {
+#chat-website-button {
   background-color: #9370db;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, background-color 0.2s;
 }
-.toggle-handle {
-  width: 21px;
-  height: 21px;
-  background-color: white;
-  border-radius: 50%;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.3s;
-}
-.toggle.active .toggle-handle {
-  transform: translateX(25px);
+
+#chat-website-button:hover {
+  background-color: #7a5abf;
+  transform: scale(1.05);
 }
 
 /* INTERACTION CHOOSER (above toggle) */
@@ -89,7 +68,7 @@
   width: 320px;
   display: none;
   border: 1px solid #e0e0e0;
-  padding: 15px;
+  padding: 10px;
   text-align: center;
 }
 #close-voice {
@@ -113,8 +92,8 @@
 /* Voice waves + status */
 .voice-status-container {
   text-align: center;
-  margin: 5px 0;
-  height: 30px;
+  margin: 2px 0;
+  height: 20px;
 }
 .recording-waves {
   display: none;
@@ -156,7 +135,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 15px auto;
+  margin: 8px auto;
   transition: all 0.3s ease;
   padding: 0;
   position: relative;
@@ -415,6 +394,7 @@
 #voice-interface.compact-interface {
   width: 220px;
   bottom: 80px;
+  padding: 8px;
 }
 #voice-interface.compact-interface #transcript-container {
   max-height: 60px;
@@ -425,7 +405,7 @@
 #voice-interface.compact-interface #mic-button {
   width: 50px;
   height: 50px;
-  margin: 8px auto;
+  margin: 5px auto;
 }
 #voice-interface.compact-interface #mic-button img {
   width: 25px;

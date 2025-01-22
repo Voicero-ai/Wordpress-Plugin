@@ -12,16 +12,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 0) LOCALSTORAGE UTILS
   // ======================
   function saveStateToLocalStorage() {
-    // Gather relevant AI / UI state
     const state = {
-      // main toggle on/off
-      isAIActive: mainToggle.classList.contains("active"),
-      // whether voice interface is shown
-      isVoiceInterface: voiceInterface.style.display === "block",
-      // whether text interface is shown
-      isTextInterface: textInterface.style.display === "block",
-      // keep chat messages
       chatHistory,
+      lastActiveInterface:
+        voiceInterface.style.display === "block"
+          ? "voice"
+          : textInterface.style.display === "block"
+          ? "text"
+          : null,
     };
     localStorage.setItem("aiAssistantState", JSON.stringify(state));
   }
@@ -31,41 +29,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!saved) return;
     try {
       const state = JSON.parse(saved);
-      if (state.isAIActive) {
-        // Turn the main toggle on
-        mainToggle.classList.add("active");
-        // Hide the interaction chooser because the AI is already on
-        interactionChooser.style.display = "none";
 
-        // Show whichever interface was active
-        if (state.isVoiceInterface) {
-          voiceInterface.style.display = "block";
-        }
-        if (state.isTextInterface) {
-          textInterface.style.display = "block";
-        }
+      // Restore chat history
+      if (Array.isArray(state.chatHistory)) {
+        chatHistory = state.chatHistory;
 
-        // Restore chat history
-        if (Array.isArray(state.chatHistory)) {
-          chatHistory = state.chatHistory;
-        }
-
-        // Refresh the text chat interface with stored messages
+        // Restore chat messages in text interface
         chatMessages.innerHTML = "";
-        chatHistory.forEach((msg) => {
-          // Map "assistant" role to "ai" for proper styling
-          const displayRole = msg.role === "assistant" ? "ai" : msg.role;
-          addMessageToChat(displayRole, msg.content);
+        chatHistory.slice(-10).forEach((msg) => {
+          // Show last 10 messages max
+          addMessageToChat(
+            msg.role === "assistant" ? "ai" : "user",
+            msg.content
+          );
         });
+      }
 
-        // If voice interface was active, attempt to re-initialize mic
-        if (state.isVoiceInterface) {
+      // Check if this page load was from an AI redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      const isAiRedirect = urlParams.get("ai_redirect") === "true";
+
+      if (isAiRedirect) {
+        // Show the last active interface
+        if (state.lastActiveInterface === "voice") {
+          voiceInterface.style.display = "block";
+          textInterface.style.display = "none";
+          interactionChooser.style.display = "none";
           try {
             startRecording();
           } catch (err) {
-            console.error("Error restarting recording after load:", err);
+            console.error("Error restarting recording after redirect:", err);
           }
+        } else if (state.lastActiveInterface === "text") {
+          textInterface.style.display = "block";
+          voiceInterface.style.display = "none";
+          interactionChooser.style.display = "none";
+          // Scroll chat to bottom
+          chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+
+        // Clean URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete("ai_redirect");
+        window.history.replaceState({}, "", newUrl.toString());
+      } else {
+        // Not an AI redirect, reset everything including localStorage
+        localStorage.removeItem("aiAssistantState");
+        interactionChooser.style.display = "none";
+        voiceInterface.style.display = "none";
+        textInterface.style.display = "none";
+        cleanupRecording(false);
+        chatHistory = [];
+        chatMessages.innerHTML = "";
       }
     } catch (err) {
       console.error("Failed to load AI assistant state:", err);
@@ -95,7 +110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let mediaStream = null;
 
-  const mainToggle = document.querySelector("#main-voice-toggle");
+  const mainToggle = document.getElementById("chat-website-button");
   const interactionChooser = document.getElementById("interaction-chooser");
   const voiceInterface = document.getElementById("voice-interface");
   const textInterface = document.getElementById("text-interface");
@@ -118,25 +133,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================
   // 3) UI HANDLERS
   // ======================
-  mainToggle.addEventListener("click", async () => {
-    mainToggle.classList.toggle("active");
-    if (mainToggle.classList.contains("active")) {
-      // Toggle turned on => show interaction choices
-      interactionChooser.style.display = "block";
-      voiceInterface.style.display = "none";
-      textInterface.style.display = "none";
-    } else {
-      // Toggle turned off => hide everything
-      console.log("Turning off main toggle, cleaning up...");
-      interactionChooser.style.display = "none";
-      voiceInterface.style.display = "none";
-      textInterface.style.display = "none";
-
-      if (isListening) cleanupRecording(true);
-      console.log("Main toggle cleanup complete");
-    }
-    // Save changes in localStorage
-    saveStateToLocalStorage();
+  mainToggle.addEventListener("click", () => {
+    // Show interaction chooser
+    interactionChooser.style.display = "block";
+    voiceInterface.style.display = "none";
+    textInterface.style.display = "none";
   });
 
   document
@@ -191,16 +192,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("close-voice").addEventListener("click", () => {
     voiceInterface.style.display = "none";
-    mainToggle.classList.remove("active");
     cleanupRecording(true);
     saveStateToLocalStorage();
   });
 
   document.getElementById("close-text").addEventListener("click", () => {
     textInterface.style.display = "none";
-    mainToggle.classList.remove("active");
-    // We might or might not want to do a full cleanup
-    // cleanupRecording(true);
     saveStateToLocalStorage();
   });
 
@@ -298,48 +295,71 @@ document.addEventListener("DOMContentLoaded", async () => {
           body: JSON.stringify({
             query: text,
             context: `
-            You are a friendly voice assistant helping someone navigate this website.
-            Keep responses brief and conversational.
+              You are a friendly website guide who speaks naturally and informatively.
+              Your personality: Helpful and warm - like a knowledgeable friend showing someone around.
 
-            CURRENT PAGE:
-            URL: ${currentPageUrl}
-            TITLE: ${currentPageTitle}
+              Your goals are to:
+              1. Give meaningful information first, then ask questions if needed
+              2. Provide specific details about what users can find
+              3. Guide users naturally to relevant pages
+              4. Sound human and conversational
 
-            Previous conversation:
-            ${chatHistory
-              .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
-              .join("\n")}
+              IMPORTANT GUIDELINES:
+              - Always give substance before asking questions
+              - Include 1-2 specific details about the topic being discussed
+              - Keep responses focused but informative (2-4 sentences)
+              - Use transitions like "Let me show you" when redirecting
+              - Only ask questions when you need clarification
 
-            User's question/message: ${text}
+              EXAMPLES:
+              ❌ "Want to learn more about us?"
+              ✅ "We're a family-owned business helping people live sustainably since 2010. Our shop features eco-friendly products, all tested by our team. Would you like to see our best-sellers?"
 
-            Pages:
-            ${pages
-              .map(
-                (page) => `
+              ❌ "We help you live sustainably. Want to browse our shop?"
+              ✅ "Our shop specializes in affordable eco-friendly products, from $15 bamboo utensils to solar-powered gadgets. Let me show you our most popular items!"
+
+              ❌ "Want to see our blog?"
+              ✅ "Our blog features weekly tips on sustainable living, including our popular guides on zero-waste cooking and energy saving. I'll take you to our latest articles."
+
+              CURRENT PAGE:
+              URL: ${currentPageUrl}
+              TITLE: ${currentPageTitle}
+
+              Previous conversation:
+              ${chatHistory
+                .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
+                .join("\n")}
+
+              User's question/message: ${text}
+
+              Pages:
+              ${pages
+                .map(
+                  (page) => `
                 PAGE: ${page.title}
                 URL: ${page.link}
                 CONTENT: ${page.content}
                 ---
               `
-              )
-              .join("\n")}
+                )
+                .join("\n")}
 
-            Posts:
-            ${posts
-              .map(
-                (post) => `
+              Posts:
+              ${posts
+                .map(
+                  (post) => `
                 POST: ${post.title}
                 URL: ${post.link}
                 CONTENT: ${post.content}
                 ---
               `
-              )
-              .join("\n")}
+                )
+                .join("\n")}
 
-            Products:
-            ${products
-              .map(
-                (product) => `
+              Products:
+              ${products
+                .map(
+                  (product) => `
                 PRODUCT: ${product.title}
                 PRICE: ${product.price}
                 URL: ${product.link}
@@ -349,9 +369,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 STOCK: ${product.in_stock ? "In Stock" : "Out of Stock"}
                 ---
               `
-              )
-              .join("\n")}
-          `,
+                )
+                .join("\n")}
+            `,
           }),
         }
       );
@@ -393,10 +413,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       await sendToTTS(aiResponse);
 
       // If there's a redirect, save state and redirect
-      if (typeof aiRedirect === "string" && aiRedirect.trim()) {
-        console.log("➡️ [sendToGemini] Redirecting to:", aiRedirect);
-        saveStateToLocalStorage(); // ensure we know the AI is still ON
-        window.location.href = aiRedirect;
+      if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
+        console.log("➡️ [sendToGemini] Now redirecting to:", aiRedirect);
+        handleRedirect(aiRedirect);
       } else {
         // If no redirect, remain on page
         if (mainToggle.classList.contains("active")) {
@@ -800,9 +819,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (chatHistory.length > MAX_HISTORY_LENGTH * 2) {
         chatHistory = chatHistory.slice(-MAX_HISTORY_LENGTH * 2);
       }
-      saveStateToLocalStorage(); // updated chat
+      saveStateToLocalStorage();
 
       const loadingMessage = addMessageToChat("ai", "...");
+
+      const currentPageUrl = window.location.href;
+      const currentPageTitle = document.title;
 
       const formattedPages = (window.siteContent.pages || []).map((p) => ({
         title: p.title,
@@ -830,35 +852,78 @@ document.addEventListener("DOMContentLoaded", async () => {
           body: JSON.stringify({
             query: text,
             context: `
-            You are a friendly AI assistant helping someone navigate this website.
-            Keep responses brief and conversational.
+              You are a friendly website guide who speaks naturally and informatively.
+              Your personality: Helpful and warm - like a knowledgeable friend showing someone around.
 
-            Previous conversation:
-            ${chatHistory
-              .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
-              .join("\n")}
+              Your goals are to:
+              1. Give meaningful information first, then ask questions if needed
+              2. Provide specific details about what users can find
+              3. Guide users naturally to relevant pages
+              4. Sound human and conversational
 
-            Pages:
-            ${formattedPages
-              .map(
-                (page) =>
-                  `PAGE: ${page.title}\nURL: ${page.url}\nCONTENT: ${page.content}\n---`
-              )
-              .join("\n")}
-            Posts:
-            ${formattedPosts
-              .map(
-                (post) => `POST: ${post.title}\nCONTENT: ${post.content}\n---`
-              )
-              .join("\n")}
-            Products:
-            ${formattedProducts
-              .map(
-                (product) =>
-                  `PRODUCT: ${product.title}\nPRICE: ${product.price}\nDESCRIPTION: ${product.description}\n---`
-              )
-              .join("\n")}
-          `,
+              IMPORTANT GUIDELINES:
+              - Always give substance before asking questions
+              - Include 1-2 specific details about the topic being discussed
+              - Keep responses focused but informative (2-4 sentences)
+              - Use transitions like "Let me show you" when redirecting
+              - Only ask questions when you need clarification
+
+              EXAMPLES:
+              ❌ "Want to learn more about us?"
+              ✅ "We're a family-owned business helping people live sustainably since 2010. Our shop features eco-friendly products, all tested by our team. Would you like to see our best-sellers?"
+
+              ❌ "We help you live sustainably. Want to browse our shop?"
+              ✅ "Our shop specializes in affordable eco-friendly products, from $15 bamboo utensils to solar-powered gadgets. Let me show you our most popular items!"
+
+              ❌ "Want to see our blog?"
+              ✅ "Our blog features weekly tips on sustainable living, including our popular guides on zero-waste cooking and energy saving. I'll take you to our latest articles."
+
+              CURRENT PAGE:
+              URL: ${currentPageUrl}
+              TITLE: ${currentPageTitle}
+
+              Previous conversation:
+              ${chatHistory
+                .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
+                .join("\n")}
+
+              User's question/message: ${text}
+
+              Pages:
+              ${formattedPages
+                .map(
+                  (page) => `
+                PAGE: ${page.title}
+                URL: ${page.url}
+                CONTENT: ${page.content}
+                ---
+              `
+                )
+                .join("\n")}
+
+              Posts:
+              ${formattedPosts
+                .map(
+                  (post) => `
+                POST: ${post.title}
+                CONTENT: ${post.content}
+                ---
+              `
+                )
+                .join("\n")}
+
+              Products:
+              ${formattedProducts
+                .map(
+                  (product) => `
+                PRODUCT: ${product.title}
+                PRICE: ${product.price}
+                DESCRIPTION: ${product.description}
+                ---
+              `
+                )
+                .join("\n")}
+            `,
           }),
         }
       );
@@ -903,20 +968,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       saveStateToLocalStorage();
 
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
-        // If in voice mode, do TTS then redirect
-        if (voiceInterface.style.display === "block") {
-          console.log("🗣️ [sendMessage] TTS before redirect...");
-          await sendToTTS(aiResp);
-        } else {
-          // Add 1 second delay for text mode
-          console.log("⏳ [sendMessage] Waiting 1 second before redirect...");
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
         console.log("➡️ [sendMessage] Now redirecting to:", aiRedirect);
-
-        // Save state before leaving
-        saveStateToLocalStorage();
-        window.location.href = aiRedirect;
+        handleRedirect(aiRedirect);
       } else if (voiceInterface.style.display === "block") {
         await sendToTTS(aiResp);
         console.log("ℹ️ [sendMessage] No redirect.");
@@ -1043,6 +1096,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     };
   }
+
+  // Add this near the top of the DOMContentLoaded event listener
+  let isAiRedirect = false; // Flag to track if navigation is AI-initiated
+
+  // Update the redirect logic in both sendToGemini and sendMessage
+  function handleRedirect(redirectUrl) {
+    isAiRedirect = true; // Set flag before redirect
+    const url = new URL(redirectUrl);
+    url.searchParams.set("ai_redirect", "true");
+    window.location.href = url.toString();
+  }
+
+  // Add event listener for page unload
+  window.addEventListener("beforeunload", () => {
+    // Only clear if it's not an AI redirect
+    if (!isAiRedirect) {
+      localStorage.removeItem("aiAssistantState");
+    }
+  });
 });
 
 /**

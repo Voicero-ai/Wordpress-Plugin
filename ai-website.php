@@ -408,10 +408,7 @@ add_action('wp_enqueue_scripts', 'my_first_plugin_enqueue_scripts');
 function my_first_plugin_add_toggle_button() {
     echo '
     <div id="voice-toggle-container">
-        <span>AI Assistant</span>
-        <div class="toggle" id="main-voice-toggle">
-            <div class="toggle-handle"></div>
-        </div>
+        <button id="chat-website-button">Chat with Website</button>
     </div>
 
     <div id="interaction-chooser">
