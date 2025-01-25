@@ -8,9 +8,13 @@ function stripHtml(html) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // ======================
-  // 0) LOCALSTORAGE UTILS
-  // ======================
+  // =======================================================
+  // 0) LOCALSTORAGE UTILS + AI REDIRECT FLAG (KEY CHANGES)
+  // =======================================================
+
+  let chatHistory = [];
+  let isAiRedirect = false; // <--- Global flag to track if navigation is AI-initiated
+
   function saveStateToLocalStorage() {
     const state = {
       chatHistory,
@@ -27,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function loadStateFromLocalStorage() {
     const saved = localStorage.getItem("aiAssistantState");
     if (!saved) return;
+
     try {
       const state = JSON.parse(saved);
 
@@ -47,16 +52,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       // Check if this page load was from an AI redirect
       const urlParams = new URLSearchParams(window.location.search);
-      const isAiRedirect = urlParams.get("ai_redirect") === "true";
+      if (urlParams.get("ai_redirect") === "true") {
+        isAiRedirect = true; // <--- We set the global flag
 
-      if (isAiRedirect) {
         // Show the last active interface
         if (state.lastActiveInterface === "voice") {
           voiceInterface.style.display = "block";
           textInterface.style.display = "none";
           interactionChooser.style.display = "none";
           try {
-            startRecording();
+            // Add a small delay before starting recording
+            setTimeout(async () => {
+              await startRecording();
+            }, 500);
           } catch (err) {
             console.error("Error restarting recording after redirect:", err);
           }
@@ -73,14 +81,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         newUrl.searchParams.delete("ai_redirect");
         window.history.replaceState({}, "", newUrl.toString());
       } else {
-        // Not an AI redirect, reset everything including localStorage
-        localStorage.removeItem("aiAssistantState");
-        interactionChooser.style.display = "none";
-        voiceInterface.style.display = "none";
-        textInterface.style.display = "none";
-        cleanupRecording(false);
-        chatHistory = [];
-        chatMessages.innerHTML = "";
+        // ---------------------------------------------
+        // IMPORTANT CHANGE:
+        // We NO LONGER wipe out localStorage here.
+        // Instead, we restore from whatever's saved.
+        // ---------------------------------------------
+        if (state.lastActiveInterface === "voice") {
+          voiceInterface.style.display = "block";
+          textInterface.style.display = "none";
+          interactionChooser.style.display = "none";
+          // We won't auto-start the mic unless you want to call `startRecording()` here.
+        } else if (state.lastActiveInterface === "text") {
+          textInterface.style.display = "block";
+          voiceInterface.style.display = "none";
+          interactionChooser.style.display = "none";
+          // Scroll chat to bottom
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
       }
     } catch (err) {
       console.error("Failed to load AI assistant state:", err);
@@ -100,11 +117,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   let dataArray = null;
   let silenceTimer = null;
   let recognition = null;
-  let chatHistory = [];
+
   const MAX_HISTORY_LENGTH = 5;
 
-  const SILENCE_THRESHOLD = 0.01;
-  const SILENCE_DURATION = 2000;
+  const SILENCE_THRESHOLD = 0.008;
+  const SILENCE_DURATION = 1000;
   const MAX_EMPTY_ATTEMPTS = 3;
   let emptyTranscriptionCount = 0;
 
@@ -124,6 +141,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const chatInput = document.getElementById("chat-input");
   const sendButton = document.getElementById("send-message");
   const chatMessages = document.getElementById("chat-messages");
+
+  // Add this at the top level with other global variables
+  let currentTTSAudio = null; // Track current TTS audio playback
 
   // =========================================
   // 2) LOAD ANY PREVIOUS STATE FROM localStorage
@@ -311,16 +331,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               - Use transitions like "Let me show you" when redirecting
               - Only ask questions when you need clarification
 
-              EXAMPLES:
-              ❌ "Want to learn more about us?"
-              ✅ "We're a family-owned business helping people live sustainably since 2010. Our shop features eco-friendly products, all tested by our team. Would you like to see our best-sellers?"
-
-              ❌ "We help you live sustainably. Want to browse our shop?"
-              ✅ "Our shop specializes in affordable eco-friendly products, from $15 bamboo utensils to solar-powered gadgets. Let me show you our most popular items!"
-
-              ❌ "Want to see our blog?"
-              ✅ "Our blog features weekly tips on sustainable living, including our popular guides on zero-waste cooking and energy saving. I'll take you to our latest articles."
-
               CURRENT PAGE:
               URL: ${currentPageUrl}
               TITLE: ${currentPageTitle}
@@ -417,15 +427,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("➡️ [sendToGemini] Now redirecting to:", aiRedirect);
         handleRedirect(aiRedirect);
       } else {
-        // If no redirect, remain on page
-        if (mainToggle.classList.contains("active")) {
+        // Modified this section to always restart recording if voice interface is active
+        if (voiceInterface.style.display === "block") {
           console.log("✅ [sendToGemini] TTS done. Restart mic...");
-          micButton.classList.remove("listening");
-          recordingWaves.classList.remove("active");
+          // First cleanup existing recording
+          cleanupRecording(false);
 
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          // Wait a moment before restarting
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
           try {
+            isListening = false; // Reset listening state
             await startRecording();
+            console.log("🎤 [sendToGemini] Recording restarted successfully");
           } catch (error) {
             console.error("❌ [sendToGemini] Error restarting mic:", error);
             cleanupRecording();
@@ -477,10 +491,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       isListening = false;
 
+      // Ensure complete cleanup of previous recording session
       if (recognition) {
         try {
           recognition.stop();
-          await new Promise((resolve) => setTimeout(resolve, 50));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (e) {
           console.error("Error stopping old recognition:", e);
         }
@@ -489,14 +504,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (audioContext) {
         await audioContext.close();
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         audioContext = null;
       }
 
       if (recorder) {
         recorder.destroy();
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         recorder = null;
+      }
+
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      }
+
+      // Clear any existing timers
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
       }
 
       micButton.classList.add("listening");
@@ -514,7 +540,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         numberOfAudioChannels: 1,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       recorder.startRecording();
       console.log("🎤 [Recording] RecordRTC started");
 
@@ -525,7 +551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         setupRecognitionHandlers(recognition);
         isListening = true;
 
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         await recognition.start();
         console.log("🎤 [Recording] Recognition started");
 
@@ -586,7 +612,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       micButton.disabled = true;
       micButton.style.opacity = "0.5";
 
-      const response = await fetch(
+      // Start fetching the audio as soon as possible
+      const responsePromise = fetch(
         "https://ai-website-server.vercel.app/speak",
         {
           method: "POST",
@@ -595,17 +622,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       );
 
+      // While waiting for the response, prepare the audio context
+      if (!audioContext) {
+        audioContext = new AudioContext();
+      }
+
+      const response = await responsePromise;
       const audioBlob = await response.blob();
       console.log("📥 [TTS] Received audio blob");
+
       const audioURL = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioURL);
 
+      // Preload the audio
+      audio.preload = "auto";
+
+      // Store reference to current audio
+      currentTTSAudio = audio;
+
       return new Promise((resolve, reject) => {
+        // Start playing as soon as enough data is loaded
+        audio.oncanplaythrough = () => {
+          audio.play().catch(reject);
+        };
+
         audio.onended = () => {
           console.log("🔊 [TTS] Playback ended");
           URL.revokeObjectURL(audioURL);
           micButton.disabled = false;
           micButton.style.opacity = "1";
+          currentTTSAudio = null;
           resolve();
         };
 
@@ -613,15 +659,15 @@ document.addEventListener("DOMContentLoaded", async () => {
           console.error("❌ [TTS] Playback error:", err);
           micButton.disabled = false;
           micButton.style.opacity = "1";
+          currentTTSAudio = null;
           reject(err);
         };
-
-        audio.play().catch(reject);
       });
     } catch (error) {
       console.error("❌ [TTS] Error:", error);
       micButton.disabled = false;
       micButton.style.opacity = "1";
+      currentTTSAudio = null;
       throw error;
     }
   }
@@ -684,13 +730,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) {
-      const val = dataArray[i] - 128;
-      sum += val * val;
-    }
-    const rms = Math.sqrt(sum / dataArray.length) / 128;
+    let silenceCount = 0;
+    const samples = 3; // Check multiple samples before deciding
 
-    if (rms < SILENCE_THRESHOLD) {
+    // Take multiple samples to avoid false triggers
+    for (let j = 0; j < samples; j++) {
+      sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const val = dataArray[i] - 128;
+        sum += val * val;
+      }
+      const rms = Math.sqrt(sum / dataArray.length) / 128;
+
+      if (rms < SILENCE_THRESHOLD) {
+        silenceCount++;
+      }
+
+      // Small delay between samples
+      if (j < samples - 1) {
+        analyser.getByteTimeDomainData(dataArray);
+      }
+    }
+
+    // Only trigger silence if majority of samples are silent
+    if (silenceCount >= Math.ceil(samples * 0.7)) {
       if (!silenceTimer) {
         console.log("🔇 [Silence] Detected, starting timer...");
         silenceTimer = setTimeout(() => {
@@ -716,7 +779,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       recognition &&
       audioContext?.state === "running"
     ) {
-      requestAnimationFrame(checkSilence);
+      // Increase check frequency
+      setTimeout(() => requestAnimationFrame(checkSilence), 50);
     } else {
       console.log("🔇 [Silence] Loop ended - state changed");
     }
@@ -730,6 +794,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       clearHistory,
       isListening,
     });
+
+    // Stop any ongoing TTS playback
+    if (currentTTSAudio) {
+      currentTTSAudio.pause();
+      currentTTSAudio.currentTime = 0;
+      currentTTSAudio = null;
+      micButton.disabled = false;
+      micButton.style.opacity = "1";
+    }
 
     isListening = false;
 
@@ -779,7 +852,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       mediaStream = null;
     }
 
-    // After cleaning up, save the new state (which might be "off" or cleared)
+    // After cleaning up, save the new state
     saveStateToLocalStorage();
   }
 
@@ -867,16 +940,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               - Keep responses focused but informative (2-4 sentences)
               - Use transitions like "Let me show you" when redirecting
               - Only ask questions when you need clarification
-
-              EXAMPLES:
-              ❌ "Want to learn more about us?"
-              ✅ "We're a family-owned business helping people live sustainably since 2010. Our shop features eco-friendly products, all tested by our team. Would you like to see our best-sellers?"
-
-              ❌ "We help you live sustainably. Want to browse our shop?"
-              ✅ "Our shop specializes in affordable eco-friendly products, from $15 bamboo utensils to solar-powered gadgets. Let me show you our most popular items!"
-
-              ❌ "Want to see our blog?"
-              ✅ "Our blog features weekly tips on sustainable living, including our popular guides on zero-waste cooking and energy saving. I'll take you to our latest articles."
 
               CURRENT PAGE:
               URL: ${currentPageUrl}
@@ -972,6 +1035,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         handleRedirect(aiRedirect);
       } else if (voiceInterface.style.display === "block") {
         await sendToTTS(aiResp);
+        // After TTS, restart recording if in voice mode
+        if (mainToggle.classList.contains("active")) {
+          console.log("✅ [sendMessage] TTS done. Restart mic...");
+          await startRecording();
+        }
         console.log("ℹ️ [sendMessage] No redirect.");
       }
 
@@ -1097,23 +1165,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
   }
 
-  // Add this near the top of the DOMContentLoaded event listener
-  let isAiRedirect = false; // Flag to track if navigation is AI-initiated
-
-  // Update the redirect logic in both sendToGemini and sendMessage
+  // ======================
+  // 9) REDIRECT HANDLING
+  // ======================
   function handleRedirect(redirectUrl) {
-    isAiRedirect = true; // Set flag before redirect
+    isAiRedirect = true; // We set this global flag before redirect
     const url = new URL(redirectUrl);
     url.searchParams.set("ai_redirect", "true");
     window.location.href = url.toString();
   }
 
-  // Add event listener for page unload
+  // ======================
+  // 10) OPTIONAL PAGE UNLOAD LOGIC
+  // ======================
   window.addEventListener("beforeunload", () => {
-    // Only clear if it's not an AI redirect
-    if (!isAiRedirect) {
-      localStorage.removeItem("aiAssistantState");
-    }
+    // If you do NOT want to clear localStorage on normal exits,
+    // either remove this or comment it out. If you keep it:
+    // localStorage.removeItem("aiAssistantState") will occur on normal user exit.
+    //
+    // if (!isAiRedirect) {
+    //   localStorage.removeItem("aiAssistantState");
+    // }
   });
 });
 
