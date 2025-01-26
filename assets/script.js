@@ -284,21 +284,35 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Save updated state
       saveStateToLocalStorage();
 
-      const pages = window.siteContent.pages || [];
-      const posts = window.siteContent.posts || [];
-      const products = window.siteContent.products || [];
+      const truncateContent = (str) => str?.substring(0, 300) || "";
 
-      // Get current page sections and text index
+      const pages = (window.siteContent.pages || []).map((p) => ({
+        title: p.title,
+        link: p.link,
+        content: truncateContent(p.content),
+      }));
+
+      const posts = (window.siteContent.posts || []).map((p) => ({
+        title: p.title,
+        link: p.link,
+        content: truncateContent(p.content),
+      }));
+
+      const products = (window.siteContent.products || []).map((p) => ({
+        title: p.title,
+        price: p.price,
+        link: p.link,
+        content: truncateContent(p.content),
+        categories: p.categories,
+      }));
+
+      // Get only essential page sections data
       const { sections: pageSections, textIndex } = collectPageSections();
       const currentPageUrl = window.location.href;
       const currentPageTitle = document.title;
 
-      console.log("🔎 [sendToGemini] Using raw data:", {
-        pages,
-        posts,
-        products,
-        currentPage: { url: currentPageUrl, title: currentPageTitle },
-      });
+      // Limit chat history
+      const limitedChatHistory = chatHistory.slice(-3); // Keep only last 3 messages
 
       const response = await fetch(
         "https://ai-website-server.vercel.app/gemini",
@@ -308,99 +322,64 @@ document.addEventListener("DOMContentLoaded", async () => {
           body: JSON.stringify({
             query: text,
             context: `
-              You are a friendly website guide who speaks naturally and informatively.
-              Your personality: Helpful and warm - like a knowledgeable friend showing someone around.
+            You are a friendly website guide who speaks naturally and informatively.
+            Your personality: Helpful and warm - like a knowledgeable friend showing someone around.
 
-              Your goals are to:
-              1. Give meaningful information first, then ask questions if needed
-              2. Provide specific details about what users can find
-              3. Guide users naturally to relevant pages or sections
-              4. Sound human and conversational
+            NAVIGATION PRIORITY:
+            1. If user asks about specific pages/posts/products, ALWAYS provide redirect_url
+            2. Only look for text on current page if no relevant pages/posts/products exist
+            3. Use scroll_to_text only when staying on current page
 
-              IMPORTANT GUIDELINES:
-              - Always give substance before asking questions
-              - Include 1-2 specific details about the topic being discussed
-              - Keep responses focused but informative (2-4 sentences)
-              - Use transitions like "Let me show you" when redirecting
-              - Only ask questions when you need clarification
-              - When content exists on the current page, use scroll_to_id to point to the relevant section
-              - Look for relevant text in the TEXT_INDEX to find the most appropriate section
+            CURRENT PAGE:
+            URL: ${currentPageUrl}
+            TITLE: ${currentPageTitle}
 
-              CURRENT PAGE:
-              URL: ${currentPageUrl}
-              TITLE: ${currentPageTitle}
+            Available Content:
 
-              CURRENT PAGE SECTIONS:
-              ${pageSections
-                .map(
-                  (section) => `
-                SECTION ID: ${section.id}
-                TITLE: ${section.title}
-                CONTENT: ${section.content}
-                ---
-              `
-                )
-                .join("\n")}
+            Pages:
+            ${pages
+              .map(
+                (p) => `
+              PAGE: ${p.title}
+              URL: ${p.link}
+              PREVIEW: ${p.content}
+              ---
+            `
+              )
+              .join("\n")}
 
-              TEXT INDEX (Use this to find relevant content):
-              ${textIndex
-                .map(
-                  (entry) => `
-                TEXT: ${entry.text}
-                SECTION_ID: ${entry.sectionId}
-                KEYWORDS: ${entry.keywords.join(", ")}
-                ---
-              `
-                )
-                .join("\n")}
+            Posts:
+            ${posts
+              .map(
+                (p) => `
+              POST: ${p.title}
+              URL: ${p.link}
+              PREVIEW: ${p.content}
+              ---
+            `
+              )
+              .join("\n")}
 
-              Previous conversation:
-              ${chatHistory
-                .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
-                .join("\n")}
+            Products:
+            ${products
+              .map(
+                (p) => `
+              PRODUCT: ${p.title}
+              PRICE: ${p.price}
+              URL: ${p.link}
+              PREVIEW: ${p.content}
+              ---
+            `
+              )
+              .join("\n")}
 
-              User's question/message: ${text}
+            Recent conversation:
+            ${limitedChatHistory
+              .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
+              .join("\n")}
 
-              Pages:
-              ${pages
-                .map(
-                  (page) => `
-                PAGE: ${page.title}
-                URL: ${page.link}
-                CONTENT: ${page.content}
-                ---
-              `
-                )
-                .join("\n")}
-
-              Posts:
-              ${posts
-                .map(
-                  (post) => `
-                POST: ${post.title}
-                URL: ${post.link}
-                CONTENT: ${post.content}
-                ---
-              `
-                )
-                .join("\n")}
-
-              Products:
-              ${products
-                .map(
-                  (product) => `
-                PRODUCT: ${product.title}
-                PRICE: ${product.price}
-                URL: ${product.link}
-                DESCRIPTION: ${product.content}
-                CATEGORIES: ${product.categories?.join(", ") || ""}
-                SKU: ${product.sku}
-                STOCK: ${product.in_stock ? "In Stock" : "Out of Stock"}
-                ---
-              `
-                )
-                .join("\n")}
-            `,
+            User's question: ${text}
+          `,
           }),
         }
       );
@@ -442,56 +421,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       await sendToTTS(aiResponse);
 
-      // Handle redirect and scroll logic
+      // Update the redirect handling logic
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
-        // Check if we're redirecting to the same page
-        const currentUrlNoSearch =
-          window.location.origin + window.location.pathname;
-        const redirectUrlNoSearch =
-          new URL(aiRedirect).origin + new URL(aiRedirect).pathname;
-
-        if (currentUrlNoSearch === redirectUrlNoSearch) {
-          // Same page - just do the scroll if we have an ID
-          if (aiScrollText) {
-            scrollToText(aiScrollText);
-          }
-          // Restart recording if in voice mode
-          if (voiceInterface.style.display === "block") {
-            console.log("✅ [sendToGemini] Same page. Restart mic...");
-            cleanupRecording(false);
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            try {
-              isListening = false;
-              await startRecording();
-            } catch (error) {
-              console.error("❌ [sendToGemini] Error restarting mic:", error);
-              cleanupRecording();
-            }
-          }
-        } else {
-          // Different page - do the redirect
-          console.log("➡️ [sendToGemini] Now redirecting to:", aiRedirect);
-          handleRedirect(aiRedirect);
-        }
-      } else {
-        // No redirect - check for scroll
-        if (aiScrollText) {
-          scrollToText(aiScrollText);
-        }
-
-        // Modified this section to always restart recording if voice interface is active
-        if (voiceInterface.style.display === "block") {
-          console.log("✅ [sendToGemini] TTS done. Restart mic...");
-          cleanupRecording(false);
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          try {
-            isListening = false;
-            await startRecording();
-          } catch (error) {
-            console.error("❌ [sendToGemini] Error restarting mic:", error);
-            cleanupRecording();
-          }
-        }
+        console.log("➡️ [sendToGemini] Found redirect URL:", aiRedirect);
+        // Always redirect if we have a URL, regardless of current page
+        handleRedirect(aiRedirect);
+      } else if (aiScrollText) {
+        // Only try scrolling if we have no redirect
+        scrollToText(aiScrollText);
       }
     } catch (error) {
       console.error("❌ [sendToGemini] Error:", error);
@@ -959,23 +896,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       saveStateToLocalStorage();
 
-      const currentPageUrl = window.location.href;
-      const currentPageTitle = document.title;
+      const truncateContent = (str) => str?.substring(0, 300) || "";
 
       const formattedPages = (window.siteContent.pages || []).map((p) => ({
         title: p.title,
         url: p.url || "",
-        content: (p.fullContent || p.content || "").substring(0, 500),
+        content: truncateContent(p.fullContent || p.content),
       }));
+
       const formattedPosts = (window.siteContent.posts || []).map((p) => ({
         title: p.title,
-        content: p.content.substring(0, 500),
+        content: truncateContent(p.content),
       }));
+
       const formattedProducts = (window.siteContent.products || []).map(
         (p) => ({
           title: p.title,
           price: p.price,
-          description: p.content,
+          description: truncateContent(p.content),
           categories: (p.categories || []).join(", "),
         })
       );
@@ -993,6 +931,11 @@ document.addEventListener("DOMContentLoaded", async () => {
               You are a friendly website guide who speaks naturally and informatively.
               Your personality: Helpful and warm - like a knowledgeable friend showing someone around.
 
+              NAVIGATION PRIORITY:
+              1. If user asks about specific pages/posts/products, ALWAYS provide redirect_url
+              2. Only look for text on current page if no relevant pages/posts/products exist
+              3. Use scroll_to_text only when staying on current page
+
               Your goals are to:
               1. Give meaningful information first, then ask questions if needed
               2. Provide specific details about what users can find
@@ -1000,17 +943,15 @@ document.addEventListener("DOMContentLoaded", async () => {
               4. Sound human and conversational
 
               IMPORTANT GUIDELINES:
-              - Always give substance before asking questions
+              - For navigation requests, ALWAYS check Pages/Posts/Products first
+              - Only search current page text if no relevant navigation exists
               - Include 1-2 specific details about the topic being discussed
               - Keep responses focused but informative (2-4 sentences)
               - Use transitions like "Let me show you" when redirecting
-              - Only ask questions when you need clarification
-              - When content exists on the current page, use scroll_to_id to point to the relevant section
-              - Look for relevant text in the TEXT_INDEX to find the most appropriate section
 
               CURRENT PAGE:
-              URL: ${currentPageUrl}
-              TITLE: ${currentPageTitle}
+              URL: ${window.location.href}
+              TITLE: ${document.title}
 
               CURRENT PAGE SECTIONS:
               ${pageSections.sections
