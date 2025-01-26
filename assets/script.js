@@ -35,8 +35,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const state = JSON.parse(saved);
 
-      // Restore chat history
-      if (Array.isArray(state.chatHistory)) {
+      // Check if this page load was from an AI redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      const isAiRedirect = urlParams.get("ai_redirect") === "true";
+
+      // Only restore chat history if it's an AI redirect
+      if (isAiRedirect && Array.isArray(state.chatHistory)) {
         chatHistory = state.chatHistory;
 
         // Restore chat messages in text interface
@@ -48,59 +52,47 @@ document.addEventListener("DOMContentLoaded", async () => {
             msg.content
           );
         });
+      } else {
+        // Clear chat history on normal page load
+        chatHistory = [];
+        chatMessages.innerHTML = "";
       }
 
-      // Check if this page load was from an AI redirect
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("ai_redirect") === "true") {
-        isAiRedirect = true; // <--- We set the global flag
-
-        // Show the last active interface
-        if (state.lastActiveInterface === "voice") {
-          voiceInterface.style.display = "block";
-          textInterface.style.display = "none";
-          interactionChooser.style.display = "none";
+      // Restore interface state
+      if (state.lastActiveInterface === "voice") {
+        voiceInterface.style.display = "block";
+        textInterface.style.display = "none";
+        interactionChooser.style.display = "none";
+        if (isAiRedirect) {
           try {
-            // Add a small delay before starting recording
             setTimeout(async () => {
               await startRecording();
             }, 500);
           } catch (err) {
             console.error("Error restarting recording after redirect:", err);
           }
-        } else if (state.lastActiveInterface === "text") {
-          textInterface.style.display = "block";
-          voiceInterface.style.display = "none";
-          interactionChooser.style.display = "none";
-          // Scroll chat to bottom
-          chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-
-        // Clean URL
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete("ai_redirect");
-        window.history.replaceState({}, "", newUrl.toString());
-      } else {
-        // ---------------------------------------------
-        // IMPORTANT CHANGE:
-        // We NO LONGER wipe out localStorage here.
-        // Instead, we restore from whatever's saved.
-        // ---------------------------------------------
-        if (state.lastActiveInterface === "voice") {
-          voiceInterface.style.display = "block";
-          textInterface.style.display = "none";
-          interactionChooser.style.display = "none";
-          // We won't auto-start the mic unless you want to call `startRecording()` here.
-        } else if (state.lastActiveInterface === "text") {
-          textInterface.style.display = "block";
-          voiceInterface.style.display = "none";
-          interactionChooser.style.display = "none";
-          // Scroll chat to bottom
+      } else if (state.lastActiveInterface === "text") {
+        textInterface.style.display = "block";
+        voiceInterface.style.display = "none";
+        interactionChooser.style.display = "none";
+        // Scroll chat to bottom if we restored messages
+        if (isAiRedirect) {
           chatMessages.scrollTop = chatMessages.scrollHeight;
         }
       }
+
+      // Clean URL if it was an AI redirect
+      if (isAiRedirect) {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete("ai_redirect");
+        window.history.replaceState({}, "", newUrl.toString());
+      }
     } catch (err) {
       console.error("Failed to load AI assistant state:", err);
+      // On error, clear everything
+      chatHistory = [];
+      chatMessages.innerHTML = "";
     }
   }
 
@@ -296,7 +288,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const posts = window.siteContent.posts || [];
       const products = window.siteContent.products || [];
 
-      // Get current page info
+      // Get current page sections and text index
+      const { sections: pageSections, textIndex } = collectPageSections();
       const currentPageUrl = window.location.href;
       const currentPageTitle = document.title;
 
@@ -321,7 +314,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               Your goals are to:
               1. Give meaningful information first, then ask questions if needed
               2. Provide specific details about what users can find
-              3. Guide users naturally to relevant pages
+              3. Guide users naturally to relevant pages or sections
               4. Sound human and conversational
 
               IMPORTANT GUIDELINES:
@@ -330,10 +323,36 @@ document.addEventListener("DOMContentLoaded", async () => {
               - Keep responses focused but informative (2-4 sentences)
               - Use transitions like "Let me show you" when redirecting
               - Only ask questions when you need clarification
+              - When content exists on the current page, use scroll_to_id to point to the relevant section
+              - Look for relevant text in the TEXT_INDEX to find the most appropriate section
 
               CURRENT PAGE:
               URL: ${currentPageUrl}
               TITLE: ${currentPageTitle}
+
+              CURRENT PAGE SECTIONS:
+              ${pageSections
+                .map(
+                  (section) => `
+                SECTION ID: ${section.id}
+                TITLE: ${section.title}
+                CONTENT: ${section.content}
+                ---
+              `
+                )
+                .join("\n")}
+
+              TEXT INDEX (Use this to find relevant content):
+              ${textIndex
+                .map(
+                  (entry) => `
+                TEXT: ${entry.text}
+                SECTION_ID: ${entry.sectionId}
+                KEYWORDS: ${entry.keywords.join(", ")}
+                ---
+              `
+                )
+                .join("\n")}
 
               Previous conversation:
               ${chatHistory
@@ -407,11 +426,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.warn(
           "Could not parse AI text as JSON. Falling back to plain text..."
         );
-        parsed = { response: aiText, redirect_url: null };
+        parsed = { response: aiText, redirect_url: null, scroll_to_text: null };
       }
 
       const aiResponse = parsed.response;
       const aiRedirect = parsed.redirect_url;
+      const aiScrollText = parsed.scroll_to_text;
 
       const aiResponseElement = document.querySelector(
         ".transcript-line.ai-response span"
@@ -422,24 +442,51 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       await sendToTTS(aiResponse);
 
-      // If there's a redirect, save state and redirect
+      // Handle redirect and scroll logic
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
-        console.log("➡️ [sendToGemini] Now redirecting to:", aiRedirect);
-        handleRedirect(aiRedirect);
+        // Check if we're redirecting to the same page
+        const currentUrlNoSearch =
+          window.location.origin + window.location.pathname;
+        const redirectUrlNoSearch =
+          new URL(aiRedirect).origin + new URL(aiRedirect).pathname;
+
+        if (currentUrlNoSearch === redirectUrlNoSearch) {
+          // Same page - just do the scroll if we have an ID
+          if (aiScrollText) {
+            scrollToText(aiScrollText);
+          }
+          // Restart recording if in voice mode
+          if (voiceInterface.style.display === "block") {
+            console.log("✅ [sendToGemini] Same page. Restart mic...");
+            cleanupRecording(false);
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            try {
+              isListening = false;
+              await startRecording();
+            } catch (error) {
+              console.error("❌ [sendToGemini] Error restarting mic:", error);
+              cleanupRecording();
+            }
+          }
+        } else {
+          // Different page - do the redirect
+          console.log("➡️ [sendToGemini] Now redirecting to:", aiRedirect);
+          handleRedirect(aiRedirect);
+        }
       } else {
+        // No redirect - check for scroll
+        if (aiScrollText) {
+          scrollToText(aiScrollText);
+        }
+
         // Modified this section to always restart recording if voice interface is active
         if (voiceInterface.style.display === "block") {
           console.log("✅ [sendToGemini] TTS done. Restart mic...");
-          // First cleanup existing recording
           cleanupRecording(false);
-
-          // Wait a moment before restarting
           await new Promise((resolve) => setTimeout(resolve, 300));
-
           try {
-            isListening = false; // Reset listening state
+            isListening = false;
             await startRecording();
-            console.log("🎤 [sendToGemini] Recording restarted successfully");
           } catch (error) {
             console.error("❌ [sendToGemini] Error restarting mic:", error);
             cleanupRecording();
@@ -449,6 +496,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (error) {
       console.error("❌ [sendToGemini] Error:", error);
       cleanupRecording();
+    }
+  }
+
+  /**
+   * If the AI wants us to scroll to a particular part of the current page,
+   * we'll look up that element by ID and scroll it into view.
+   */
+  function handleInPageScroll(scrollId) {
+    if (!scrollId) return;
+    const targetElement = document.getElementById(scrollId);
+    if (targetElement) {
+      // Perform the scroll
+      targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      console.log(
+        `🔎 [In-Page Scroll] Scrolled to element with ID: ${scrollId}`
+      );
+    } else {
+      console.warn(`⚠️ [In-Page Scroll] No element found with ID: ${scrollId}`);
     }
   }
 
@@ -894,8 +959,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       saveStateToLocalStorage();
 
-      const loadingMessage = addMessageToChat("ai", "...");
-
       const currentPageUrl = window.location.href;
       const currentPageTitle = document.title;
 
@@ -917,6 +980,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         })
       );
 
+      const pageSections = collectPageSections();
+
       const response = await fetch(
         "https://ai-website-server.vercel.app/gemini",
         {
@@ -931,7 +996,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               Your goals are to:
               1. Give meaningful information first, then ask questions if needed
               2. Provide specific details about what users can find
-              3. Guide users naturally to relevant pages
+              3. Guide users naturally to relevant pages or sections
               4. Sound human and conversational
 
               IMPORTANT GUIDELINES:
@@ -940,10 +1005,36 @@ document.addEventListener("DOMContentLoaded", async () => {
               - Keep responses focused but informative (2-4 sentences)
               - Use transitions like "Let me show you" when redirecting
               - Only ask questions when you need clarification
+              - When content exists on the current page, use scroll_to_id to point to the relevant section
+              - Look for relevant text in the TEXT_INDEX to find the most appropriate section
 
               CURRENT PAGE:
               URL: ${currentPageUrl}
               TITLE: ${currentPageTitle}
+
+              CURRENT PAGE SECTIONS:
+              ${pageSections.sections
+                .map(
+                  (section) => `
+                SECTION ID: ${section.id}
+                TITLE: ${section.title}
+                CONTENT: ${section.content}
+                ---
+              `
+                )
+                .join("\n")}
+
+              TEXT INDEX (Use this to find relevant content):
+              ${pageSections.textIndex
+                .map(
+                  (entry) => `
+                TEXT: ${entry.text}
+                SECTION_ID: ${entry.sectionId}
+                KEYWORDS: ${entry.keywords.join(", ")}
+                ---
+              `
+                )
+                .join("\n")}
 
               Previous conversation:
               ${chatHistory
@@ -1002,45 +1093,69 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Remove markdown code block if present
       rawText = rawText.replace(/```json\n|\n```/g, "").trim();
       console.log("Raw text from Gemini:", rawText);
-      loadingMessage.remove();
 
       let parsed;
       let aiResp;
       try {
-        // If rawText is JSON, parse it
         if (rawText.trim().startsWith("{")) {
           parsed = JSON.parse(rawText);
           aiResp = parsed.response || rawText;
-          console.log("Parsed JSON response:", aiResp);
         } else {
-          // If rawText is plain text, use directly
           aiResp = rawText;
-          console.log("Using raw text:", aiResp);
+          parsed = {
+            response: rawText,
+            redirect_url: null,
+            scroll_to_text: null,
+          };
         }
       } catch (err) {
         console.warn(
           "[sendMessage] Parsing AI text as JSON failed. Fallback to plain text."
         );
         aiResp = rawText;
+        parsed = {
+          response: rawText,
+          redirect_url: null,
+          scroll_to_text: null,
+        };
       }
 
-      const aiRedirect = parsed?.redirect_url || null;
+      const aiRedirect = parsed.redirect_url;
+      const aiScrollText = parsed.scroll_to_text;
 
       addMessageToChat("ai", aiResp);
       chatHistory.push({ role: "assistant", content: aiResp });
       saveStateToLocalStorage();
 
       if (aiRedirect && typeof aiRedirect === "string" && aiRedirect.trim()) {
-        console.log("➡️ [sendMessage] Now redirecting to:", aiRedirect);
-        handleRedirect(aiRedirect);
-      } else if (voiceInterface.style.display === "block") {
+        // Check if we're redirecting to the same page
+        const currentUrlNoSearch =
+          window.location.origin + window.location.pathname;
+        const redirectUrlNoSearch =
+          new URL(aiRedirect).origin + new URL(aiRedirect).pathname;
+
+        if (currentUrlNoSearch === redirectUrlNoSearch) {
+          // Same page - just do the scroll if we have an ID
+          if (aiScrollText) {
+            scrollToText(aiScrollText);
+          }
+        } else {
+          // Different page - do the redirect
+          console.log("➡️ [sendMessage] Now redirecting to:", aiRedirect);
+          handleRedirect(aiRedirect);
+        }
+      } else if (aiScrollText) {
+        // No redirect but we have a scroll ID
+        scrollToText(aiScrollText);
+      }
+
+      if (voiceInterface.style.display === "block") {
         await sendToTTS(aiResp);
         // After TTS, restart recording if in voice mode
         if (mainToggle.classList.contains("active")) {
           console.log("✅ [sendMessage] TTS done. Restart mic...");
           await startRecording();
         }
-        console.log("ℹ️ [sendMessage] No redirect.");
       }
 
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1265,4 +1380,263 @@ async function collectSiteContent() {
       error: error.message,
     };
   }
+}
+
+// Add this function near the top with other utility functions
+function collectPageSections() {
+  // Collect all sections with IDs and all text blocks
+  const sections = [];
+  const textNodes = [];
+
+  // Helper function to get all text nodes under an element
+  function getTextNodes(element, sectionId = null) {
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent.trim();
+      if (text.length > 20) {
+        // Only collect meaningful text blocks
+        textNodes.push({
+          text,
+          sectionId,
+          element: node.parentElement,
+        });
+      }
+    }
+  }
+
+  // First collect all sections with IDs
+  document
+    .querySelectorAll("section[id], div[id], article[id], main[id]")
+    .forEach((section) => {
+      const id = section.id;
+      const title =
+        section.querySelector("h1,h2,h3,h4,h5,h6")?.textContent?.trim() || "";
+      const content = section.textContent.trim().substring(0, 200);
+
+      sections.push({
+        id,
+        title,
+        content,
+        element: section,
+      });
+
+      // Collect text nodes within this section
+      getTextNodes(section, id);
+    });
+
+  // Also collect text nodes that aren't in any ID'd section
+  getTextNodes(document.body);
+
+  // Create a searchable index of text content
+  const textIndex = textNodes.map((node) => ({
+    text: node.text,
+    sectionId: node.sectionId || findClosestSection(node.element, sections),
+    keywords: node.text
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((word) => word.length > 3),
+  }));
+
+  console.log("📑 [Sections] Found sections:", sections);
+  console.log("📝 [Sections] Text index:", textIndex);
+
+  return {
+    sections: sections.map(({ id, title, content }) => ({
+      id,
+      title,
+      content,
+    })),
+    textIndex,
+  };
+}
+
+// Helper function to find the closest section to an element
+function findClosestSection(element, sections) {
+  let current = element;
+  while (current && current !== document.body) {
+    // Check if any section contains this element
+    const containingSection = sections.find((section) =>
+      section.element.contains(current)
+    );
+    if (containingSection) {
+      return containingSection.id;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+// Add this function to handle text-based scrolling
+function scrollToText(searchText) {
+  if (!searchText) return;
+  console.log("🔍 [ScrollToText] Searching for:", searchText);
+
+  // Clean and escape the search text for regex
+  const cleanSearchText = searchText
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    // Allow for some flexibility in whitespace
+    .replace(/\s+/g, "\\s+");
+
+  console.log("🧹 [ScrollToText] Cleaned search text:", cleanSearchText);
+
+  // First try exact match
+  const exactFinder = new RegExp(cleanSearchText, "i");
+  let found = findAndScrollToText(exactFinder);
+
+  // If not found, try a more flexible match
+  if (!found) {
+    console.log(
+      "↪️ [ScrollToText] Exact match not found, trying flexible match..."
+    );
+    // Split into words and create a looser pattern
+    const words = searchText
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 3) // Only use significant words
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join(".*?"); // Allow any characters between words
+
+    const flexibleFinder = new RegExp(words, "i");
+    found = findAndScrollToText(flexibleFinder);
+  }
+
+  return found;
+}
+
+function findAndScrollToText(finder) {
+  console.log("🔎 [FindAndScroll] Using regex:", finder);
+
+  // Get all text nodes, including those in the chat interface
+  const textNodes = [];
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: function (node) {
+        // Skip script and style tags
+        if (
+          node.parentElement.tagName === "SCRIPT" ||
+          node.parentElement.tagName === "STYLE"
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // Skip chat messages
+        let current = node.parentElement;
+        while (current && current !== document.body) {
+          if (
+            current.classList.contains("message-content") || // Skip chat messages
+            current.classList.contains("message") || // Skip entire message container
+            current.id === "chat-messages" || // Skip chat container
+            current.id === "text-interface" // Skip entire chat interface
+          ) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          current = current.parentElement;
+        }
+
+        // Skip hidden elements
+        if (isHidden(node.parentElement)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        const matches = finder.test(node.textContent);
+        if (matches) {
+          console.log(
+            "✅ [FindAndScroll] Found matching text:",
+            node.textContent.trim()
+          );
+        }
+        return matches ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    }
+  );
+
+  let node;
+  while ((node = walker.nextNode())) {
+    textNodes.push(node);
+  }
+
+  console.log("📝 [FindAndScroll] Found matching nodes:", textNodes.length);
+
+  // If we found matching nodes
+  if (textNodes.length > 0) {
+    // Get the first visible match
+    const element = textNodes[0].parentElement;
+    console.log("🎯 [FindAndScroll] Target element:", element);
+
+    // Make sure the element and its parents are visible
+    let current = element;
+    while (current && current !== document.body) {
+      if (current.style.display === "none") {
+        current.style.display = "block";
+      }
+      current = current.parentElement;
+    }
+
+    // Scroll into view with offset
+    const offset = 100; // pixels from top
+    const elementPosition = element.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: "smooth",
+    });
+
+    // Highlight the element
+    const originalBackground = element.style.backgroundColor;
+    const originalTransition = element.style.transition;
+    element.style.transition = "background-color 0.3s ease";
+    element.style.backgroundColor = "#ffeb3b";
+    element.style.animation = "pulse 2s";
+    element.style.position = "relative";
+
+    // Add CSS for pulse animation if it doesn't exist
+    if (!document.getElementById("pulse-animation")) {
+      const style = document.createElement("style");
+      style.id = "pulse-animation";
+      style.textContent = `
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+          100% { transform: scale(1); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Reset after animation
+    setTimeout(() => {
+      element.style.backgroundColor = originalBackground;
+      element.style.transition = originalTransition;
+      element.style.animation = "";
+    }, 2000);
+
+    console.log("✨ [FindAndScroll] Scrolled and highlighted element");
+    return true;
+  }
+
+  console.log("❌ [FindAndScroll] No matching text found");
+  return false;
+}
+
+// Helper function to check if an element is hidden
+function isHidden(element) {
+  if (!element) return true;
+  const style = window.getComputedStyle(element);
+  return (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0" ||
+    element.offsetParent === null
+  );
 }
