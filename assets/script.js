@@ -147,6 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document
     .querySelector(".interaction-option.voice")
     .addEventListener("click", () => {
+      voiceInterface.dataset.forceStop = "false";
       voiceInterface.style.display = "block";
       textInterface.style.display = "none";
       interactionChooser.style.display = "none";
@@ -608,6 +609,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function sendToTTS(text) {
     console.log("📤 [TTS] Sending text to /speak:", text);
     try {
+      // Don't start TTS if we're force stopped
+      if (voiceInterface.dataset.forceStop === "true") {
+        console.log("🛑 [TTS] Force stop detected - not starting TTS");
+        return;
+      }
+
       micButton.disabled = true;
       micButton.style.opacity = "0.5";
 
@@ -629,6 +636,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       return new Promise((resolve, reject) => {
         audio.oncanplaythrough = () => {
+          // Check force stop again before playing
+          if (voiceInterface.dataset.forceStop === "true") {
+            console.log("🛑 [TTS] Force stop detected - not playing audio");
+            URL.revokeObjectURL(audioURL);
+            currentTTSAudio = null;
+            resolve();
+            return;
+          }
           audio.play().catch(reject);
         };
 
@@ -639,8 +654,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           micButton.style.opacity = "1";
           currentTTSAudio = null;
 
-          // Always restart recording after TTS if we're in voice mode
-          if (voiceInterface.style.display === "block") {
+          // Only restart recording if not force stopped
+          if (
+            voiceInterface.style.display === "block" &&
+            !isListening &&
+            voiceInterface.dataset.forceStop !== "true"
+          ) {
             console.log("🎤 [TTS] Restarting recording after playback");
             try {
               await startRecording();
@@ -768,13 +787,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================
   // 6) CLEANUP
   // ======================
+  let currentTTSAudio = null; // Track current TTS audio playback
+
   function cleanupRecording(clearHistory = false) {
     console.log("♻️ [Cleanup] Recording...", {
       clearHistory,
       isListening,
     });
 
+    // Force stop all recording/listening
     isListening = false;
+    voiceInterface.dataset.forceStop = "true"; // Add this flag to prevent restarts
+
+    // Stop any playing TTS audio
+    if (currentTTSAudio) {
+      currentTTSAudio.pause();
+      currentTTSAudio.currentTime = 0;
+      currentTTSAudio = null;
+    }
 
     micButton.classList.remove("listening");
     micButton.disabled = false;
@@ -1100,6 +1130,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     recognitionInstance.onend = async () => {
       console.log("🎤 [Recognition] Ended.");
+
+      // Check for force stop flag
+      if (voiceInterface.dataset.forceStop === "true") {
+        console.log("🛑 [Recognition] Force stop detected - not restarting");
+        isListening = false;
+        return;
+      }
 
       // Only restart if we're in voice mode and actively listening
       if (
