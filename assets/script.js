@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       const response = await fetch(
-        "https://ai-website-server.vercel.app/gemini",
+        "https://ai-website-server-wordpress.vercel.app/gemini",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -572,7 +572,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("📤 [Transcribe] Sending audio to /transcribe...");
     try {
       const response = await fetch(
-        "https://ai-website-server.vercel.app/transcribe",
+        "https://ai-website-server-wordpress.vercel.app/transcribe",
         {
           method: "POST",
           body: formData,
@@ -619,7 +619,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       micButton.style.opacity = "0.5";
 
       const response = await fetch(
-        "https://ai-website-server.vercel.app/speak",
+        "https://ai-website-server-wordpress.vercel.app/speak",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -921,7 +921,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const products = window.siteContent.products || [];
 
       const response = await fetch(
-        "https://ai-website-server.vercel.app/gemini",
+        "https://ai-website-server-wordpress.vercel.app/gemini",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
