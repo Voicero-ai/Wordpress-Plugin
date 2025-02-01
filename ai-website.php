@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 /* ------------------------------------------------------------------------
-   1. ADMIN PAGE TO DISPLAY PAGES IN JSON
+   1. ADMIN PAGE TO DISPLAY CONNECTION INTERFACE
 ------------------------------------------------------------------------ */
 add_action('admin_menu', 'ai_website_add_admin_page');
 function ai_website_add_admin_page() {
@@ -26,187 +26,550 @@ function ai_website_add_admin_page() {
     );
 }
 
-function ai_website_render_admin_page() {
-    // Check if refresh button was clicked
-    if (isset($_POST['refresh_content']) && check_admin_referer('refresh_content_nonce')) {
-        // We'll add a success message
-        add_settings_error('my_plugin_messages', 'content_refreshed', 'Content refreshed successfully!', 'updated');
+// Add AJAX handlers for the admin page
+add_action('wp_ajax_ai_website_check_connection', 'ai_website_check_connection');
+add_action('wp_ajax_ai_website_sync_content', 'ai_website_sync_content');
+
+// Define the API base URL
+define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+
+function ai_website_check_connection() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key found']);
     }
 
-    // Pull all published pages
-    $all_pages = get_pages([
-        'post_status' => 'publish',
-        'sort_order'  => 'asc',
-        'sort_column' => 'post_title'
+    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
     ]);
 
-    // Pull all published posts
-    $all_posts = get_posts([
+    if (is_wp_error($response)) {
+        error_log('AI Website connection error: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => 'Connection failed: ' . $response->get_error_message(),
+            'code' => $response->get_error_code()
+        ]);
+    }
+
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($response_code !== 200) {
+        error_log('AI Website API error: ' . $body);
+        wp_send_json_error([
+            'message' => 'Server returned error: ' . $response_code,
+            'code' => $response_code,
+            'body' => $body
+        ]);
+    }
+
+    $data = json_decode($body, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        wp_send_json_error([
+            'message' => 'Invalid response from server',
+            'code' => 'invalid_json'
+        ]);
+    }
+
+    wp_send_json_success($data);
+}
+
+function ai_website_sync_content() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key found']);
+    }
+
+    // First, let's collect all the data we want to sync
+    $data = [
+        'posts' => [],
+        'pages' => [],
+        'products' => [],
+        'categories' => [],
+        'tags' => [],
+        'comments' => [],
+        'reviews' => []
+    ];
+
+    // Get Posts
+    $posts = get_posts([
+        'post_type' => 'post',
         'post_status' => 'publish',
         'numberposts' => -1
     ]);
 
-    // Pull all products if WooCommerce is active
-    $all_products = [];
-    if (class_exists('WC_Product_Query')) {
-        $query = new WC_Product_Query([
-            'status' => 'publish',
-            'limit'  => -1,
+    foreach ($posts as $post) {
+        // Get comments for this post
+        $comments = get_comments([
+            'post_id' => $post->ID,
+            'status' => 'approve'
         ]);
-        $all_products = $query->get_products();
-    }
 
-    // Format pages
-    $formatted_pages = [];
-    foreach ($all_pages as $page) {
-        // Clean up the content by:
-        // 1. Removing extra whitespace and newlines
-        // 2. Converting multiple spaces to single space
-        // 3. Trimming whitespace from start/end
-        $clean_content = wp_strip_all_tags($page->post_content);  // First strip HTML
-        $clean_content = preg_replace('/\s+/', ' ', $clean_content);  // Replace multiple spaces/newlines with single space
-        $clean_content = trim($clean_content);  // Remove leading/trailing whitespace
-
-        $formatted_pages[] = [
-            'id'      => $page->ID,
-            'title'   => $page->post_title,
-            'content' => $clean_content,
-            'url'     => get_permalink($page->ID),
-        ];
-    }
-
-    // Format posts
-    $formatted_posts = [];
-    foreach ($all_posts as $post) {
-        $clean_content = wp_strip_all_tags($post->post_content);
-        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
-        $clean_content = trim($clean_content);
-
-        $formatted_posts[] = [
-            'id'      => $post->ID,
-            'title'   => $post->post_title,
-            'content' => $clean_content,
-            'url'     => get_permalink($post->ID),
-        ];
-    }
-
-    // Format products
-    $formatted_products = [];
-    foreach ($all_products as $product) {
-        $clean_description = wp_strip_all_tags($product->get_description());
-        $clean_description = preg_replace('/\s+/', ' ', $clean_description);
-        $clean_description = trim($clean_description);
-
-        $clean_short_description = wp_strip_all_tags($product->get_short_description());
-        $clean_short_description = preg_replace('/\s+/', ' ', $clean_short_description);
-        $clean_short_description = trim($clean_short_description);
-
-        $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'names']);
-        
-        $attributes = [];
-        foreach ($product->get_attributes() as $attribute) {
-            $attributes[] = [
-                'name' => wc_attribute_label($attribute->get_name()),
-                'options' => $attribute->get_options(),
+        foreach ($comments as $comment) {
+            $data['comments'][] = [
+                'id' => $comment->comment_ID,
+                'post_id' => $post->ID,
+                'author' => $comment->comment_author,
+                'author_email' => $comment->comment_author_email,
+                'content' => wp_strip_all_tags($comment->comment_content),
+                'date' => $comment->comment_date,
+                'status' => $comment->comment_approved,
+                'parent_id' => $comment->comment_parent
             ];
         }
 
-        $formatted_products[] = [
-            'id'          => $product->get_id(),
-            'title'       => $product->get_name(),
-            'price'       => $product->get_price(),
-            'sale_price'  => $product->get_sale_price(),
-            'regular_price' => $product->get_regular_price(),
-            'content'     => $clean_description,
-            'short_description' => $clean_short_description,
-            'link'        => get_permalink($product->get_id()),
-            'image'       => wp_get_attachment_url($product->get_image_id()),
-            'categories'  => $categories,
-            'attributes'  => $attributes,
-            'sku'         => $product->get_sku(),
-            'stock_status' => $product->get_stock_status(),
-            'in_stock'    => $product->is_in_stock(),
+        $data['posts'][] = [
+            'id' => $post->ID,
+            'title' => $post->post_title,
+            'content' => wp_strip_all_tags($post->post_content),
+            'excerpt' => wp_strip_all_tags(get_the_excerpt($post)),
+            'slug' => $post->post_name,
+            'link' => get_permalink($post->ID)
         ];
     }
 
-    // Combine all data
-    $all_data = [
-        'pages' => $formatted_pages,
-        'posts' => $formatted_posts,
-        'products' => $formatted_products,
-        'timestamp' => current_time('mysql')
-    ];
+    // Get Pages
+    $pages = get_pages(['post_status' => 'publish']);
+    foreach ($pages as $page) {
+        $data['pages'][] = [
+            'id' => $page->ID,
+            'title' => $page->post_title,
+            'content' => wp_strip_all_tags($page->post_content),
+            'slug' => $page->post_name,
+            'link' => get_permalink($page->ID)
+        ];
+    }
 
-    // Output as pretty HTML
-    echo '<div class="wrap">';
-    echo '<h1>My Plugin: All Content</h1>';
-    
-    // Show any admin notices
-    settings_errors('my_plugin_messages');
+    // Get Categories
+    $categories = get_categories(['hide_empty' => false]);
+    foreach ($categories as $category) {
+        $data['categories'][] = [
+            'id' => $category->term_id,
+            'name' => $category->name,
+            'slug' => $category->slug,
+            'description' => wp_strip_all_tags($category->description)
+        ];
+    }
 
-    // Add refresh button
-    echo '<form method="post">';
-    wp_nonce_field('refresh_content_nonce');
-    echo '<p><input type="submit" name="refresh_content" class="button button-primary" value="Refresh Content"></p>';
-    echo '</form>';
+    // Get Tags
+    $tags = get_tags(['hide_empty' => false]);
+    foreach ($tags as $tag) {
+        $data['tags'][] = [
+            'id' => $tag->term_id,
+            'name' => $tag->name,
+            'slug' => $tag->slug
+        ];
+    }
 
-    // Add tabs for different content types
-    echo '<div class="nav-tab-wrapper">';
-    echo '<a href="#" class="nav-tab nav-tab-active" data-tab="all">All Data</a>';
-    echo '<a href="#" class="nav-tab" data-tab="pages">Pages</a>';
-    echo '<a href="#" class="nav-tab" data-tab="posts">Posts</a>';
-    echo '<a href="#" class="nav-tab" data-tab="products">Products</a>';
-    echo '</div>';
+    // Get Products if WooCommerce is active
+    if (class_exists('WC_Product_Query')) {
+        $products = wc_get_products([
+            'status' => 'publish',
+            'limit' => -1
+        ]);
 
-    // Content sections
-    echo '<div class="tab-content" id="tab-all" style="display:block;">';
-    echo '<h2>All Data</h2>';
-    echo '<pre>' . esc_html(wp_json_encode($all_data, JSON_PRETTY_PRINT)) . '</pre>';
-    echo '</div>';
+        foreach ($products as $product) {
+            // Get reviews for this product
+            $reviews = get_comments([
+                'post_id' => $product->get_id(),
+                'status' => 'approve',
+                'type' => 'review'
+            ]);
 
-    echo '<div class="tab-content" id="tab-pages" style="display:none;">';
-    echo '<h2>Pages</h2>';
-    echo '<pre>' . esc_html(wp_json_encode($formatted_pages, JSON_PRETTY_PRINT)) . '</pre>';
-    echo '</div>';
+            foreach ($reviews as $review) {
+                $rating = get_comment_meta($review->comment_ID, 'rating', true);
+                $verified = get_comment_meta($review->comment_ID, 'verified', true);
 
-    echo '<div class="tab-content" id="tab-posts" style="display:none;">';
-    echo '<h2>Posts</h2>';
-    echo '<pre>' . esc_html(wp_json_encode($formatted_posts, JSON_PRETTY_PRINT)) . '</pre>';
-    echo '</div>';
+                $data['reviews'][] = [
+                    'id' => $review->comment_ID,
+                    'product_id' => $product->get_id(),
+                    'reviewer' => $review->comment_author,
+                    'reviewer_email' => $review->comment_author_email,
+                    'review' => wp_strip_all_tags($review->comment_content),
+                    'rating' => (int)$rating,
+                    'date' => $review->comment_date,
+                    'verified' => (bool)$verified
+                ];
+            }
 
-    echo '<div class="tab-content" id="tab-products" style="display:none;">';
-    echo '<h2>Products</h2>';
-    echo '<pre>' . esc_html(wp_json_encode($formatted_products, JSON_PRETTY_PRINT)) . '</pre>';
-    echo '</div>';
+            $data['products'][] = [
+                'id' => $product->get_id(),
+                'name' => $product->get_name(),
+                'slug' => $product->get_slug(),
+                'description' => wp_strip_all_tags($product->get_description()),
+                'short_description' => wp_strip_all_tags($product->get_short_description()),
+                'price' => $product->get_price(),
+                'regular_price' => $product->get_regular_price(),
+                'sale_price' => $product->get_sale_price(),
+                'stock_quantity' => $product->get_stock_quantity(),
+                'link' => get_permalink($product->get_id())
+            ];
+        }
+    }
 
-    // Add inline JavaScript for tab switching
-    echo '<script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const tabs = document.querySelectorAll(".nav-tab");
-            tabs.forEach(tab => {
-                tab.addEventListener("click", function(e) {
-                    e.preventDefault();
-                    
-                    // Remove active class from all tabs
-                    tabs.forEach(t => t.classList.remove("nav-tab-active"));
-                    
-                    // Add active class to clicked tab
-                    this.classList.add("nav-tab-active");
-                    
-                    // Hide all content sections
-                    document.querySelectorAll(".tab-content").forEach(content => {
-                        content.style.display = "none";
-                    });
-                    
-                    // Show selected content section
-                    const tabId = "tab-" + this.dataset.tab;
-                    document.getElementById(tabId).style.display = "block";
-                });
+    // Send the data to the AI Website API
+    $response = wp_remote_post(AI_WEBSITE_API_URL . '/sync', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($data),
+        'timeout' => 120,
+        'sslverify' => false
+    ]);
+
+    if (is_wp_error($response)) {
+        error_log('AI Website sync error: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => 'Sync failed: ' . $response->get_error_message(),
+            'code' => $response->get_error_code()
+        ]);
+    }
+
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($response_code !== 200) {
+        error_log('AI Website sync API error: ' . $body);
+        wp_send_json_error([
+            'message' => 'Server returned error during sync: ' . $response_code,
+            'code' => $response_code,
+            'body' => $body
+        ]);
+    }
+
+    $data = json_decode($body, true);
+    wp_send_json_success($data);
+}
+
+function ai_website_render_admin_page() {
+    // Handle form submission
+    if (isset($_POST['access_key']) && check_admin_referer('save_access_key_nonce')) {
+        $access_key = sanitize_text_field($_POST['access_key']);
+        
+        // Basic validation of access key format
+        if (strlen($access_key) !== 32) {
+            add_settings_error(
+                'ai_website_messages',
+                'key_invalid',
+                'Invalid access key format. Please check your key and try again.',
+                'error'
+            );
+        } else {
+            update_option('ai_website_access_key', $access_key);
+            add_settings_error(
+                'ai_website_messages',
+                'key_updated',
+                'Settings saved successfully! Attempting to connect...',
+                'updated'
+            );
+        }
+    }
+
+    // Handle manual sync
+    if (isset($_POST['sync_content']) && check_admin_referer('sync_content_nonce')) {
+        // We'll handle the sync status message in the AJAX response
+        add_settings_error(
+            'ai_website_messages',
+            'sync_started',
+            'Content sync initiated...',
+            'info'
+        );
+    }
+
+    // Get saved values
+    $saved_key = get_option('ai_website_access_key', '');
+
+    // Output the admin interface
+    ?>
+    <div class="wrap">
+        <h1>AI Website Connection</h1>
+        
+        <?php settings_errors('ai_website_messages'); ?>
+
+        <div class="card" style="max-width: 800px; margin-top: 20px;">
+            <h2>Connect Your Website</h2>
+            <p>Enter your access key to connect to the AI Website service.</p>
+
+            <form method="post" action="">
+                <?php wp_nonce_field('save_access_key_nonce'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="access_key">Access Key</label></th>
+                        <td>
+                            <input type="text" 
+                                   id="access_key" 
+                                   name="access_key" 
+                                   value="<?php echo esc_attr($saved_key); ?>" 
+                                   class="regular-text"
+                                   placeholder="Enter your 32-character access key"
+                                   pattern=".{32,32}"
+                                   title="Access key should be exactly 32 characters long">
+                            <p class="description">Your access key should be exactly 32 characters long.</p>
+                        </td>
+                    </tr>
+                </table>
+                <p class="submit">
+                    <input type="submit" 
+                           name="submit" 
+                           id="submit" 
+                           class="button button-primary" 
+                           value="Save & Connect">
+                </p>
+            </form>
+        </div>
+
+        <?php if ($saved_key): ?>
+        <div class="card" style="max-width: 800px; margin-top: 20px;">
+            <h2>Website Information</h2>
+            <div id="website-info-container">
+                <div class="spinner is-active" style="float: none;"></div>
+                <p>Loading website information...</p>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <form method="post" action="" id="sync-form">
+                    <?php wp_nonce_field('sync_content_nonce'); ?>
+                    <input type="submit" 
+                           name="sync_content" 
+                           id="sync-button" 
+                           class="button" 
+                           value="Sync Content Now">
+                    <span id="sync-status" style="margin-left: 10px;"></span>
+                </form>
+                <div id="sync-progress" style="margin-top: 15px; display: none;">
+                    <h4 style="margin-bottom: 10px;">Sync Progress</h4>
+                    <div class="sync-stats"></div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
+        const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
+
+        function loadWebsiteInfo() {
+            const container = $('#website-info-container');
+            container.html(`
+                <div class="spinner is-active" style="float: none;"></div>
+                <p>Loading website information...</p>
+            `);
+
+            $.post(ajaxurl, {
+                action: 'ai_website_check_connection',
+                nonce: nonce
+            })
+            .done(function(response) {
+                if (!response.success) {
+                    container.html(`
+                        <div class="notice notice-error">
+                            <p>Error: ${response.data.message || 'Unknown error occurred'}</p>
+                            ${response.data.code ? `<p>Error Code: ${response.data.code}</p>` : ''}
+                            <p>Please check your access key or contact support if the problem persists.</p>
+                        </div>
+                    `);
+                    return;
+                }
+
+                const website = response.data.website;
+                const html = `
+                    <table class="widefat">
+                        <tbody>
+                            <tr>
+                                <th>Website Name</th>
+                                <td>${website.name || website.url}</td>
+                            </tr>
+                            <tr>
+                                <th>URL</th>
+                                <td>${website.url}</td>
+                            </tr>
+                            <tr>
+                                <th>Plan</th>
+                                <td>${website.plan}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>
+                                    <span class="button button-small ${website.active ? 'button-primary' : 'button-secondary'}">
+                                        ${website.active ? 'Active' : 'Inactive'}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Monthly Queries</th>
+                                <td>
+                                    ${website.monthlyQueries} / ${website.queryLimit}
+                                    <div class="progress-bar" style="
+                                        background: #f0f0f1;
+                                        height: 10px;
+                                        border-radius: 5px;
+                                        margin-top: 5px;
+                                        overflow: hidden;
+                                    ">
+                                        <div style="
+                                            width: ${(website.monthlyQueries / website.queryLimit) * 100}%;
+                                            background: #2271b1;
+                                            height: 100%;
+                                            transition: width 0.3s ease;
+                                        "></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Last Synced</th>
+                                <td>${website.lastSyncedAt ? new Date(website.lastSyncedAt).toLocaleString() : 'Never'}</td>
+                            </tr>
+                            <tr>
+                                <th>Sync Frequency</th>
+                                <td>${website.syncFrequency}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top: 20px;">
+                        <h3>Content Statistics</h3>
+                        <table class="widefat">
+                            <thead>
+                                <tr>
+                                    <th>Content Type</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Pages</td>
+                                    <td>${website._count?.pages || 0}</td>
+                                </tr>
+                                <tr>
+                                    <td>Posts</td>
+                                    <td>${website._count?.posts || 0}</td>
+                                </tr>
+                                <tr>
+                                    <td>Products</td>
+                                    <td>${website._count?.products || 0}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.html(html);
+            })
+            .fail(function(xhr, status, error) {
+                container.html(`
+                    <div class="notice notice-error">
+                        <p>Connection Error: ${error || 'Failed to connect to server'}</p>
+                        <p>Status: ${status}</p>
+                        <p>Please check your internet connection and try again.</p>
+                    </div>
+                `);
+            });
+        }
+
+        // Handle manual sync
+        $('#sync-form').on('submit', function(e) {
+            e.preventDefault();
+            const syncButton = $('#sync-button');
+            const syncStatus = $('#sync-status');
+            const syncProgress = $('#sync-progress');
+            const syncStats = $('.sync-stats');
+            
+            syncButton.prop('disabled', true);
+            syncStatus.html(`<span class="spinner is-active" style="float: none;"></span> Syncing content...`);
+            syncProgress.show();
+            syncStats.html('');
+
+            $.post(ajaxurl, {
+                action: 'ai_website_sync_content',
+                nonce: nonce
+            })
+            .done(function(response) {
+                if (!response.success) {
+                    syncStatus.html(`<span style="color: #d63638;">✗ ${response.data.message || 'Sync failed'}</span>`);
+                    return;
+                }
+
+                const stats = response.data.stats;
+                syncStatus.html(`<span style="color: #00a32a;">✓ Sync completed successfully!</span>`);
+                
+                // Show detailed stats
+                let statsHtml = `
+                    <table class="widefat" style="margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Created/Updated</th>
+                                <th>Errors</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Items</td>
+                                <td>${stats.created}</td>
+                                <td>${stats.errors}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                `;
+
+                // Show any fetch errors
+                if (stats.fetchErrors && Object.keys(stats.fetchErrors).length > 0) {
+                    statsHtml += `
+                        <div class="notice notice-warning" style="margin-top: 10px;">
+                            <p>Some data could not be fetched:</p>
+                            <ul style="list-style: disc; margin-left: 20px;">
+                                ${Object.entries(stats.fetchErrors)
+                                    .map(([key, error]) => `<li>${key}: ${error}</li>`)
+                                    .join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                syncStats.html(statsHtml);
+
+                setTimeout(() => {
+                    loadWebsiteInfo();
+                }, 1000);
+            })
+            .fail(function(xhr, status, error) {
+                syncStatus.html(`<span style="color: #d63638;">✗ Connection error: ${error || 'Failed to connect'}</span>`);
+                syncStats.html(`
+                    <div class="notice notice-error">
+                        <p>Sync failed with error: ${error || 'Unknown error'}</p>
+                        <p>Status: ${status}</p>
+                    </div>
+                `);
+            })
+            .always(function() {
+                syncButton.prop('disabled', false);
+                setTimeout(() => {
+                    syncStatus.html('');
+                }, 5000);
             });
         });
-    </script>';
 
-    echo '</div>'; // Close wrap div
+        // Load website info on page load if we have an access key
+        if ('<?php echo esc_js($saved_key); ?>') {
+            loadWebsiteInfo();
+        }
+    });
+    </script>
+    <?php
 }
 
 /* ------------------------------------------------------------------------
@@ -376,14 +739,192 @@ add_action('rest_api_init', function() {
     ]);
 });
 
+/**
+ * 2F) /wp-json/my-plugin/v1/all-content
+ *     Returns all content types in one request
+ */
+add_action('rest_api_init', function() {
+    register_rest_route('my-plugin/v1', '/all-content', [
+        'methods'  => ['GET', 'POST', 'OPTIONS'],
+        'callback' => function($request) {
+            $response = [
+                'posts' => [],
+                'pages' => [],
+                'products' => [],
+                'categories' => [],
+                'tags' => [],
+                'comments' => [],
+                'reviews' => []
+            ];
+
+            // Get Posts
+            $posts = get_posts([
+                'post_type' => 'post',
+                'post_status' => 'publish',
+                'numberposts' => -1
+            ]);
+
+            foreach ($posts as $post) {
+                // Get comments for this post
+                $comments = get_comments([
+                    'post_id' => $post->ID,
+                    'status' => 'approve'
+                ]);
+
+                $formatted_comments = [];
+                foreach ($comments as $comment) {
+                    $formatted_comments[] = [
+                        'id' => $comment->comment_ID,
+                        'post_id' => $post->ID,
+                        'author' => $comment->comment_author,
+                        'author_email' => $comment->comment_author_email,
+                        'content' => wp_strip_all_tags($comment->comment_content),
+                        'date' => $comment->comment_date,
+                        'status' => $comment->comment_approved,
+                        'parent_id' => $comment->comment_parent
+                    ];
+                }
+
+                // Add comments to the main comments array
+                $response['comments'] = array_merge($response['comments'], $formatted_comments);
+
+                $response['posts'][] = [
+                    'id' => $post->ID,
+                    'title' => $post->post_title,
+                    'content' => wp_strip_all_tags($post->post_content),
+                    'excerpt' => wp_strip_all_tags(get_the_excerpt($post)),
+                    'slug' => $post->post_name,
+                    'link' => get_permalink($post->ID)
+                ];
+            }
+
+            // Get Pages
+            $pages = get_pages(['post_status' => 'publish']);
+            foreach ($pages as $page) {
+                $response['pages'][] = [
+                    'id' => $page->ID,
+                    'title' => $page->post_title,
+                    'content' => wp_strip_all_tags($page->post_content),
+                    'slug' => $page->post_name,
+                    'link' => get_permalink($page->ID)
+                ];
+            }
+
+            // Get Categories
+            $categories = get_categories(['hide_empty' => false]);
+            foreach ($categories as $category) {
+                $response['categories'][] = [
+                    'id' => $category->term_id,
+                    'name' => $category->name,
+                    'slug' => $category->slug,
+                    'description' => wp_strip_all_tags($category->description)
+                ];
+            }
+
+            // Get Tags
+            $tags = get_tags(['hide_empty' => false]);
+            foreach ($tags as $tag) {
+                $response['tags'][] = [
+                    'id' => $tag->term_id,
+                    'name' => $tag->name,
+                    'slug' => $tag->slug
+                ];
+            }
+
+            // Get Products if WooCommerce is active
+            if (class_exists('WC_Product_Query')) {
+                $products = wc_get_products([
+                    'status' => 'publish',
+                    'limit' => -1
+                ]);
+
+                foreach ($products as $product) {
+                    // Get reviews for this product
+                    $reviews = get_comments([
+                        'post_id' => $product->get_id(),
+                        'status' => 'approve',
+                        'type' => 'review'
+                    ]);
+
+                    $formatted_reviews = [];
+                    foreach ($reviews as $review) {
+                        $rating = get_comment_meta($review->comment_ID, 'rating', true);
+                        $verified = get_comment_meta($review->comment_ID, 'verified', true);
+
+                        $formatted_reviews[] = [
+                            'id' => $review->comment_ID,
+                            'product_id' => $product->get_id(),
+                            'reviewer' => $review->comment_author,
+                            'reviewer_email' => $review->comment_author_email,
+                            'review' => wp_strip_all_tags($review->comment_content),
+                            'rating' => (int)$rating,
+                            'date' => $review->comment_date,
+                            'verified' => (bool)$verified
+                        ];
+                    }
+
+                    // Add reviews to the main reviews array
+                    $response['reviews'] = array_merge($response['reviews'], $formatted_reviews);
+
+                    $response['products'][] = [
+                        'id' => $product->get_id(),
+                        'name' => $product->get_name(),
+                        'slug' => $product->get_slug(),
+                        'description' => wp_strip_all_tags($product->get_description()),
+                        'short_description' => wp_strip_all_tags($product->get_short_description()),
+                        'price' => $product->get_price(),
+                        'regular_price' => $product->get_regular_price(),
+                        'sale_price' => $product->get_sale_price(),
+                        'stock_quantity' => $product->get_stock_quantity(),
+                        'link' => get_permalink($product->get_id())
+                    ];
+                }
+            }
+
+            return new WP_REST_Response($response, 200);
+        },
+        'permission_callback' => '__return_true'
+    ]);
+});
+
 /* ------------------------------------------------------------------------
-   3. (OPTIONAL) CORS HEADERS
+   3. CORS HEADERS
 ------------------------------------------------------------------------ */
 add_action('init', function() {
-    header("Access-Control-Allow-Origin: *");
+    if (isset($_SERVER['HTTP_ORIGIN'])) {
+        header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+        header('Access-Control-Allow-Credentials: true');
+    } else {
+        header("Access-Control-Allow-Origin: *");
+    }
+    
     header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type");
+    header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept");
+    
+    // Handle preflight requests
+    if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+        status_header(200);
+        exit();
+    }
 });
+
+// Also add CORS headers to REST API responses
+add_action('rest_api_init', function() {
+    remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+    add_filter('rest_pre_serve_request', function($value) {
+        if (isset($_SERVER['HTTP_ORIGIN'])) {
+            header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+            header('Access-Control-Allow-Credentials: true');
+        } else {
+            header("Access-Control-Allow-Origin: *");
+        }
+        
+        header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+        header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept");
+        header("Access-Control-Expose-Headers: X-WP-Total, X-WP-TotalPages");
+        return $value;
+    });
+}, 15);
 
 /* ------------------------------------------------------------------------
    4. ENQUEUE ASSETS (script.js & style.css)
@@ -471,3 +1012,76 @@ function my_first_plugin_add_toggle_button() {
     ';
 }
 add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
+
+// Add this near the top of the file after the header
+function ai_website_get_access_key() {
+    return get_option('ai_website_access_key', '');
+}
+
+// Add this to make the access key and API URL available to frontend scripts
+function ai_website_enqueue_scripts() {
+    wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
+    wp_enqueue_script(
+        'ai-website-script',
+        plugin_dir_url(__FILE__) . 'assets/script.js',
+        ['jquery', 'recordrtc'],
+        '1.1',
+        true
+    );
+
+    // Pass data to the frontend script
+    wp_localize_script('ai-website-script', 'aiWebsiteData', [
+        'apiUrl' => AI_WEBSITE_API_URL,
+        'accessKey' => ai_website_get_access_key(),
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('ai_website_frontend_nonce')
+    ]);
+
+    wp_enqueue_style('ai-website-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
+}
+add_action('wp_enqueue_scripts', 'ai_website_enqueue_scripts');
+
+// Add AJAX handler for frontend access
+add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_frontend_get_info');
+add_action('wp_ajax_ai_website_get_info', 'ai_website_frontend_get_info');
+
+function ai_website_frontend_get_info() {
+    // Verify nonce for both logged-in and non-logged-in users
+    check_ajax_referer('ai_website_frontend_nonce', 'nonce');
+    
+    $access_key = ai_website_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'Website not configured']);
+    }
+
+    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    if (is_wp_error($response)) {
+        wp_send_json_error([
+            'message' => 'Connection failed',
+            'error' => $response->get_error_message()
+        ]);
+    }
+
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($response_code !== 200) {
+        wp_send_json_error([
+            'message' => 'API error',
+            'code' => $response_code,
+            'response' => $body
+        ]);
+    }
+
+    $data = json_decode($body, true);
+    wp_send_json_success($data);
+}
