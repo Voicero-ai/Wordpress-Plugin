@@ -292,14 +292,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentPage: { url: currentPageUrl, title: currentPageTitle },
       });
 
-      const response = await fetch(
-        "http://localhost:3000/gemini",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: text,
-            context: `
+      const response = await fetch("http://localhost:3000/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: text,
+          context: `
               You are a friendly and helpful guide. Keep responses natural and conversational.
               Avoid phrases like "as an AI" or "as a website assistant".
               Just answer questions directly and warmly like a knowledgeable friend would.
@@ -359,9 +357,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
               User's question: ${text}
             `,
-          }),
-        }
-      );
+        }),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -571,13 +568,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     console.log("📤 [Transcribe] Sending audio to /transcribe...");
     try {
-      const response = await fetch(
-        "http://localhost:3000/transcribe",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const response = await fetch("http://localhost:3000/transcribe", {
+        method: "POST",
+        body: formData,
+      });
       const data = await response.json();
       console.log("📥 [Transcribe] Received:", data);
 
@@ -618,14 +612,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       micButton.disabled = true;
       micButton.style.opacity = "0.5";
 
-      const response = await fetch(
-        "http://localhost:3000/speak",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        }
-      );
+      const response = await fetch("http://localhost:3000/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
 
       const audioBlob = await response.blob();
       console.log("📥 [TTS] Received audio blob");
@@ -920,14 +911,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       const posts = window.siteContent.posts || [];
       const products = window.siteContent.products || [];
 
-      const response = await fetch(
-        "http://localhost:3000/gemini",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: text,
-            context: `
+      const response = await fetch("http://localhost:3000/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: text,
+          context: `
               You are a friendly and helpful guide. Keep responses natural and conversational.
               Avoid phrases like "as an AI" or "as a website assistant".
               Just answer questions directly and warmly like a knowledgeable friend would.
@@ -984,9 +973,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
               User's question: ${text}
             `,
-          }),
-        }
-      );
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`[Gemini] Error: ${response.status}`);
@@ -1216,6 +1204,91 @@ document.addEventListener("DOMContentLoaded", async () => {
       localStorage.removeItem("aiAssistantState");
     }
   });
+
+  // Handle sync form submission
+  $("#sync-form").on("submit", async function (e) {
+    e.preventDefault();
+    const syncButton = $("#sync-button");
+    const syncStatus = $("#sync-status");
+
+    // Reset initial state
+    syncButton.prop("disabled", true);
+
+    // Create status elements for each step
+    syncStatus.html(`
+        <div class="sync-steps">
+            <div id="sync-step">⏳ Syncing content...</div>
+            <div id="vectorize-step">Vectorizing content (waiting...)</div>
+            <div id="assistant-step">Setting up assistant (waiting...)</div>
+        </div>
+    `);
+
+    try {
+      // Step 1: Initial Sync
+      const syncResponse = await $.post(ajaxurl, {
+        action: "ai_website_sync_content",
+        nonce: nonce,
+      });
+
+      if (!syncResponse.success) {
+        throw new Error(syncResponse.data.message || "Sync failed");
+      }
+
+      // Update sync step with checkmark
+      $("#sync-step").html("✅ Content synced successfully");
+
+      // Step 2: Vectorization
+      $("#vectorize-step").html("⏳ Vectorizing content...");
+      const vectorizeResponse = await $.post(ajaxurl, {
+        action: "ai_website_vectorize_content",
+        nonce: nonce,
+      });
+
+      if (!vectorizeResponse.success) {
+        throw new Error(
+          vectorizeResponse.data.message || "Vectorization failed"
+        );
+      }
+
+      // Update vectorize step with checkmark
+      $("#vectorize-step").html("✅ Content vectorized successfully");
+
+      // Step 3: Assistant Setup
+      $("#assistant-step").html("⏳ Setting up assistant...");
+      const assistantResponse = await $.post(ajaxurl, {
+        action: "ai_website_setup_assistant",
+        nonce: nonce,
+      });
+
+      if (!assistantResponse.success) {
+        throw new Error(
+          assistantResponse.data.message || "Assistant setup failed"
+        );
+      }
+
+      // Update assistant step with checkmark
+      $("#assistant-step").html("✅ Assistant setup complete");
+
+      // Update website info after a short delay
+      setTimeout(() => {
+        loadWebsiteInfo();
+      }, 1500);
+    } catch (error) {
+      // Error handling - mark current step as failed with X
+      console.error("Operation failed:", error);
+      if (!$("#sync-step").text().includes("✅")) {
+        $("#sync-step").html("❌ Sync failed: " + error.message);
+      } else if (!$("#vectorize-step").text().includes("✅")) {
+        $("#vectorize-step").html("❌ Vectorization failed: " + error.message);
+      } else if (!$("#assistant-step").text().includes("✅")) {
+        $("#assistant-step").html(
+          "❌ Assistant setup failed: " + error.message
+        );
+      }
+    } finally {
+      syncButton.prop("disabled", false);
+    }
+  });
 });
 
 /**
@@ -1366,102 +1439,4 @@ function isHidden(element) {
     style.opacity === "0" ||
     element.offsetParent === null
   );
-}
-
-async function ai_website_sync_content() {
-  const syncButton = $("#sync-button");
-  const syncStatus = $("#sync-status");
-  const progressBar = $(".progress-bar");
-  const progressText = $(".progress-text");
-
-  syncButton.prop("disabled", true);
-  syncProgress.show();
-  progressBar.css("width", "0%");
-  progressText.text("0%");
-
-  try {
-    // Step 1: Sync Content (0-33%)
-    syncStatus.html(
-      `<span class="spinner is-active" style="float: none;"></span> Syncing content...`
-    );
-    const syncResponse = await fetch(
-      "http://localhost:3000/api/wordpress/sync",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    if (!syncResponse.ok) {
-      throw new Error(`Sync failed: ${syncResponse.status}`);
-    }
-    progressBar.css("width", "33%");
-    progressText.text("33%");
-
-    // Step 2: Vectorize Content (33-66%)
-    syncStatus.html(
-      `<span class="spinner is-active" style="float: none;"></span> Vectorizing content...`
-    );
-    const vectorizeResponse = await fetch(
-      "http://localhost:3000/api/wordpress/vectorize",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessKey}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!vectorizeResponse.ok) {
-      throw new Error(`Vectorization failed: ${vectorizeResponse.status}`);
-    }
-    progressBar.css("width", "66%");
-    progressText.text("66%");
-
-    // Step 3: Create/Update Assistant (66-100%)
-    syncStatus.html(
-      `<span class="spinner is-active" style="float: none;"></span> Setting up AI assistant...`
-    );
-    const assistantResponse = await fetch(
-      "http://localhost:3000/api/wordpress/assistant",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessKey}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!assistantResponse.ok) {
-      throw new Error(`Assistant setup failed: ${assistantResponse.status}`);
-    }
-
-    // Show completion
-    progressBar.css("width", "100%");
-    progressText.text("Complete!");
-    syncStatus.html(
-      `<span style="color: #00a32a;">✓ All operations completed successfully!</span>`
-    );
-
-    // Update website info after a short delay
-    setTimeout(() => {
-      loadWebsiteInfo();
-      syncProgress.hide();
-    }, 1500);
-  } catch (error) {
-    console.error("Operation failed:", error);
-    syncStatus.html(
-      `<span style="color: #d63638;">✗ Error: ${error.message}</span>`
-    );
-    progressBar.css("width", "100%").css("background", "#d63638");
-    progressText.text("Failed");
-  } finally {
-    syncButton.prop("disabled", false);
-  }
 }

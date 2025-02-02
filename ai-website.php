@@ -29,6 +29,8 @@ function ai_website_add_admin_page() {
 // Add AJAX handlers for the admin page
 add_action('wp_ajax_ai_website_check_connection', 'ai_website_check_connection');
 add_action('wp_ajax_ai_website_sync_content', 'ai_website_sync_content');
+add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
+add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
 
 // Define the API base URL
 define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
@@ -90,28 +92,100 @@ function ai_website_sync_content() {
         wp_send_json_error(['message' => 'No access key found']);
     }
 
-    // 1. First sync the content
-    $data = collect_wordpress_data(); // Extract existing data collection to a function
-    $sync_response = wp_remote_post('http://localhost:3000/api/wordpress/sync', [
-        'headers' => [
-            'Authorization' => 'Bearer ' . $access_key,
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ],
-        'body' => json_encode($data),
-        'timeout' => 120,
-        'sslverify' => false
-    ]);
+    try {
+        // 1. First sync the content
+        $data = collect_wordpress_data();
+        $sync_response = wp_remote_post('http://localhost:3000/api/wordpress/sync', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ],
+            'body' => json_encode($data),
+            'timeout' => 120,
+            'sslverify' => false
+        ]);
 
-    if (is_wp_error($sync_response)) {
+        if (is_wp_error($sync_response)) {
+            wp_send_json_error([
+                'message' => 'Sync failed: ' . $sync_response->get_error_message(),
+                'code' => $sync_response->get_error_code(),
+                'stage' => 'sync',
+                'progress' => 0
+            ]);
+        }
+
+        // 2. Then vectorize the content
+        $vectorize_response = wp_remote_post('http://localhost:3000/api/wordpress/vectorize', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ],
+            'timeout' => 120,
+            'sslverify' => false
+        ]);
+
+        if (is_wp_error($vectorize_response)) {
+            wp_send_json_error([
+                'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
+                'code' => $vectorize_response->get_error_code(),
+                'stage' => 'vectorize',
+                'progress' => 33
+            ]);
+        }
+
+        // 3. Finally set up the assistant
+        $assistant_response = wp_remote_post('http://localhost:3000/api/wordpress/assistant', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ],
+            'timeout' => 120,
+            'sslverify' => false
+        ]);
+
+        if (is_wp_error($assistant_response)) {
+            wp_send_json_error([
+                'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
+                'code' => $assistant_response->get_error_code(),
+                'stage' => 'assistant',
+                'progress' => 66
+            ]);
+        }
+
+        // All operations successful
+        wp_send_json_success([
+            'message' => 'All operations completed successfully!',
+            'stage' => 'complete',
+            'progress' => 100,
+            'complete' => true,
+            'details' => [
+                'sync' => json_decode(wp_remote_retrieve_body($sync_response), true),
+                'vectorize' => json_decode(wp_remote_retrieve_body($vectorize_response), true),
+                'assistant' => json_decode(wp_remote_retrieve_body($assistant_response), true)
+            ]
+        ]);
+
+    } catch (Exception $e) {
         wp_send_json_error([
-            'message' => 'Sync failed: ' . $sync_response->get_error_message(),
-            'code' => $sync_response->get_error_code(),
-            'stage' => 'sync'
+            'message' => 'Operation failed: ' . $e->getMessage(),
+            'stage' => 'unknown',
+            'progress' => 0
         ]);
     }
+}
 
-    // 2. Then vectorize the content
+// Add new endpoint for vectorization
+function ai_website_vectorize_content() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key found']);
+    }
+
     $vectorize_response = wp_remote_post('http://localhost:3000/api/wordpress/vectorize', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
@@ -126,11 +200,28 @@ function ai_website_sync_content() {
         wp_send_json_error([
             'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
             'code' => $vectorize_response->get_error_code(),
-            'stage' => 'vectorize'
+            'stage' => 'vectorize',
+            'progress' => 33
         ]);
     }
 
-    // 3. Finally set up the assistant
+    wp_send_json_success([
+        'message' => 'Vectorization completed, setting up assistant...',
+        'stage' => 'vectorize',
+        'progress' => 66,
+        'complete' => false
+    ]);
+}
+
+// Add new endpoint for assistant setup
+function ai_website_setup_assistant() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key found']);
+    }
+
     $assistant_response = wp_remote_post('http://localhost:3000/api/wordpress/assistant', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
@@ -145,43 +236,22 @@ function ai_website_sync_content() {
         wp_send_json_error([
             'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
             'code' => $assistant_response->get_error_code(),
-            'stage' => 'assistant'
+            'stage' => 'assistant',
+            'progress' => 66
         ]);
     }
 
-    // Check all responses are successful
-    $sync_code = wp_remote_retrieve_response_code($sync_response);
-    $vectorize_code = wp_remote_retrieve_response_code($vectorize_response);
-    $assistant_code = wp_remote_retrieve_response_code($assistant_response);
-
-    if ($sync_code !== 200 || $vectorize_code !== 200 || $assistant_code !== 200) {
-        wp_send_json_error([
-            'message' => 'One or more operations failed',
-            'details' => [
-                'sync' => [
-                    'code' => $sync_code,
-                    'body' => wp_remote_retrieve_body($sync_response)
-                ],
-                'vectorize' => [
-                    'code' => $vectorize_code,
-                    'body' => wp_remote_retrieve_body($vectorize_response)
-                ],
-                'assistant' => [
-                    'code' => $assistant_code,
-                    'body' => wp_remote_retrieve_body($assistant_response)
-                ]
-            ]
-        ]);
-    }
-
-    // All operations successful
     wp_send_json_success([
-        'message' => 'All operations completed successfully',
-        'sync' => json_decode(wp_remote_retrieve_body($sync_response), true),
-        'vectorize' => json_decode(wp_remote_retrieve_body($vectorize_response), true),
-        'assistant' => json_decode(wp_remote_retrieve_body($assistant_response), true)
+        'message' => 'All operations completed successfully!',
+        'stage' => 'complete',
+        'progress' => 100,
+        'complete' => true
     ]);
 }
+
+// Register the new AJAX actions
+add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
+add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
 
 // Helper function to collect WordPress data
 function collect_wordpress_data() {
@@ -530,14 +600,6 @@ function ai_website_render_admin_page() {
                            value="Sync Content Now">
                     <span id="sync-status" style="margin-left: 10px;"></span>
                 </form>
-                <div id="sync-progress" style="margin-top: 15px; display: none;">
-                    <h4 style="margin-bottom: 10px;">Sync Progress</h4>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-text">0%</div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -548,85 +610,88 @@ function ai_website_render_admin_page() {
         const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
         const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
 
-        // Add the progress bar HTML
-        const syncProgress = $('#sync-progress');
-        syncProgress.html(`
-            <style>
-                .progress-container {
-                    margin: 20px 0;
-                    background: #f0f0f1;
-                    border-radius: 4px;
-                    overflow: hidden;
-                }
-                .progress-bar {
-                    width: 0%;
-                    height: 24px;
-                    background: #2271b1;
-                    transition: width 0.3s ease;
-                    position: relative;
-                }
-                .progress-text {
-                    position: absolute;
-                    width: 100%;
-                    text-align: center;
-                    color: white;
-                    text-shadow: 0 0 2px rgba(0,0,0,0.4);
-                    font-weight: bold;
-                    line-height: 24px;
-                }
-            </style>
-            <div class="progress-container">
-                <div class="progress-bar">
-                    <div class="progress-text">0%</div>
-                </div>
-            </div>
-        `);
-
         // Handle sync form submission
         $('#sync-form').on('submit', function(e) {
             e.preventDefault();
             const syncButton = $('#sync-button');
             const syncStatus = $('#sync-status');
-            const progressBar = $('.progress-bar');
-            const progressText = $('.progress-text');
-            
+
+            // Reset initial state
             syncButton.prop('disabled', true);
-            syncProgress.show();
-            progressBar.css('width', '0%');
-            progressText.text('0%');
-            syncStatus.html(`<span class="spinner is-active" style="float: none;"></span> Starting sync...`);
 
-            $.post(ajaxurl, {
-                action: 'ai_website_sync_content',
-                nonce: nonce
-            })
-            .done(function(response) {
-                if (!response.success) {
-                    syncStatus.html(`<span style="color: #d63638;">✗ ${response.data.message || 'Sync failed'}</span>`);
-                    progressBar.css('width', '100%').css('background', '#d63638');
-                    progressText.text('Failed');
-                    return;
-                }
+            // Create status elements for each step
+            syncStatus.html(`
+                <div class="sync-steps">
+                    <div id="sync-step">⏳ Syncing content...</div>
+                    <div id="vectorize-step">Vectorizing content (waiting...)</div>
+                    <div id="assistant-step">Setting up assistant (waiting...)</div>
+                </div>
+            `);
 
-                // Show completion
-                progressBar.css('width', '100%');
-                progressText.text('Complete!');
-                syncStatus.html(`<span style="color: #00a32a;">✓ Sync completed successfully!</span>`);
-                
-                // Update website info after a short delay
-                setTimeout(() => {
-                    loadWebsiteInfo();
-                    syncProgress.hide();
-                }, 1500);
-            })
-            .fail(function(xhr, status, error) {
-                syncStatus.html(`<span style="color: #d63638;">✗ Connection error: ${error || 'Failed to connect'}</span>`);
-                progressBar.css('width', '100%').css('background', '#d63638');
-                progressText.text('Failed');
-            })
-            .always(function() {
+            try {
+                // Step 1: Initial Sync
+                $.post(ajaxurl, {
+                    action: 'ai_website_sync_content',
+                    nonce: nonce
+                })
+                .then(function(response) {
+                    if (!response.success) {
+                        throw new Error(response.data.message || "Sync failed");
+                    }
+                    // Update sync step with checkmark
+                    $("#sync-step").html("✅ Content synced successfully");
+
+                    // Step 2: Vectorization
+                    $("#vectorize-step").html("⏳ Vectorizing content...");
+                    return $.post(ajaxurl, {
+                        action: 'ai_website_vectorize_content',
+                        nonce: nonce
+                    });
+                })
+                .then(function(response) {
+                    if (!response.success) {
+                        throw new Error(response.data.message || "Vectorization failed");
+                    }
+                    // Update vectorize step with checkmark
+                    $("#vectorize-step").html("✅ Content vectorized successfully");
+
+                    // Step 3: Assistant Setup
+                    $("#assistant-step").html("⏳ Setting up assistant...");
+                    return $.post(ajaxurl, {
+                        action: 'ai_website_setup_assistant',
+                        nonce: nonce
+                    });
+                })
+                .then(function(response) {
+                    if (!response.success) {
+                        throw new Error(response.data.message || "Assistant setup failed");
+                    }
+                    // Update assistant step with checkmark
+                    $("#assistant-step").html("✅ Assistant setup complete");
+
+                    // Update website info after a short delay
+                    setTimeout(() => {
+                        loadWebsiteInfo();
+                    }, 1500);
+                })
+                .catch(function(error) {
+                    // Error handling - mark current step as failed with X
+                    console.error("Operation failed:", error);
+                    if (!$("#sync-step").text().includes("✅")) {
+                        $("#sync-step").html("❌ Sync failed: " + error.message);
+                    } else if (!$("#vectorize-step").text().includes("✅")) {
+                        $("#vectorize-step").html("❌ Vectorization failed: " + error.message);
+                    } else if (!$("#assistant-step").text().includes("✅")) {
+                        $("#assistant-step").html("❌ Assistant setup failed: " + error.message);
+                    }
+                })
+                .always(function() {
+                    syncButton.prop('disabled', false);
+                });
+            } catch (error) {
                 syncButton.prop('disabled', false);
-            });
+                syncStatus.html(`<span style="color: #d63638;">✗ Error: ${error.message}</span>`);
+            }
         });
 
         function loadWebsiteInfo() {

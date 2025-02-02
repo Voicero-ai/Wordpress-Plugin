@@ -419,3 +419,30 @@
 #voice-interface.compact-interface .interface-content {
   padding: 6px;
 }
+
+/* Sync Steps Styling */
+.sync-steps {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.sync-steps > div {
+  margin: 10px 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sync-steps > div:first-child {
+  margin-top: 0;
+}
+
+.sync-steps > div:last-child {
+  margin-bottom: 0;
+}
