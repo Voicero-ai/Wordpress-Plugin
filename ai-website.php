@@ -90,7 +90,101 @@ function ai_website_sync_content() {
         wp_send_json_error(['message' => 'No access key found']);
     }
 
-    // First, let's collect all the data we want to sync
+    // 1. First sync the content
+    $data = collect_wordpress_data(); // Extract existing data collection to a function
+    $sync_response = wp_remote_post('http://localhost:3000/api/wordpress/sync', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($data),
+        'timeout' => 120,
+        'sslverify' => false
+    ]);
+
+    if (is_wp_error($sync_response)) {
+        wp_send_json_error([
+            'message' => 'Sync failed: ' . $sync_response->get_error_message(),
+            'code' => $sync_response->get_error_code(),
+            'stage' => 'sync'
+        ]);
+    }
+
+    // 2. Then vectorize the content
+    $vectorize_response = wp_remote_post('http://localhost:3000/api/wordpress/vectorize', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 120,
+        'sslverify' => false
+    ]);
+
+    if (is_wp_error($vectorize_response)) {
+        wp_send_json_error([
+            'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
+            'code' => $vectorize_response->get_error_code(),
+            'stage' => 'vectorize'
+        ]);
+    }
+
+    // 3. Finally set up the assistant
+    $assistant_response = wp_remote_post('http://localhost:3000/api/wordpress/assistant', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 120,
+        'sslverify' => false
+    ]);
+
+    if (is_wp_error($assistant_response)) {
+        wp_send_json_error([
+            'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
+            'code' => $assistant_response->get_error_code(),
+            'stage' => 'assistant'
+        ]);
+    }
+
+    // Check all responses are successful
+    $sync_code = wp_remote_retrieve_response_code($sync_response);
+    $vectorize_code = wp_remote_retrieve_response_code($vectorize_response);
+    $assistant_code = wp_remote_retrieve_response_code($assistant_response);
+
+    if ($sync_code !== 200 || $vectorize_code !== 200 || $assistant_code !== 200) {
+        wp_send_json_error([
+            'message' => 'One or more operations failed',
+            'details' => [
+                'sync' => [
+                    'code' => $sync_code,
+                    'body' => wp_remote_retrieve_body($sync_response)
+                ],
+                'vectorize' => [
+                    'code' => $vectorize_code,
+                    'body' => wp_remote_retrieve_body($vectorize_response)
+                ],
+                'assistant' => [
+                    'code' => $assistant_code,
+                    'body' => wp_remote_retrieve_body($assistant_response)
+                ]
+            ]
+        ]);
+    }
+
+    // All operations successful
+    wp_send_json_success([
+        'message' => 'All operations completed successfully',
+        'sync' => json_decode(wp_remote_retrieve_body($sync_response), true),
+        'vectorize' => json_decode(wp_remote_retrieve_body($vectorize_response), true),
+        'assistant' => json_decode(wp_remote_retrieve_body($assistant_response), true)
+    ]);
+}
+
+// Helper function to collect WordPress data
+function collect_wordpress_data() {
     $data = [
         'posts' => [],
         'pages' => [],
@@ -338,40 +432,7 @@ function ai_website_sync_content() {
         }
     }
 
-    // Send the data to the AI Website API
-    $response = wp_remote_post(AI_WEBSITE_API_URL . '/sync', [
-        'headers' => [
-            'Authorization' => 'Bearer ' . $access_key,
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ],
-        'body' => json_encode($data),
-        'timeout' => 120,
-        'sslverify' => false
-    ]);
-
-    if (is_wp_error($response)) {
-        error_log('AI Website sync error: ' . $response->get_error_message());
-        wp_send_json_error([
-            'message' => 'Sync failed: ' . $response->get_error_message(),
-            'code' => $response->get_error_code()
-        ]);
-    }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    $body = wp_remote_retrieve_body($response);
-
-    if ($response_code !== 200) {
-        error_log('AI Website sync API error: ' . $body);
-        wp_send_json_error([
-            'message' => 'Server returned error during sync: ' . $response_code,
-            'code' => $response_code,
-            'body' => $body
-        ]);
-    }
-
-    $data = json_decode($body, true);
-    wp_send_json_success($data);
+    return $data;
 }
 
 function ai_website_render_admin_page() {

@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       const response = await fetch(
-        "https://ai-website-server-wordpress.vercel.app/gemini",
+        "http://localhost:3000/gemini",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -572,7 +572,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("📤 [Transcribe] Sending audio to /transcribe...");
     try {
       const response = await fetch(
-        "https://ai-website-server-wordpress.vercel.app/transcribe",
+        "http://localhost:3000/transcribe",
         {
           method: "POST",
           body: formData,
@@ -619,7 +619,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       micButton.style.opacity = "0.5";
 
       const response = await fetch(
-        "https://ai-website-server-wordpress.vercel.app/speak",
+        "http://localhost:3000/speak",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -921,7 +921,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const products = window.siteContent.products || [];
 
       const response = await fetch(
-        "https://ai-website-server-wordpress.vercel.app/gemini",
+        "http://localhost:3000/gemini",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1366,4 +1366,102 @@ function isHidden(element) {
     style.opacity === "0" ||
     element.offsetParent === null
   );
+}
+
+async function ai_website_sync_content() {
+  const syncButton = $("#sync-button");
+  const syncStatus = $("#sync-status");
+  const progressBar = $(".progress-bar");
+  const progressText = $(".progress-text");
+
+  syncButton.prop("disabled", true);
+  syncProgress.show();
+  progressBar.css("width", "0%");
+  progressText.text("0%");
+
+  try {
+    // Step 1: Sync Content (0-33%)
+    syncStatus.html(
+      `<span class="spinner is-active" style="float: none;"></span> Syncing content...`
+    );
+    const syncResponse = await fetch(
+      "http://localhost:3000/api/wordpress/sync",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!syncResponse.ok) {
+      throw new Error(`Sync failed: ${syncResponse.status}`);
+    }
+    progressBar.css("width", "33%");
+    progressText.text("33%");
+
+    // Step 2: Vectorize Content (33-66%)
+    syncStatus.html(
+      `<span class="spinner is-active" style="float: none;"></span> Vectorizing content...`
+    );
+    const vectorizeResponse = await fetch(
+      "http://localhost:3000/api/wordpress/vectorize",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!vectorizeResponse.ok) {
+      throw new Error(`Vectorization failed: ${vectorizeResponse.status}`);
+    }
+    progressBar.css("width", "66%");
+    progressText.text("66%");
+
+    // Step 3: Create/Update Assistant (66-100%)
+    syncStatus.html(
+      `<span class="spinner is-active" style="float: none;"></span> Setting up AI assistant...`
+    );
+    const assistantResponse = await fetch(
+      "http://localhost:3000/api/wordpress/assistant",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!assistantResponse.ok) {
+      throw new Error(`Assistant setup failed: ${assistantResponse.status}`);
+    }
+
+    // Show completion
+    progressBar.css("width", "100%");
+    progressText.text("Complete!");
+    syncStatus.html(
+      `<span style="color: #00a32a;">✓ All operations completed successfully!</span>`
+    );
+
+    // Update website info after a short delay
+    setTimeout(() => {
+      loadWebsiteInfo();
+      syncProgress.hide();
+    }, 1500);
+  } catch (error) {
+    console.error("Operation failed:", error);
+    syncStatus.html(
+      `<span style="color: #d63638;">✗ Error: ${error.message}</span>`
+    );
+    progressBar.css("width", "100%").css("background", "#d63638");
+    progressText.text("Failed");
+  } finally {
+    syncButton.prop("disabled", false);
+  }
 }
