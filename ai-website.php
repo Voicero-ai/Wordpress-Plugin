@@ -98,7 +98,12 @@ function ai_website_sync_content() {
         'categories' => [],
         'tags' => [],
         'comments' => [],
-        'reviews' => []
+        'reviews' => [],
+        'authors' => [],
+        'media' => [],
+        'customFields' => [],
+        'productCategories' => [],
+        'productTags' => []
     ];
 
     // Get Posts
@@ -108,8 +113,124 @@ function ai_website_sync_content() {
         'numberposts' => -1
     ]);
 
+    // Get Authors (Users with relevant roles)
+    $authors = get_users([
+        'role__in' => ['administrator', 'editor', 'author', 'contributor'],
+    ]);
+
+    foreach ($authors as $author) {
+        $data['authors'][] = [
+            'id' => $author->ID,
+            'name' => $author->display_name,
+            'email' => $author->user_email,
+            'url' => $author->user_url,
+            'bio' => get_user_meta($author->ID, 'description', true),
+            'avatarUrl' => get_avatar_url($author->ID)
+        ];
+    }
+
+    // Get Media
+    $media_items = get_posts([
+        'post_type' => 'attachment',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1
+    ]);
+
+    foreach ($media_items as $media) {
+        $metadata = wp_get_attachment_metadata($media->ID);
+        $data['media'][] = [
+            'id' => $media->ID,
+            'title' => $media->post_title,
+            'url' => wp_get_attachment_url($media->ID),
+            'alt' => get_post_meta($media->ID, '_wp_attachment_image_alt', true),
+            'description' => $media->post_content,
+            'caption' => $media->post_excerpt,
+            'mimeType' => $media->post_mime_type,
+            'metadata' => $metadata ? $metadata : new stdClass(),
+            'createdAt' => $media->post_date,
+            'updatedAt' => $media->post_modified
+        ];
+    }
+
+    // Get Custom Fields for Posts and Products
     foreach ($posts as $post) {
-        // Get comments for this post
+        $custom_fields = get_post_meta($post->ID);
+        foreach ($custom_fields as $key => $values) {
+            if (strpos($key, '_') !== 0) { // Skip private meta
+                $data['customFields'][] = [
+                    'postId' => $post->ID,
+                    'metaKey' => $key,
+                    'metaValue' => maybe_serialize($values[0]),
+                    'postType' => 'post'
+                ];
+            }
+        }
+    }
+
+    // Get Product Categories
+    $product_categories = get_terms([
+        'taxonomy' => 'product_cat',
+        'hide_empty' => false
+    ]);
+
+    if (!is_wp_error($product_categories)) {
+        foreach ($product_categories as $category) {
+            $thumbnail_id = get_term_meta($category->term_id, 'thumbnail_id', true);
+            $image_url = $thumbnail_id ? wp_get_attachment_url($thumbnail_id) : '';
+            
+            $data['productCategories'][] = [
+                'id' => $category->term_id,
+                'name' => $category->name,
+                'slug' => $category->slug,
+                'description' => wp_strip_all_tags($category->description),
+                'parent' => $category->parent,
+                'count' => $category->count,
+                'imageUrl' => $image_url
+            ];
+        }
+    }
+
+    // Get Product Tags
+    $product_tags = get_terms([
+        'taxonomy' => 'product_tag',
+        'hide_empty' => false
+    ]);
+
+    if (!is_wp_error($product_tags)) {
+        foreach ($product_tags as $tag) {
+            $data['productTags'][] = [
+                'id' => $tag->term_id,
+                'name' => $tag->name,
+                'slug' => $tag->slug,
+                'description' => wp_strip_all_tags($tag->description),
+                'count' => $tag->count
+            ];
+        }
+    }
+
+    // Get Custom Fields for Products
+    $products = get_posts([
+        'post_type' => 'product',
+        'post_status' => 'publish',
+        'numberposts' => -1
+    ]);
+
+    foreach ($products as $product) {
+        $custom_fields = get_post_meta($product->ID);
+        foreach ($custom_fields as $key => $values) {
+            if (strpos($key, '_') !== 0) { // Skip private meta
+                $data['customFields'][] = [
+                    'postId' => $product->ID,
+                    'metaKey' => $key,
+                    'metaValue' => maybe_serialize($values[0]),
+                    'postType' => 'product'
+                ];
+            }
+        }
+    }
+
+    // Get Comments
+    foreach ($posts as $post) {
         $comments = get_comments([
             'post_id' => $post->ID,
             'status' => 'approve'
@@ -350,7 +471,11 @@ function ai_website_render_admin_page() {
                 </form>
                 <div id="sync-progress" style="margin-top: 15px; display: none;">
                     <h4 style="margin-bottom: 10px;">Sync Progress</h4>
-                    <div class="sync-stats"></div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-text">0%</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -361,6 +486,87 @@ function ai_website_render_admin_page() {
     jQuery(document).ready(function($) {
         const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
         const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
+
+        // Add the progress bar HTML
+        const syncProgress = $('#sync-progress');
+        syncProgress.html(`
+            <style>
+                .progress-container {
+                    margin: 20px 0;
+                    background: #f0f0f1;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+                .progress-bar {
+                    width: 0%;
+                    height: 24px;
+                    background: #2271b1;
+                    transition: width 0.3s ease;
+                    position: relative;
+                }
+                .progress-text {
+                    position: absolute;
+                    width: 100%;
+                    text-align: center;
+                    color: white;
+                    text-shadow: 0 0 2px rgba(0,0,0,0.4);
+                    font-weight: bold;
+                    line-height: 24px;
+                }
+            </style>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-text">0%</div>
+                </div>
+            </div>
+        `);
+
+        // Handle sync form submission
+        $('#sync-form').on('submit', function(e) {
+            e.preventDefault();
+            const syncButton = $('#sync-button');
+            const syncStatus = $('#sync-status');
+            const progressBar = $('.progress-bar');
+            const progressText = $('.progress-text');
+            
+            syncButton.prop('disabled', true);
+            syncProgress.show();
+            progressBar.css('width', '0%');
+            progressText.text('0%');
+            syncStatus.html(`<span class="spinner is-active" style="float: none;"></span> Starting sync...`);
+
+            $.post(ajaxurl, {
+                action: 'ai_website_sync_content',
+                nonce: nonce
+            })
+            .done(function(response) {
+                if (!response.success) {
+                    syncStatus.html(`<span style="color: #d63638;">✗ ${response.data.message || 'Sync failed'}</span>`);
+                    progressBar.css('width', '100%').css('background', '#d63638');
+                    progressText.text('Failed');
+                    return;
+                }
+
+                // Show completion
+                progressBar.css('width', '100%');
+                progressText.text('Complete!');
+                syncStatus.html(`<span style="color: #00a32a;">✓ Sync completed successfully!</span>`);
+                
+                // Update website info after a short delay
+                setTimeout(() => {
+                    loadWebsiteInfo();
+                    syncProgress.hide();
+                }, 1500);
+            })
+            .fail(function(xhr, status, error) {
+                syncStatus.html(`<span style="color: #d63638;">✗ Connection error: ${error || 'Failed to connect'}</span>`);
+                progressBar.css('width', '100%').css('background', '#d63638');
+                progressText.text('Failed');
+            })
+            .always(function() {
+                syncButton.prop('disabled', false);
+            });
+        });
 
         function loadWebsiteInfo() {
             const container = $('#website-info-container');
@@ -479,89 +685,6 @@ function ai_website_render_admin_page() {
                 `);
             });
         }
-
-        // Handle manual sync
-        $('#sync-form').on('submit', function(e) {
-            e.preventDefault();
-            const syncButton = $('#sync-button');
-            const syncStatus = $('#sync-status');
-            const syncProgress = $('#sync-progress');
-            const syncStats = $('.sync-stats');
-            
-            syncButton.prop('disabled', true);
-            syncStatus.html(`<span class="spinner is-active" style="float: none;"></span> Syncing content...`);
-            syncProgress.show();
-            syncStats.html('');
-
-            $.post(ajaxurl, {
-                action: 'ai_website_sync_content',
-                nonce: nonce
-            })
-            .done(function(response) {
-                if (!response.success) {
-                    syncStatus.html(`<span style="color: #d63638;">✗ ${response.data.message || 'Sync failed'}</span>`);
-                    return;
-                }
-
-                const stats = response.data.stats;
-                syncStatus.html(`<span style="color: #00a32a;">✓ Sync completed successfully!</span>`);
-                
-                // Show detailed stats
-                let statsHtml = `
-                    <table class="widefat" style="margin-top: 10px;">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Created/Updated</th>
-                                <th>Errors</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Total Items</td>
-                                <td>${stats.created}</td>
-                                <td>${stats.errors}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                `;
-
-                // Show any fetch errors
-                if (stats.fetchErrors && Object.keys(stats.fetchErrors).length > 0) {
-                    statsHtml += `
-                        <div class="notice notice-warning" style="margin-top: 10px;">
-                            <p>Some data could not be fetched:</p>
-                            <ul style="list-style: disc; margin-left: 20px;">
-                                ${Object.entries(stats.fetchErrors)
-                                    .map(([key, error]) => `<li>${key}: ${error}</li>`)
-                                    .join('')}
-                            </ul>
-                        </div>
-                    `;
-                }
-
-                syncStats.html(statsHtml);
-
-                setTimeout(() => {
-                    loadWebsiteInfo();
-                }, 1000);
-            })
-            .fail(function(xhr, status, error) {
-                syncStatus.html(`<span style="color: #d63638;">✗ Connection error: ${error || 'Failed to connect'}</span>`);
-                syncStats.html(`
-                    <div class="notice notice-error">
-                        <p>Sync failed with error: ${error || 'Unknown error'}</p>
-                        <p>Status: ${status}</p>
-                    </div>
-                `);
-            })
-            .always(function() {
-                syncButton.prop('disabled', false);
-                setTimeout(() => {
-                    syncStatus.html('');
-                }, 5000);
-            });
-        });
 
         // Load website info on page load if we have an access key
         if ('<?php echo esc_js($saved_key); ?>') {
@@ -754,8 +877,106 @@ add_action('rest_api_init', function() {
                 'categories' => [],
                 'tags' => [],
                 'comments' => [],
-                'reviews' => []
+                'reviews' => [],
+                'authors' => [],
+                'media' => [],
+                'customFields' => [],
+                'productCategories' => [],
+                'productTags' => []
             ];
+
+            // Get Authors
+            $authors = get_users(['role__in' => ['author', 'editor', 'administrator']]);
+            foreach ($authors as $author) {
+                $response['authors'][] = [
+                    'id' => $author->ID,
+                    'name' => $author->display_name,
+                    'email' => $author->user_email,
+                    'url' => $author->user_url,
+                    'bio' => get_user_meta($author->ID, 'description', true),
+                    'avatar' => get_avatar_url($author->ID)
+                ];
+            }
+
+            // Get Media
+            $media_items = get_posts([
+                'post_type' => 'attachment',
+                'post_status' => 'inherit',
+                'posts_per_page' => -1
+            ]);
+            foreach ($media_items as $media) {
+                $metadata = wp_get_attachment_metadata($media->ID);
+                $response['media'][] = [
+                    'id' => $media->ID,
+                    'title' => $media->post_title,
+                    'url' => wp_get_attachment_url($media->ID),
+                    'alt' => get_post_meta($media->ID, '_wp_attachment_image_alt', true),
+                    'description' => $media->post_content,
+                    'caption' => $media->post_excerpt,
+                    'mime_type' => $media->post_mime_type,
+                    'metadata' => $metadata
+                ];
+            }
+
+            // Get Custom Fields (Post Meta)
+            $post_types = ['post', 'page', 'product'];
+            foreach ($post_types as $post_type) {
+                $posts = get_posts([
+                    'post_type' => $post_type,
+                    'posts_per_page' => -1
+                ]);
+                foreach ($posts as $post) {
+                    $custom_fields = get_post_custom($post->ID);
+                    foreach ($custom_fields as $key => $values) {
+                        // Skip internal WordPress meta
+                        if (strpos($key, '_') === 0) continue;
+                        
+                        $response['customFields'][] = [
+                            'post_id' => $post->ID,
+                            'post_type' => $post_type,
+                            'meta_key' => $key,
+                            'meta_value' => $values[0]
+                        ];
+                    }
+                }
+            }
+
+            // Get Product Categories
+            if (taxonomy_exists('product_cat')) {
+                $product_categories = get_terms([
+                    'taxonomy' => 'product_cat',
+                    'hide_empty' => false
+                ]);
+                foreach ($product_categories as $category) {
+                    $thumbnail_id = get_term_meta($category->term_id, 'thumbnail_id', true);
+                    $response['productCategories'][] = [
+                        'id' => $category->term_id,
+                        'name' => $category->name,
+                        'slug' => $category->slug,
+                        'description' => $category->description,
+                        'parent' => $category->parent,
+                        'count' => $category->count,
+                        'image' => $thumbnail_id ? wp_get_attachment_url($thumbnail_id) : null
+                    ];
+                }
+            }
+
+            // Get Product Tags
+            if (taxonomy_exists('product_tag')) {
+                $product_tags = get_terms([
+                    'taxonomy' => 'product_tag',
+                    'hide_empty' => false
+                ]);
+                foreach ($product_tags as $tag) {
+                    $response['productTags'][] = [
+                        'id' => $tag->term_id,
+                        'name' => $tag->name,
+                        'slug' => $tag->slug,
+                        'description' => $tag->description,
+                        'count' => $tag->count
+                    ];
+                }
+            }
 
             // Get Posts
             $posts = get_posts([
