@@ -10,6 +10,9 @@ if (!defined('ABSPATH')) {
     exit; // Prevent direct access
 }
 
+// Define the API base URL
+define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+
 /* ------------------------------------------------------------------------
    1. ADMIN PAGE TO DISPLAY CONNECTION INTERFACE
 ------------------------------------------------------------------------ */
@@ -31,9 +34,7 @@ add_action('wp_ajax_ai_website_check_connection', 'ai_website_check_connection')
 add_action('wp_ajax_ai_website_sync_content', 'ai_website_sync_content');
 add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
 add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
-
-// Define the API base URL
-define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+add_action('wp_ajax_ai_website_clear_connection', 'ai_website_clear_connection');
 
 function ai_website_check_connection() {
     check_ajax_referer('ai_website_ajax_nonce', 'nonce');
@@ -506,26 +507,53 @@ function collect_wordpress_data() {
 }
 
 function ai_website_render_admin_page() {
+    // Check for access key in URL
+    $url_access_key = isset($_GET['access_key']) ? sanitize_text_field($_GET['access_key']) : '';
+    
     // Handle form submission
-    if (isset($_POST['access_key']) && check_admin_referer('save_access_key_nonce')) {
-        $access_key = sanitize_text_field($_POST['access_key']);
-        
-        // Basic validation of access key format
-        if (strlen($access_key) !== 32) {
-            add_settings_error(
-                'ai_website_messages',
-                'key_invalid',
-                'Invalid access key format. Please check your key and try again.',
-                'error'
-            );
-        } else {
-            update_option('ai_website_access_key', $access_key);
-            add_settings_error(
-                'ai_website_messages',
-                'key_updated',
-                'Settings saved successfully! Attempting to connect...',
-                'updated'
-            );
+    if (isset($_POST['access_key']) || !empty($url_access_key)) {
+        // Don't check nonce if we have a URL access key
+        if (!empty($url_access_key) || check_admin_referer('save_access_key_nonce')) {
+            $access_key = !empty($_POST['access_key']) ? sanitize_text_field($_POST['access_key']) : $url_access_key;
+            
+            // Verify the key is valid by making a test request
+            $test_response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $access_key,
+                    'Content-Type' => 'application/json'
+                ],
+                'timeout' => 15,
+                'sslverify' => false
+            ]);
+
+            if (is_wp_error($test_response)) {
+                add_settings_error(
+                    'ai_website_messages',
+                    'connection_error',
+                    'Could not connect to AI service. Please check your internet connection and try again.',
+                    'error'
+                );
+            } else {
+                $response_code = wp_remote_retrieve_response_code($test_response);
+                $response_body = wp_remote_retrieve_body($test_response);
+                
+                if ($response_code !== 200) {
+                    add_settings_error(
+                        'ai_website_messages',
+                        'connection_error',
+                        'Could not validate access key. Please try connecting again.',
+                        'error'
+                    );
+                } else {
+                    update_option('ai_website_access_key', $access_key);
+                    add_settings_error(
+                        'ai_website_messages',
+                        'key_updated',
+                        'Successfully connected to AI service!',
+                        'updated'
+                    );
+                }
+            }
         }
     }
 
@@ -543,6 +571,17 @@ function ai_website_render_admin_page() {
     // Get saved values
     $saved_key = get_option('ai_website_access_key', '');
 
+    // Get the current site URL
+    $site_url = get_site_url();
+    $admin_url = admin_url('admin.php?page=ai-website-admin');
+    
+    // Encode URLs for safe transport
+    $encoded_site_url = urlencode($site_url);
+    $encoded_admin_url = urlencode($admin_url);
+    
+    // Generate the connection URL
+    $connect_url = "http://localhost:3000/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
+
     // Output the admin interface
     ?>
     <div class="wrap">
@@ -555,20 +594,27 @@ function ai_website_render_admin_page() {
             <p>Enter your access key to connect to the AI Website service.</p>
 
             <form method="post" action="">
-                <?php wp_nonce_field('save_access_key_nonce'); ?>
+                <?php if (empty($url_access_key)) wp_nonce_field('save_access_key_nonce'); ?>
                 <table class="form-table">
                     <tr>
                         <th scope="row"><label for="access_key">Access Key</label></th>
                         <td>
-                            <input type="text" 
-                                   id="access_key" 
-                                   name="access_key" 
-                                   value="<?php echo esc_attr($saved_key); ?>" 
-                                   class="regular-text"
-                                   placeholder="Enter your 32-character access key"
-                                   pattern=".{32,32}"
-                                   title="Access key should be exactly 32 characters long">
-                            <p class="description">Your access key should be exactly 32 characters long.</p>
+                            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                                <input type="text" 
+                                       id="access_key" 
+                                       name="access_key" 
+                                       value="<?php echo esc_attr($saved_key); ?>" 
+                                       class="regular-text"
+                                       placeholder="Enter your 64-character access key"
+                                       pattern=".{64,64}"
+                                       title="Access key should be exactly 64 characters long">
+                                <?php if ($saved_key): ?>
+                                    <button type="button" id="clear-connection" class="button button-secondary">
+                                        Clear Connection
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                            <p class="description">Your access key should be exactly 64 characters long.</p>
                         </td>
                     </tr>
                 </table>
@@ -580,33 +626,139 @@ function ai_website_render_admin_page() {
                            value="Save & Connect">
                 </p>
             </form>
+
+            <?php if (!$saved_key): ?>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h3>New to Voicero?</h3>
+                    <p>Connect your website in one click and create your account.</p>
+                    <a href="<?php echo esc_url($connect_url); ?>" class="button button-secondary">
+                        Connect with Voicero
+                    </a>
+                </div>
+            <?php endif; ?>
         </div>
+       
 
         <?php if ($saved_key): ?>
-        <div class="card" style="max-width: 800px; margin-top: 20px;">
-            <h2>Website Information</h2>
-            <div id="website-info-container">
-                <div class="spinner is-active" style="float: none;"></div>
-                <p>Loading website information...</p>
+            <!-- Website info card -->
+            <div class="card" style="max-width: 800px; margin-top: 20px;">
+                <h2>Website Information</h2>
+                <div id="website-info-container">
+                    <div class="spinner is-active" style="float: none;"></div>
+                    <p>Loading website information...</p>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <form method="post" action="" id="sync-form">
+                        <?php wp_nonce_field('sync_content_nonce'); ?>
+                        <input type="submit" 
+                               name="sync_content" 
+                               id="sync-button" 
+                               class="button" 
+                               value="Sync Content Now">
+                        <span id="sync-status" style="margin-left: 10px;"></span>
+                    </form>
+                </div>
             </div>
-            
-            <div style="margin-top: 20px;">
-                <form method="post" action="" id="sync-form">
-                    <?php wp_nonce_field('sync_content_nonce'); ?>
-                    <input type="submit" 
-                           name="sync_content" 
-                           id="sync-button" 
-                           class="button" 
-                           value="Sync Content Now">
-                    <span id="sync-status" style="margin-left: 10px;"></span>
-                </form>
-            </div>
-        </div>
         <?php endif; ?>
     </div>
 
+    <style>
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 100000;
+    }
+    .modal-content {
+        position: relative;
+        background: #fff;
+        width: 90%;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    .modal-close {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        font-size: 24px;
+        cursor: pointer;
+        color: #666;
+    }
+    .modal-close:hover {
+        color: #000;
+    }
+    </style>
+
     <script>
     jQuery(document).ready(function($) {
+        // Add toggle functionality
+        $('.connection-details-toggle button').on('click', function() {
+            const $toggle = $(this).parent();
+            const $details = $('.connection-details');
+            const isVisible = $details.is(':visible');
+            
+            $details.slideToggle();
+            $toggle.toggleClass('active');
+            $(this).html(`
+                <span class="dashicons dashicons-arrow-${isVisible ? 'down' : 'up'}-alt2"></span>
+                ${isVisible ? 'Show' : 'Hide'} Connection Details
+            `);
+        });
+
+        // Check if WordPress shows expired message - only once
+        const bodyText = $('body').text();
+        if (bodyText.includes('link you followed has expired') && window.location.search.includes('access_key')) {
+            // Only refresh if we came from an access_key URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('access_key');
+            window.location.replace(newUrl.toString()); // Use replace instead of href
+            return;
+        }
+
+        // Add a flag to localStorage when clearing connection
+        $('#clear-connection').on('click', function() {
+            if (confirm('Are you sure you want to clear the connection?')) {
+                localStorage.setItem('connection_cleared', 'true');
+                
+                // Make AJAX call to clear the connection
+                $.post(ajaxurl, {
+                    action: 'ai_website_clear_connection',
+                    nonce: nonce
+                })
+                .then(function() {
+                    // Clear the form and reload
+                    $('#access_key').val('');
+                    window.location.reload();
+                });
+            }
+        });
+
+        // Check for access key in URL - but only if we haven't just cleared
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessKey = urlParams.get('access_key');
+        const wasCleared = localStorage.getItem('connection_cleared') === 'true';
+        
+        if (accessKey && !wasCleared) {
+            // Just fill the form
+            $('#access_key').val(accessKey);
+            
+            // Clean the URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('access_key');
+            window.history.replaceState({}, '', newUrl.toString());
+        }
+
+        // Clear the flag after handling
+        localStorage.removeItem('connection_cleared');
+
         const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
         const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
 
@@ -696,42 +848,124 @@ function ai_website_render_admin_page() {
 
         function loadWebsiteInfo() {
             const container = $('#website-info-container');
-            container.html(`
-                <div class="spinner is-active" style="float: none;"></div>
-                <p>Loading website information...</p>
-            `);
-
-            $.post(ajaxurl, {
-                action: 'ai_website_check_connection',
+            
+            $.get(ajaxurl, {
+                action: 'ai_website_get_info',
                 nonce: nonce
             })
             .done(function(response) {
                 if (!response.success) {
-                    container.html(`
-                        <div class="notice notice-error">
-                            <p>Error: ${response.data.message || 'Unknown error occurred'}</p>
-                            ${response.data.code ? `<p>Error Code: ${response.data.code}</p>` : ''}
-                            <p>Please check your access key or contact support if the problem persists.</p>
-                        </div>
-                    `);
-                    return;
+                    throw new Error(response.data.message || 'Failed to load website info');
                 }
 
-                const website = response.data.website;
+                const website = response.data;
+                
+                // Only show first-time modal if we have a valid website connection
+                // AND it has never been synced
+                if (website && website.id && !website.lastSyncedAt) {
+                    // Show the modal
+                    $('#first-time-modal').fadeIn();
+                    
+                    // Handle modal close
+                    $('.modal-close').on('click', function() {
+                        $('#first-time-modal').fadeOut();
+                    });
+                    
+                    // Close modal when clicking outside
+                    $(window).on('click', function(e) {
+                        if ($(e.target).is('#first-time-modal')) {
+                            $('#first-time-modal').fadeOut();
+                        }
+                    });
+
+                    // Handle first sync button click in modal
+                    $('#first-sync-button').on('click', function() {
+                        const $modalContent = $(this).closest('.notice');
+                        
+                        // Replace modal content with sync progress
+                        $modalContent.html(`
+                            <h2 style="margin-top: 0;">🔄 Syncing Your Website</h2>
+                            <div class="sync-steps">
+                                <div id="sync-step">⏳ Syncing content...</div>
+                                <div id="vectorize-step">Vectorizing content (waiting...)</div>
+                                <div id="assistant-step">Setting up assistant (waiting...)</div>
+                            </div>
+                        `);
+
+                        // Trigger the sync process
+                        $.post(ajaxurl, {
+                            action: 'ai_website_sync_content',
+                            nonce: nonce
+                        })
+                        .then(function(response) {
+                            if (!response.success) {
+                                throw new Error(response.data.message || "Sync failed");
+                            }
+                            $("#sync-step").html("✅ Content synced successfully");
+                            
+                            // Continue with vectorization
+                            return $.post(ajaxurl, {
+                                action: 'ai_website_vectorize_content',
+                                nonce: nonce
+                            });
+                        })
+                        .then(function(response) {
+                            if (!response.success) {
+                                throw new Error(response.data.message || "Vectorization failed");
+                            }
+                            $("#vectorize-step").html("✅ Content vectorized successfully");
+                            
+                            // Finally set up the assistant
+                            return $.post(ajaxurl, {
+                                action: 'ai_website_setup_assistant',
+                                nonce: nonce
+                            });
+                        })
+                        .then(function(response) {
+                            if (!response.success) {
+                                throw new Error(response.data.message || "Assistant setup failed");
+                            }
+                            $("#assistant-step").html("✅ Assistant setup complete");
+                            
+                            // Show success message and close button
+                            setTimeout(() => {
+                                $modalContent.html(`
+                                    <h2 style="margin-top: 0;">✅ Setup Complete!</h2>
+                                    <p>Your website is now ready to use AI features.</p>
+                                    <button class="button button-primary modal-close">
+                                        Get Started
+                                    </button>
+                                `);
+                                
+                                // Reload website info in background
+                                loadWebsiteInfo();
+                            }, 1000);
+                        })
+                        .catch(function(error) {
+                            $modalContent.append(`
+                                <div class="notice notice-error">
+                                    <p>Error: ${error.message || 'Something went wrong'}</p>
+                                </div>
+                            `);
+                        });
+                    });
+                }
+
+                // Regular website info display code...
                 const html = `
                     <table class="widefat">
                         <tbody>
                             <tr>
                                 <th>Website Name</th>
-                                <td>${website.name || website.url}</td>
+                                <td>${website.name || 'Unnamed Site'}</td>
                             </tr>
                             <tr>
                                 <th>URL</th>
-                                <td>${website.url}</td>
+                                <td>${website.url || 'Not set'}</td>
                             </tr>
                             <tr>
                                 <th>Plan</th>
-                                <td>${website.plan}</td>
+                                <td>${website.plan || 'Free'}</td>
                             </tr>
                             <tr>
                                 <th>Status</th>
@@ -744,7 +978,7 @@ function ai_website_render_admin_page() {
                             <tr>
                                 <th>Monthly Queries</th>
                                 <td>
-                                    ${website.monthlyQueries} / ${website.queryLimit}
+                                    ${website.monthlyQueries || 0} / ${website.queryLimit || 1000}
                                     <div class="progress-bar" style="
                                         background: #f0f0f1;
                                         height: 10px;
@@ -753,7 +987,7 @@ function ai_website_render_admin_page() {
                                         overflow: hidden;
                                     ">
                                         <div style="
-                                            width: ${(website.monthlyQueries / website.queryLimit) * 100}%;
+                                            width: ${((website.monthlyQueries || 0) / (website.queryLimit || 1000)) * 100}%;
                                             background: #2271b1;
                                             height: 100%;
                                             transition: width 0.3s ease;
@@ -767,7 +1001,7 @@ function ai_website_render_admin_page() {
                             </tr>
                             <tr>
                                 <th>Sync Frequency</th>
-                                <td>${website.syncFrequency}</td>
+                                <td>${website.syncFrequency || 'Manual'}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -798,7 +1032,6 @@ function ai_website_render_admin_page() {
                         </table>
                     </div>
                 `;
-                
                 container.html(html);
             })
             .fail(function(xhr, status, error) {
@@ -815,6 +1048,14 @@ function ai_website_render_admin_page() {
         // Load website info on page load if we have an access key
         if ('<?php echo esc_js($saved_key); ?>') {
             loadWebsiteInfo();
+        }
+
+        // If there was an error, show the connect button prominently
+        if ($('.notice-error').length > 0) {
+            $('.button-secondary').addClass('button-primary').css({
+                'margin-top': '10px',
+                'font-weight': 'bold'
+            });
         }
     });
     </script>
@@ -1277,7 +1518,6 @@ add_action('rest_api_init', function() {
    4. ENQUEUE ASSETS (script.js & style.css)
 ------------------------------------------------------------------------ */
 function my_first_plugin_enqueue_scripts() {
-    // Make sure 'assets/script.js' actually exists in your plugin folder
     wp_enqueue_style('my-first-plugin-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
     wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
     wp_enqueue_script(
@@ -1350,12 +1590,6 @@ function my_first_plugin_add_toggle_button() {
             </div>
         </div>
     </div>
-
-    <!-- Hidden Popup (Content Collection) -->
-    <div id="voice-popup">
-      <div class="voice-popup-content">
-      </div>
-    </div>
     ';
 }
 add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
@@ -1389,16 +1623,21 @@ function ai_website_enqueue_scripts() {
 add_action('wp_enqueue_scripts', 'ai_website_enqueue_scripts');
 
 // Add AJAX handler for frontend access
-add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_frontend_get_info');
-add_action('wp_ajax_ai_website_get_info', 'ai_website_frontend_get_info');
+add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_get_info');
+add_action('wp_ajax_ai_website_get_info', 'ai_website_get_info');
 
-function ai_website_frontend_get_info() {
-    // Verify nonce for both logged-in and non-logged-in users
-    check_ajax_referer('ai_website_frontend_nonce', 'nonce');
+function ai_website_get_info() {
+    // Verify nonce for both admin and frontend
+    $is_admin = check_admin_referer('ai_website_ajax_nonce', 'nonce', false); 
+    $is_frontend = check_ajax_referer('ai_website_frontend_nonce', 'nonce', false);
     
-    $access_key = ai_website_get_access_key();
+    if (!$is_admin && !$is_frontend) {
+        wp_send_json_error(['message' => 'Invalid nonce']);
+    }
+    
+    $access_key = get_option('ai_website_access_key', '');
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'Website not configured']);
+        wp_send_json_error(['message' => 'No access key found']);
     }
 
     $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
@@ -1408,13 +1647,12 @@ function ai_website_frontend_get_info() {
             'Accept' => 'application/json'
         ],
         'timeout' => 15,
-        'sslverify' => false // Only for local development
+        'sslverify' => false
     ]);
 
     if (is_wp_error($response)) {
         wp_send_json_error([
-            'message' => 'Connection failed',
-            'error' => $response->get_error_message()
+            'message' => 'Connection failed: ' . $response->get_error_message()
         ]);
     }
 
@@ -1423,12 +1661,25 @@ function ai_website_frontend_get_info() {
 
     if ($response_code !== 200) {
         wp_send_json_error([
-            'message' => 'API error',
-            'code' => $response_code,
-            'response' => $body
+            'message' => 'Server returned error: ' . $response_code,
+            'body' => $body
         ]);
     }
 
     $data = json_decode($body, true);
-    wp_send_json_success($data);
+    if (!$data || !isset($data['website'])) {
+        error_log('AI Website response body: ' . $body);
+        wp_send_json_error([
+            'message' => 'Invalid response from server'
+        ]);
+    }
+
+    // Return just the website data
+    wp_send_json_success($data['website']);
+}
+
+function ai_website_clear_connection() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    delete_option('ai_website_access_key');
+    wp_send_json_success(['message' => 'Connection cleared']);
 }
