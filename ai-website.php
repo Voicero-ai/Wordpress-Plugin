@@ -973,6 +973,12 @@ function ai_website_render_admin_page() {
                                     <span class="button button-small ${website.active ? 'button-primary' : 'button-secondary'}">
                                         ${website.active ? 'Active' : 'Inactive'}
                                     </span>
+                                    <button class="button button-small toggle-status-btn" 
+                                            data-website-id="${website.id || ''}" 
+                                            data-access-key="${'<?php echo esc_js($saved_key); ?>'}'"
+                                            ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
+                                        ${website.active ? 'Deactivate' : 'Activate'}
+                                    </button>
                                 </td>
                             </tr>
                             <tr>
@@ -1005,6 +1011,23 @@ function ai_website_render_admin_page() {
                             </tr>
                         </tbody>
                     </table>
+
+                    <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+                        <a href="http://localhost:3000/app" target="_blank" class="button button-primary">
+                            Open Dashboard
+                        </a>
+                        <button class="button toggle-status-btn" 
+                                data-website-id="${website.id || ''}"
+                                data-access-key="${'<?php echo esc_js($saved_key); ?>'}'"
+                                ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
+                            ${website.active ? 'Deactivate Plugin' : 'Activate Plugin'}
+                        </button>
+                        ${!website.lastSyncedAt ? `
+                            <span class="description" style="color: #d63638;">
+                                ⚠️ Please sync your website before activating the plugin
+                            </span>
+                        ` : ''}
+                    </div>
 
                     <div style="margin-top: 20px;">
                         <h3>Content Statistics</h3>
@@ -1057,6 +1080,48 @@ function ai_website_render_admin_page() {
                 'font-weight': 'bold'
             });
         }
+
+        // Update the click handler for toggle status button
+        $(document).on('click', '.toggle-status-btn', function() {
+            const websiteId = $(this).data('website-id');
+            const accessKey = $(this).data('access-key');
+            const $button = $(this);
+            
+            if (!websiteId && !accessKey) {
+                console.error('No website ID or access key available');
+                alert('Could not identify website. Please try refreshing the page.');
+                return;
+            }
+            
+            // Disable button during request
+            $button.prop('disabled', true);
+            
+            fetch('http://localhost:3000/api/websites/toggle-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    websiteId: websiteId || undefined,
+                    accessKey: accessKey || undefined
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                // Refresh the page to show updated status
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Error toggling status:', error);
+                alert('Failed to toggle website status. Please try again.');
+            })
+            .finally(() => {
+                $button.prop('disabled', false);
+            });
+        });
     });
     </script>
     <?php
