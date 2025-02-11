@@ -417,23 +417,35 @@ function collect_wordpress_data() {
         $data['posts'][] = [
             'id' => $post->ID,
             'title' => $post->post_title,
-            'content' => wp_strip_all_tags($post->post_content),
+            'content' => $post->post_content,
+            'contentStripped' => wp_strip_all_tags($post->post_content),
             'excerpt' => wp_strip_all_tags(get_the_excerpt($post)),
             'slug' => $post->post_name,
-            'link' => get_permalink($post->ID)
+            'link' => get_permalink($post->ID),
+            'author' => get_the_author_meta('display_name', $post->post_author),
+            'date' => $post->post_date,
+            'categories' => wp_get_post_categories($post->ID, ['fields' => 'names']),
+            'tags' => wp_get_post_tags($post->ID, ['fields' => 'names'])
         ];
     }
 
     // Get Pages
     $pages = get_pages(['post_status' => 'publish']);
-    foreach ($pages as $page) {
-        $data['pages'][] = [
-            'id' => $page->ID,
-            'title' => $page->post_title,
-            'content' => wp_strip_all_tags($page->post_content),
-            'slug' => $page->post_name,
-            'link' => get_permalink($page->ID)
-        ];
+    if (!empty($pages)) {
+        foreach ($pages as $page) {
+            $data['pages'][] = [
+                'id' => $page->ID,
+                'title' => $page->post_title,
+                'content' => $page->post_content,
+                'contentStripped' => wp_strip_all_tags($page->post_content),
+                'slug' => $page->post_name,
+                'link' => get_permalink($page->ID),
+                'template' => get_page_template_slug($page->ID),
+                'parent' => $page->post_parent,
+                'order' => $page->menu_order,
+                'lastModified' => $page->post_modified
+            ];
+        }
     }
 
     // Get Categories
@@ -1122,6 +1134,18 @@ function ai_website_render_admin_page() {
                 $button.prop('disabled', false);
             });
         });
+
+        // Update where we output the ACCESS_KEY constant
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Add this at the top - before any other code
+            const ACCESS_KEY = '<?php 
+                $key = get_option("ai_website_access_key", "");
+                echo esc_js($key); 
+                // Debug log the key to PHP error log
+                error_log("Access key being used: " . substr($key, 0, 10) . "...");
+            ?>';
+            console.log("Access key loaded:", ACCESS_KEY.substring(0, 10) + "..."); // Debug log
+        });
     });
     </script>
     <?php
@@ -1283,8 +1307,15 @@ add_action('rest_api_init', function() {
                 $formatted_posts[] = [
                     'id'      => $p->ID,
                     'title'   => $p->post_title,
-                    'content' => wp_strip_all_tags($p->post_content),
-                    'link'    => get_permalink($p->ID),
+                    'content' => $p->post_content,
+                    'contentStripped' => wp_strip_all_tags($p->post_content),
+                    'excerpt' => wp_strip_all_tags(get_the_excerpt($p)),
+                    'slug' => $p->post_name,
+                    'link' => get_permalink($p->ID),
+                    'author' => get_the_author_meta('display_name', $p->post_author),
+                    'date' => $p->post_date,
+                    'categories' => wp_get_post_categories($p->ID, ['fields' => 'names']),
+                    'tags' => wp_get_post_tags($p->ID, ['fields' => 'names'])
                 ];
             }
 
@@ -1444,23 +1475,35 @@ add_action('rest_api_init', function() {
                 $response['posts'][] = [
                     'id' => $post->ID,
                     'title' => $post->post_title,
-                    'content' => wp_strip_all_tags($post->post_content),
+                    'content' => $post->post_content,
+                    'contentStripped' => wp_strip_all_tags($post->post_content),
                     'excerpt' => wp_strip_all_tags(get_the_excerpt($post)),
                     'slug' => $post->post_name,
-                    'link' => get_permalink($post->ID)
+                    'link' => get_permalink($post->ID),
+                    'author' => get_the_author_meta('display_name', $post->post_author),
+                    'date' => $post->post_date,
+                    'categories' => wp_get_post_categories($post->ID, ['fields' => 'names']),
+                    'tags' => wp_get_post_tags($post->ID, ['fields' => 'names'])
                 ];
             }
 
             // Get Pages
             $pages = get_pages(['post_status' => 'publish']);
-            foreach ($pages as $page) {
-                $response['pages'][] = [
-                    'id' => $page->ID,
-                    'title' => $page->post_title,
-                    'content' => wp_strip_all_tags($page->post_content),
-                    'slug' => $page->post_name,
-                    'link' => get_permalink($page->ID)
-                ];
+            if (!empty($pages)) {
+                foreach ($pages as $page) {
+                    $response['pages'][] = [
+                        'id' => $page->ID,
+                        'title' => $page->post_title,
+                        'content' => $page->post_content,
+                        'contentStripped' => wp_strip_all_tags($page->post_content),
+                        'slug' => $page->post_name,
+                        'link' => get_permalink($page->ID),
+                        'template' => get_page_template_slug($page->ID),
+                        'parent' => $page->post_parent,
+                        'order' => $page->menu_order,
+                        'lastModified' => $page->post_modified
+                    ];
+                }
             }
 
             // Get Categories
@@ -1592,6 +1635,11 @@ function my_first_plugin_enqueue_scripts() {
         '1.1',
         true
     );
+
+    // Add the access key as a script variable
+    wp_localize_script('my-first-plugin-script', 'aiWebsiteConfig', [
+        'accessKey' => get_option('ai_website_access_key', ''),
+    ]);
 }
 add_action('wp_enqueue_scripts', 'my_first_plugin_enqueue_scripts');
 
