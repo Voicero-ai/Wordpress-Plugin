@@ -1,7 +1,7 @@
 /* MAIN TOGGLE (AI Assistant) */
 #voice-toggle-container {
   position: fixed;
-  top: var(--nav-bottom, 32px); /* Use CSS variable with fallback */
+  top: 25vh; /* 25% of viewport height */
   left: 10px;
   z-index: 10000;
   display: block; /* Ensure it's visible */
@@ -18,12 +18,13 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   padding: 0;
-  display: flex !important; /* Force display */
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  opacity: 1 !important; /* Force visibility */
-  transform: none !important; /* Remove transform */
+  opacity: 1 !important;
+  transform: none !important;
   position: relative;
+  overflow: hidden;
 }
 
 #chat-website-button:hover {
@@ -32,15 +33,54 @@
   box-shadow: 0 4px 15px rgba(147, 112, 219, 0.4);
 }
 
+/* Add gradient animation on hover */
+#chat-website-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #9370db,
+    #8a2be2,
+    #9400d3,
+    #8a2be2,
+    #9370db
+  );
+  transition: 0.5s;
+  opacity: 0;
+}
+
+#chat-website-button:hover::before {
+  left: 0;
+  opacity: 1;
+  animation: gradientSlide 2s linear infinite;
+}
+
+/* Add the gradient animation */
+@keyframes gradientSlide {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
 /* Bot icon animation */
 .bot-icon {
   transition: transform 0.3s ease;
-  width: 28px; /* Adjust size */
-  height: 28px; /* Adjust size */
+  width: 28px;
+  height: 28px;
+  position: relative;
+  z-index: 1;
 }
 
 #chat-website-button:hover .bot-icon {
   transform: rotate(-5deg) scale(1.1);
+  filter: brightness(1.2);
 }
 
 /* Add a pulse effect */
@@ -62,12 +102,12 @@
   animation: pulse 2s infinite;
 }
 
-/* Add a notification dot */
+/* Update notification dot positioning */
 #chat-website-button::after {
   content: "";
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -4px; /* Move up slightly */
+  right: -4px; /* Move right slightly */
   width: 12px;
   height: 12px;
   background-color: #4caf50;
@@ -76,17 +116,20 @@
   opacity: 0;
   transform: scale(0);
   transition: all 0.3s ease;
+  z-index: 2; /* Add z-index to ensure it's above the button and gradient */
 }
 
+/* Update the notification visible state */
 #chat-website-button.has-notification::after {
   opacity: 1;
   transform: scale(1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Add subtle shadow */
 }
 
 /* INTERACTION CHOOSER */
 #interaction-chooser {
   position: fixed;
-  top: calc(var(--nav-bottom, 32px) + 60px);
+  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
   left: 10px;
   z-index: 10001;
   background-color: #e6e6fa;
@@ -135,7 +178,7 @@
 /* VOICE INTERFACE - bottom-right, lavender style */
 #voice-interface {
   position: fixed;
-  top: calc(var(--nav-bottom, 32px) + 60px); /* Position relative to navbar */
+  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
   left: 10px;
   z-index: 9997;
 
@@ -260,7 +303,7 @@
 /* TEXT INTERFACE - bottom-right, lavender style */
 #text-interface {
   position: fixed;
-  top: calc(var(--nav-bottom, 32px) + 60px); /* Position relative to navbar */
+  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
   left: 10px;
   z-index: 9997;
 
@@ -356,6 +399,28 @@ div.message-bubble.user-bubble {
 /* Message content */
 .message-content {
   white-space: pre-wrap;
+}
+
+/* Style markdown links in messages */
+.message-content a {
+  color: inherit; /* Use same color as the message text */
+  text-decoration: none; /* Remove underline */
+  pointer-events: none; /* Prevent clicking */
+}
+
+/* Remove square brackets and parentheses from markdown links */
+.message-content a::before,
+.message-content a::after {
+  display: none;
+}
+
+/* Hide URL in markdown links */
+.message-content a[href] {
+  position: relative;
+}
+
+.message-content a[href]::after {
+  content: none;
 }
 
 /* Smooth animation for new messages */

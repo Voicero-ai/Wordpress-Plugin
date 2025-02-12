@@ -185,32 +185,31 @@ function addMessageToChat(role, content, timestamp = Date.now()) {
 
   const bubbleDiv = document.createElement("div");
   bubbleDiv.className = `message-bubble ${role}-bubble`;
-  // Force the background color based on role
-
-  if (role === "user") {
-    bubbleDiv.style.cssText =
-      "background-color: #9370db !important; color: white !important;"; // Purple background, white text for user
-  }
 
   const contentDiv = document.createElement("div");
   contentDiv.className = "message-content";
 
   // Format markdown content
   if (typeof content === "string") {
+    // Extract text from square brackets and remove parentheses with http links
+    content = content
+      // First handle any [...](http...) pattern
+      .replace(/\[([^\]]+)\]\([^)]*http[^)]*\)/g, "$1")
+      // Then handle any remaining [...] pattern
+      .replace(/\[([^\]]+)\]/g, "$1")
+      // Finally remove any (http...) pattern
+      .replace(/\([^)]*http[^)]*\)/g, "");
+
+    // Convert markdown list items
+    content = content.replace(/^- (.+)$/gm, "• $1");
+
     // Handle bold text
     content = content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
-    // Handle bullet points
-    content = content.replace(/^- /gm, "• ");
-
-    // Handle links - extract just the text
-    content = content.replace(/\[(.*?)\]\(.*?\)/g, "$1");
-
-    // Split by newlines and create proper spacing
+    // Convert newlines to proper spacing
     content = content
       .split("\n")
       .map((line) => {
-        // Add extra spacing after bullet points
         if (line.startsWith("• ")) {
           return `<div class="bullet-point">${line}</div>`;
         }
