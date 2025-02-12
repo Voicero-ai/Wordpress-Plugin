@@ -1,50 +1,119 @@
-/* MAIN TOGGLE (AI Assistant) - bottom-right lavender */
+/* MAIN TOGGLE (AI Assistant) */
 #voice-toggle-container {
   position: fixed;
-  bottom: 15px;
-  right: 10px;
-  z-index: 9999;
+  top: var(--nav-bottom, 32px); /* Use CSS variable with fallback */
+  left: 10px;
+  z-index: 10000;
+  display: block; /* Ensure it's visible */
 }
 
 #chat-website-button {
   background-color: #9370db;
   color: white;
   border: none;
-  padding: 12px 20px;
-  border-radius: 25px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   cursor: pointer;
-  font-size: 16px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, background-color 0.2s;
-  display: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-#chat-website-button.visible {
-  opacity: 1;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  padding: 0;
+  display: flex !important; /* Force display */
+  align-items: center;
+  justify-content: center;
+  opacity: 1 !important; /* Force visibility */
+  transform: none !important; /* Remove transform */
+  position: relative;
 }
 
 #chat-website-button:hover {
   background-color: #7a5abf;
-  transform: scale(1.05);
+  transform: scale(1.1);
+  box-shadow: 0 4px 15px rgba(147, 112, 219, 0.4);
 }
 
-/* INTERACTION CHOOSER (above toggle) */
+/* Bot icon animation */
+.bot-icon {
+  transition: transform 0.3s ease;
+  width: 28px; /* Adjust size */
+  height: 28px; /* Adjust size */
+}
+
+#chat-website-button:hover .bot-icon {
+  transform: rotate(-5deg) scale(1.1);
+}
+
+/* Add a pulse effect */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(147, 112, 219, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(147, 112, 219, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(147, 112, 219, 0);
+  }
+}
+
+#chat-website-button.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: pulse 2s infinite;
+}
+
+/* Add a notification dot */
+#chat-website-button::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background-color: #4caf50;
+  border-radius: 50%;
+  border: 2px solid white;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.3s ease;
+}
+
+#chat-website-button.has-notification::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* INTERACTION CHOOSER */
 #interaction-chooser {
   position: fixed;
-  bottom: 60px;
-  right: 10px;
-  z-index: 9998;
-
+  top: calc(var(--nav-bottom, 32px) + 60px);
+  left: 10px;
+  z-index: 10001;
   background-color: #e6e6fa;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   padding: 10px;
-  display: none;
   width: 200px;
   border: 1px solid #e0e0e0;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.3s ease;
+  pointer-events: auto; /* Ensure it's clickable */
 }
+
+#interaction-chooser.visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  display: block;
+}
+
+/* Remove this rule as we're handling display/visibility in JS */
+#interaction-chooser[style*="display: block"] {
+  display: none;
+}
+
+/* Ensure interaction options are clickable */
 .interaction-option {
   display: flex;
   align-items: center;
@@ -53,6 +122,7 @@
   cursor: pointer;
   border-radius: 6px;
   transition: background-color 0.2s;
+  pointer-events: auto;
 }
 .interaction-option:hover {
   background-color: #cbc3e3;
@@ -65,8 +135,8 @@
 /* VOICE INTERFACE - bottom-right, lavender style */
 #voice-interface {
   position: fixed;
-  bottom: 65px;
-  right: 10px;
+  top: calc(var(--nav-bottom, 32px) + 60px); /* Position relative to navbar */
+  left: 10px;
   z-index: 9997;
 
   background-color: #e6e6fa;
@@ -190,8 +260,8 @@
 /* TEXT INTERFACE - bottom-right, lavender style */
 #text-interface {
   position: fixed;
-  bottom: 65px;
-  right: 10px;
+  top: calc(var(--nav-bottom, 32px) + 60px); /* Position relative to navbar */
+  left: 10px;
   z-index: 9997;
 
   background-color: #e6e6fa;
@@ -222,7 +292,7 @@
 
 /* Chat container - maximize space */
 #text-interface .chat-container {
-  height: 400px;
+  height: 400px; /* Increased from 360px to accommodate input area */
   width: 100%;
   background: #fff;
   border-radius: 8px;
@@ -235,7 +305,7 @@
   padding: 20px;
   overflow-y: auto;
   background-color: #f8f9fa !important;
-  height: 340px;
+  height: 300px; /* Keep this at 300px */
   transition: none;
 }
 

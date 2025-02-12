@@ -34,7 +34,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const mainToggle = document.getElementById("chat-website-button");
   const interactionChooser = document.getElementById("interaction-chooser");
   const textInterface = document.getElementById("text-interface");
-  const chatMessages = document.getElementById("chat-messages");
+  const voiceInterface = document.getElementById("voice-interface");
+
+  console.log("Elements found:", {
+    mainToggle: !!mainToggle,
+    interactionChooser: !!interactionChooser,
+    textInterface: !!textInterface,
+    voiceInterface: !!voiceInterface,
+  });
 
   // First check website active status
   if (!(await checkConnection())) {
@@ -44,27 +51,63 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Show main toggle button
   if (mainToggle) {
-    mainToggle.style.display = "block";
+    mainToggle.style.display = "flex";
     mainToggle.classList.add("visible");
   }
 
   // Add this: Fetch thread history if we have a threadId
   await fetchThreadHistory();
 
-  // Set up click handlers
-  mainToggle.addEventListener("click", () => {
-    interactionChooser.style.display = "block";
-    textInterface.style.display = "none";
-    mainToggle.classList.add("active");
-  });
+  // Prevent multiple event registrations
+  if (mainToggle && !mainToggle.hasAttribute("data-handler-attached")) {
+    // Set up click handlers - combine notification removal with main toggle
+    mainToggle.addEventListener("click", (e) => {
+      // Prevent event bubbling
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Remove notification on any click
+      mainToggle.classList.remove("has-notification");
+
+      console.log("Main toggle clicked", Date.now()); // Add timestamp for debugging
+      const isVisible = interactionChooser.classList.contains("visible");
+      console.log("Chooser visible:", isVisible);
+
+      if (isVisible) {
+        interactionChooser.classList.remove("visible");
+        setTimeout(() => {
+          interactionChooser.style.display = "none";
+          interactionChooser.style.visibility = "hidden";
+        }, 300);
+        mainToggle.classList.remove("active");
+      } else {
+        interactionChooser.style.display = "block";
+        interactionChooser.style.visibility = "visible";
+        interactionChooser.offsetHeight; // Force reflow
+        interactionChooser.classList.add("visible");
+
+        textInterface.style.display = "none";
+        voiceInterface.style.display = "none";
+        mainToggle.classList.add("active");
+      }
+    });
+
+    // Mark that we've attached the handler
+    mainToggle.setAttribute("data-handler-attached", "true");
+  }
 
   // Set up text chat option
-  document
-    .querySelector(".interaction-option.text")
-    .addEventListener("click", () => {
-      textInterface.style.display = "block";
-      interactionChooser.style.display = "none";
-    });
+  const textOption = document.querySelector(".interaction-option.text");
+  console.log("Text option found:", !!textOption);
+
+  textOption?.addEventListener("click", () => {
+    console.log("Text option clicked");
+    textInterface.style.display = "block";
+    interactionChooser.classList.remove("visible");
+    setTimeout(() => {
+      interactionChooser.style.visibility = "hidden";
+    }, 300);
+  });
 
   // Set up close button
   document.getElementById("close-text").addEventListener("click", () => {
@@ -115,6 +158,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     newUrl.searchParams.delete("ai_redirect");
     newUrl.searchParams.delete("thread_id");
     window.history.replaceState({}, "", newUrl.toString());
+  }
+
+  // Add notification dot after a delay
+  setTimeout(() => {
+    mainToggle?.classList.add("has-notification");
+  }, 3000);
+
+  // Make sure interaction chooser starts properly hidden
+  if (interactionChooser) {
+    interactionChooser.style.display = "none";
+    interactionChooser.style.visibility = "hidden";
+    interactionChooser.classList.remove("visible");
   }
 });
 

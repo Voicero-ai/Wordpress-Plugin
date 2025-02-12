@@ -1146,6 +1146,38 @@ function ai_website_render_admin_page() {
             ?>';
             console.log("Access key loaded:", ACCESS_KEY.substring(0, 10) + "..."); // Debug log
         });
+
+        // Add script to detect nav height and position button
+        function updateNavbarPositioning() {
+            // Find the navigation element - checking common WordPress nav classes/IDs
+            const nav = document.querySelector(
+                'header, ' + // Try header first
+                '#masthead, ' + // Common WordPress header ID
+                '.site-header, ' + // Common header class
+                'nav.navbar, ' + // Bootstrap navbar
+                'nav.main-navigation, ' + // Common nav classes
+                '.nav-primary, ' +
+                '#site-navigation, ' +
+                '.site-navigation'
+            );
+            
+            if (nav) {
+                const navRect = nav.getBoundingClientRect();
+                const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
+                
+                // Set the custom property for positioning
+                document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
+            }
+        }
+
+        // Run on load
+        document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
+        
+        // Run on resize
+        window.addEventListener('resize', updateNavbarPositioning);
+        
+        // Run after a short delay to catch any dynamic header changes
+        setTimeout(updateNavbarPositioning, 500);
     });
     </script>
     <?php
@@ -1626,6 +1658,11 @@ add_action('rest_api_init', function() {
    4. ENQUEUE ASSETS (script.js & style.css)
 ------------------------------------------------------------------------ */
 function my_first_plugin_enqueue_scripts() {
+    // Remove any existing scripts first
+    wp_deregister_script('my-first-plugin-script');
+    wp_deregister_script('recordrtc');
+    
+    // Then enqueue them once
     wp_enqueue_style('my-first-plugin-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
     wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
     wp_enqueue_script(
@@ -1647,18 +1684,55 @@ add_action('wp_enqueue_scripts', 'my_first_plugin_enqueue_scripts');
    5. ADD FRONT-END INTERFACES TO <body>
 ------------------------------------------------------------------------ */
 function my_first_plugin_add_toggle_button() {
-    echo '
+    ?>
+    <script>
+    function updateNavbarPositioning() {
+        // Find the navigation element - checking common WordPress nav classes/IDs
+        const nav = document.querySelector(
+            'header, ' + // Try header first
+            '#masthead, ' + // Common WordPress header ID
+            '.site-header, ' + // Common header class
+            'nav.navbar, ' + // Bootstrap navbar
+            'nav.main-navigation, ' + // Common nav classes
+            '.nav-primary, ' +
+            '#site-navigation, ' +
+            '.site-navigation'
+        );
+        
+        if (nav) {
+            const navRect = nav.getBoundingClientRect();
+            const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
+            
+            // Set the custom property for positioning
+            document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
+        }
+    }
+
+    // Run on load
+    document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
+    
+    // Run on resize
+    window.addEventListener('resize', updateNavbarPositioning);
+    
+    // Run after a short delay to catch any dynamic header changes
+    setTimeout(updateNavbarPositioning, 500);
+    </script>
+
     <div id="voice-toggle-container">
-        <button id="chat-website-button">Chat with Website</button>
+        <button id="chat-website-button">
+            <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.72V7h2a5 5 0 0 1 5 5v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-5a5 5 0 0 1 5-5h2V5.72c-.6-.34-1-.98-1-1.72a2 2 0 0 1 2-2M9 9a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3H9m1 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m6 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-4-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0m4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+            </svg>
+        </button>
     </div>
 
     <div id="interaction-chooser">
         <div class="interaction-option voice">
-            <img src="' . plugin_dir_url(__FILE__) . 'assets/mic-icon.png" alt="Voice">
+            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.png" alt="Voice">
             <span>Talk to Website</span>
         </div>
         <div class="interaction-option text">
-            <img src="' . plugin_dir_url(__FILE__) . 'assets/keyboard.png" alt="Text">
+            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.png" alt="Text">
             <span>Type to Website</span>
         </div>
     </div>
@@ -1676,7 +1750,7 @@ function my_first_plugin_add_toggle_button() {
                 <div class="ai-speaking-indicator">AI is speaking...</div>
             </div>
             <button id="mic-button" title="Click to start/stop recording">
-                <img src="' . plugin_dir_url(__FILE__) . 'assets/mic-icon.png" alt="Microphone">
+                <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.png" alt="Microphone">
                 <span>Start</span>
             </button>
             <div id="transcript-container">
@@ -1703,7 +1777,7 @@ function my_first_plugin_add_toggle_button() {
             </div>
         </div>
     </div>
-    ';
+    <?php
 }
 add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
 
@@ -1718,7 +1792,7 @@ function ai_website_enqueue_scripts() {
     wp_enqueue_script(
         'ai-website-script',
         plugin_dir_url(__FILE__) . 'assets/script.js',
-        ['jquery', 'recordrtc'],
+        ['recordrtc'],
         '1.1',
         true
     );
