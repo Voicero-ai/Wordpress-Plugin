@@ -1721,44 +1721,44 @@ function my_first_plugin_add_toggle_button() {
     <div id="voice-toggle-container">
         <button id="chat-website-button">
             <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.72V7h2a5 5 0 0 1 5 5v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-5a5 5 0 0 1 5-5h2V5.72c-.6-.34-1-.98-1-1.72a2 2 0 0 1 2-2M9 9a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3H9m1 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m6 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-4-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0m4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
             </svg>
         </button>
     </div>
 
     <div id="interaction-chooser">
         <div class="interaction-option voice">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.png" alt="Voice">
+            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.svg" alt="Voice">
             <span>Talk to Website</span>
         </div>
         <div class="interaction-option text">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.png" alt="Text">
+            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.svg" alt="Text">
             <span>Type to Website</span>
         </div>
     </div>
 
     <!-- Voice Interface -->
     <div id="voice-interface" class="interface-panel">
-        <div class="interface-content">
-            <button id="close-voice">×</button>
-            <div class="voice-status-container">
-                <div class="recording-waves">
-                    <div class="wave"></div>
-                    <div class="wave"></div>
-                    <div class="wave"></div>
-                </div>
-                <div class="ai-speaking-indicator">AI is speaking...</div>
+        <div class="voice-header">
+            <div class="header-content">
+                <button class="mic-button-header">
+                    <svg class="mic-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
+                    </svg>
+                </button>
+                <span class="title">AI Assistant</span>
+                <button id="close-voice">×</button>
             </div>
-            <button id="mic-button" title="Click to start/stop recording">
-                <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.png" alt="Microphone">
-                <span>Start</span>
-            </button>
-            <div id="transcript-container">
-                <div class="transcript-line">
-                    <strong>User:</strong> <span class="transcript-text"></span>
+        </div>
+        <div class="voice-content">
+            <div class="conversation-container">
+                <div class="message-line">
+                    <span class="label">User:</span>
+                    <span class="content"></span>
                 </div>
-                <div class="transcript-line ai-response">
-                    <strong>AI:</strong> <span></span>
+                <div class="message-line">
+                    <span class="label">AI:</span>
+                    <span class="content"></span>
                 </div>
             </div>
         </div>

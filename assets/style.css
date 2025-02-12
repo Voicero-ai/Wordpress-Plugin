@@ -175,129 +175,116 @@
   height: 24px;
 }
 
-/* VOICE INTERFACE - bottom-right, lavender style */
+/* VOICE INTERFACE */
 #voice-interface {
   position: fixed;
-  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
+  top: calc(25vh + 60px);
   left: 10px;
   z-index: 9997;
-
-  background-color: #e6e6fa;
-  border-radius: 8px;
+  background-color: #ffffff;
+  border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 320px;
   display: none;
   border: 1px solid #e0e0e0;
-  padding: 10px;
-  text-align: center;
+  overflow: hidden;
+  transition: all 0.3s ease; /* Add transition for smooth hover effect */
 }
+
+/* Add hover effect to entire container */
+#voice-interface:hover {
+  transform: translateY(-2px); /* Slight lift effect */
+  box-shadow: 0 4px 20px rgba(147, 112, 219, 0.2); /* Larger, colored shadow */
+  border-color: #9370db; /* Highlight border */
+}
+
+/* Make the hover effect more pronounced when recording */
+#voice-interface.recording:hover {
+  box-shadow: 0 4px 20px rgba(255, 0, 0, 0.2);
+  border-color: #ff0000;
+}
+
+/* Header styling */
+.voice-header {
+  background-color: #e6e6fa;
+  padding: 10px 20px;
+  color: #9370db;
+}
+
+.voice-header .header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.voice-header .mic-icon {
+  width: 20px;
+  height: 20px;
+  color: #333 !important; /* Override any inherited colors */
+}
+
+.voice-header .title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 500;
+}
+
 #close-voice {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 18px;
   background: none;
   border: none;
+  color: #9370db;
+  font-size: 24px;
   cursor: pointer;
-  color: #666;
-  padding: 5px;
+  padding: 0;
   line-height: 1;
-  opacity: 0.7;
+  opacity: 0.8;
   transition: opacity 0.2s;
 }
+
 #close-voice:hover {
   opacity: 1;
 }
 
-/* Voice waves + status */
-.voice-status-container {
-  text-align: center;
-  margin: 2px 0;
-  height: 20px;
-}
-.recording-waves {
-  display: none;
-  justify-content: center;
-  align-items: center;
-  gap: 5px;
-  height: 100%;
-}
-.recording-waves.active {
-  display: flex;
-}
-.wave {
-  width: 3px;
-  height: 20px;
-  background: #007bff;
-  animation: wave 1s ease-in-out infinite;
-  border-radius: 2px;
-}
-.wave:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.wave:nth-child(3) {
-  animation-delay: 0.4s;
-}
-.ai-speaking-indicator {
-  display: none;
-  color: #9370db;
-  font-weight: 500;
+/* Content area */
+.voice-content {
+  padding: 20px;
 }
 
-/* Mic button */
-#mic-button {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background-color: #9370db;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 8px auto;
-  transition: all 0.3s ease;
-  padding: 0;
-  position: relative;
-}
-#mic-button:hover {
-  transform: scale(1.05);
-}
-#mic-button.listening {
-  background-color: #dc3545;
-  transform: scale(1.1);
-}
-#mic-button img {
-  width: 30px;
-  height: 30px;
-  filter: brightness(0) invert(1);
-}
-#mic-button span {
-  display: none;
+/* Conversation container */
+.conversation-container {
+  padding: 15px;
+  background: none;
 }
 
-/* Voice transcript container */
-#transcript-container {
-  margin-top: 10px;
-  padding: 10px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  min-height: 40px;
-  max-height: 100px;
-  overflow-y: auto;
-  text-align: left;
+.message-line {
+  margin-bottom: 12px;
   font-size: 14px;
+  line-height: 1.4;
 }
-.transcript-line {
-  margin-bottom: 5px;
-  line-height: 1.3;
+
+.message-line:last-child {
+  margin-bottom: 0;
 }
-.transcript-line strong {
-  color: #070707;
-  margin-right: 5px;
+
+.message-line .label {
+  font-weight: 600;
+  margin-right: 8px;
 }
-.transcript-line:nth-child(even) strong {
+
+.message-line:first-child .label {
+  color: #333;
+}
+
+.message-line:last-child .label {
   color: #9370db;
+}
+
+/* Remove old styles that conflict */
+.recording-waves,
+.voice-status-container,
+.ai-speaking-indicator,
+#transcript-container {
+  display: none;
 }
 
 /* TEXT INTERFACE - bottom-right, lavender style */
@@ -609,4 +596,33 @@ div.message-bubble.user-bubble {
 /* Update the existing message bubble styles */
 .message-bubble.ai-bubble {
   transition: background-color 0.3s ease;
+}
+
+/* Update header mic button styling - simplified */
+.mic-button-header {
+  background: none !important;
+  border: none;
+  padding: 8px;
+  margin: -8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.mic-button-header .mic-icon {
+  width: 20px;
+  height: 20px;
+  color: #9370db !important; /* Force gray color */
+}
+
+/* Only change color when recording */
+.mic-button-header.recording .mic-icon {
+  color: #ff0000 !important; /* Force red color when recording */
+}
+
+/* Remove ALL other mic-related styles */
+.voice-header .mic-icon {
+  color: #9370db !important; /* Override any inherited colors */
 }

@@ -115,6 +115,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     mainToggle.classList.remove("active");
   });
 
+  // Add this after the text option click handler
+  const voiceOption = document.querySelector(".interaction-option.voice");
+  console.log("Voice option found:", !!voiceOption);
+
+  voiceOption?.addEventListener("click", () => {
+    console.log("Voice option clicked");
+    const voiceInterface = document.getElementById("voice-interface");
+    voiceInterface.style.display = "block";
+    interactionChooser.classList.remove("visible");
+    setTimeout(() => {
+      interactionChooser.style.visibility = "hidden";
+    }, 300);
+  });
+
+  // Add close button handler for voice interface
+  document.getElementById("close-voice")?.addEventListener("click", () => {
+    const voiceInterface = document.getElementById("voice-interface");
+    voiceInterface.style.display = "none";
+    mainToggle.classList.remove("active");
+  });
+
   // Set up chat input handlers
   const chatInput = document.getElementById("chat-input");
   const sendButton = document.getElementById("send-message");
@@ -170,6 +191,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     interactionChooser.style.display = "none";
     interactionChooser.style.visibility = "hidden";
     interactionChooser.classList.remove("visible");
+  }
+
+  // Add mic button click handler
+  const micButton = document.querySelector(".mic-button-header");
+  if (micButton && !micButton.hasAttribute("data-handler-attached")) {
+    micButton.addEventListener("click", () => {
+      // Toggle recording class
+      micButton.classList.toggle("recording");
+
+      // Toggle recording class on the voice interface container too
+      const voiceInterface = document.getElementById("voice-interface");
+      if (voiceInterface) {
+        voiceInterface.classList.toggle("recording");
+      }
+
+      // Here we'll add actual recording logic later
+      console.log(
+        "Mic button clicked, recording:",
+        micButton.classList.contains("recording")
+      );
+    });
+
+    // Mark that we've attached the handler
+    micButton.setAttribute("data-handler-attached", "true");
   }
 });
 
