@@ -7,10 +7,17 @@ function stripHtml(html) {
   return temp.textContent || temp.innerText || "";
 }
 
-// Only keep these globals
-let isAiRedirect = false;
-let ACCESS_KEY = "";
-let currentThreadId = null;
+// Only declare globals if they don't already exist
+if (typeof isAiRedirect === "undefined") {
+  var isAiRedirect = false;
+}
+if (typeof ACCESS_KEY === "undefined") {
+  var ACCESS_KEY = "";
+}
+if (typeof currentThreadId === "undefined") {
+  // Remove localStorage, just use null
+  var currentThreadId = null;
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Set ACCESS_KEY value
@@ -37,6 +44,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     mainToggle.style.display = "block";
     mainToggle.classList.add("visible");
   }
+
+  // Add this: Fetch thread history if we have a threadId
+  await fetchThreadHistory();
 
   // Set up click handlers
   mainToggle.addEventListener("click", () => {
@@ -84,49 +94,107 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // If it's an AI redirect, show the interface
+  // If it's an AI redirect, show the interface and handle thread setup
   if (isAiRedirect) {
     textInterface.style.display = "block";
     interactionChooser.style.display = "none";
     mainToggle.classList.add("active");
 
+    // Get thread ID from URL if it exists
+    const threadId = urlParams.get("thread_id");
+    if (threadId) {
+      currentThreadId = threadId;
+      await fetchThreadHistory();
+    }
+
     // Clean up URL
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.delete("ai_redirect");
+    newUrl.searchParams.delete("thread_id");
     window.history.replaceState({}, "", newUrl.toString());
   }
 });
 
 // Add this function before handleTextChat
-function addMessageToChat(role, content) {
+function addMessageToChat(role, content, timestamp = Date.now()) {
   const chatMessages = document.getElementById("chat-messages");
   if (!chatMessages) return;
 
   // Create message element
   const messageDiv = document.createElement("div");
-  messageDiv.className = `message ${role}-message`;
+  messageDiv.className = `message-wrapper ${role}-wrapper`;
+  messageDiv.dataset.timestamp = timestamp;
+
+  const bubbleDiv = document.createElement("div");
+  bubbleDiv.className = `message-bubble ${role}-bubble`;
+  // Force the background color based on role
+ 
+  if (role === "user") {
+    bubbleDiv.style.cssText =
+      "background-color: #9370db !important; color: white !important;"; // Purple background, white text for user
+  }
 
   const contentDiv = document.createElement("div");
   contentDiv.className = "message-content";
-  contentDiv.textContent = content;
 
-  messageDiv.appendChild(contentDiv);
-  chatMessages.appendChild(messageDiv);
+  // Format markdown content
+  if (typeof content === "string") {
+    // Handle bold text
+    content = content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
-  // Scroll to bottom
+    // Handle bullet points
+    content = content.replace(/^- /gm, "• ");
+
+    // Handle links - extract just the text
+    content = content.replace(/\[(.*?)\]\(.*?\)/g, "$1");
+
+    // Split by newlines and create proper spacing
+    content = content
+      .split("\n")
+      .map((line) => {
+        // Add extra spacing after bullet points
+        if (line.startsWith("• ")) {
+          return `<div class="bullet-point">${line}</div>`;
+        }
+        return line;
+      })
+      .join("<br>");
+
+    contentDiv.innerHTML = content;
+  } else {
+    contentDiv.textContent = JSON.stringify(content);
+  }
+
+  bubbleDiv.appendChild(contentDiv);
+  messageDiv.appendChild(bubbleDiv);
+
+  // Sort messages by timestamp
+  const messages = Array.from(chatMessages.children);
+  const insertIndex = messages.findIndex(
+    (msg) => parseInt(msg.dataset.timestamp) > timestamp
+  );
+
+  if (insertIndex === -1) {
+    chatMessages.appendChild(messageDiv);
+  } else {
+    chatMessages.insertBefore(messageDiv, messages[insertIndex]);
+  }
+
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 // Add this before handleTextChat
 function handleRedirect(redirectUrl) {
   try {
-    // Add ai_redirect parameter to URL
     const url = new URL(redirectUrl, window.location.origin);
     url.searchParams.set("ai_redirect", "true");
 
-    console.log("🔄 Redirecting to:", url.toString());
+    // Include thread ID in redirect if we have one
+    if (currentThreadId) {
+      url.searchParams.set("thread_id", currentThreadId);
+    }
 
-    // Perform the redirect
+    console.log("🔄 Redirecting to:", url.toString());
     window.location.href = url.toString();
   } catch (error) {
     console.error("❌ Invalid redirect URL:", redirectUrl);
@@ -135,7 +203,8 @@ function handleRedirect(redirectUrl) {
 
 async function handleTextChat(text) {
   try {
-    addMessageToChat("user", text);
+    const timestamp = Date.now();
+    addMessageToChat("user", text, timestamp);
 
     const response = await fetch("http://localhost:3000/api/chat", {
       method: "POST",
@@ -155,29 +224,36 @@ async function handleTextChat(text) {
     });
 
     const data = await response.json();
+    console.log("💬 AI Response:", data);
 
-    // Update threadId if we got one
     if (data.threadId) {
       currentThreadId = data.threadId;
     }
 
     // Show AI response
-    const aiContent = data.response?.content || data.response;
-    if (aiContent) {
-      addMessageToChat("ai", aiContent);
-    }
+    if (data.response) {
+      const content = data.response.content.replace(
+        /\[([^\]]+)\]\([^)]+\)/g,
+        "$1"
+      );
+      // Use the created_at from response, or fallback to current timestamp + 1
+      const aiTimestamp = data.response.created_at || timestamp + 1;
+      addMessageToChat("ai", content, aiTimestamp);
 
-    // Prioritize scroll_to_text over redirect_url
-    if (data.response?.scroll_to_text) {
-      const scrollSuccess = scrollToText(data.response.scroll_to_text.trim());
-      if (!scrollSuccess) {
-        console.warn("Failed to find scroll text, trying redirect instead");
-        if (data.response?.redirect_url) {
-          handleRedirect(data.response.redirect_url);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Handle navigation after showing the message
+      if (data.response.scroll_to_text) {
+        const scrollSuccess = scrollToText(data.response.scroll_to_text.trim());
+        if (!scrollSuccess) {
+          console.warn("Failed to find scroll text, trying redirect instead");
+          if (data.response.redirect_url) {
+            handleRedirect(data.response.redirect_url);
+          }
         }
+      } else if (data.response.redirect_url) {
+        handleRedirect(data.response.redirect_url);
       }
-    } else if (data.response?.redirect_url) {
-      handleRedirect(data.response.redirect_url);
     }
   } catch (error) {
     console.error("Error in text chat:", error);
@@ -283,3 +359,75 @@ async function checkConnection() {
     return false;
   }
 }
+
+// Add this new function to fetch thread history
+async function fetchThreadHistory() {
+  if (!currentThreadId) return;
+  try {
+    const response = await fetch(`http://localhost:3000/api/thread-history`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_KEY}`,
+      },
+      body: JSON.stringify({
+        threadId: currentThreadId,
+      }),
+    });
+    const data = await response.json();
+    console.log("💬 Thread History:", data);
+
+    // Clear existing messages
+    const chatMessages = document.getElementById("chat-messages");
+    if (chatMessages) {
+      chatMessages.innerHTML = "";
+    }
+
+    // Display each message in the thread
+    if (data.messages && Array.isArray(data.messages)) {
+      // Sort messages by createdAt
+      const sortedMessages = [...data.messages].sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      );
+
+      sortedMessages.forEach((message) => {
+        // Extract the message content
+        const messageContent =
+          typeof message.content === "object"
+            ? message.content.content || message.content.response?.content
+            : message.content;
+
+        // Convert createdAt to timestamp
+        const timestamp = new Date(message.createdAt).getTime();
+
+        // === FIX: Convert "assistant" role to "ai" so your CSS can style it. ===
+        let finalRole = message.role;
+        if (finalRole === "assistant") {
+          finalRole = "ai";
+        }
+
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message-wrapper ${finalRole}-wrapper`;
+        messageDiv.dataset.timestamp = timestamp;
+
+        const bubbleDiv = document.createElement("div");
+        bubbleDiv.className = `message-bubble ${finalRole}-bubble`;
+
+        // Fill the content
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "message-content";
+        contentDiv.innerHTML = messageContent;
+
+        bubbleDiv.appendChild(contentDiv);
+        messageDiv.appendChild(bubbleDiv);
+        chatMessages.appendChild(messageDiv);
+      });
+
+      // Scroll to bottom after loading history
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  } catch (error) {
+    console.error("Error fetching thread history:", error);
+  }
+}
+
