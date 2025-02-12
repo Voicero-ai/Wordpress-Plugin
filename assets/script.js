@@ -128,7 +128,7 @@ function addMessageToChat(role, content, timestamp = Date.now()) {
   const bubbleDiv = document.createElement("div");
   bubbleDiv.className = `message-bubble ${role}-bubble`;
   // Force the background color based on role
- 
+
   if (role === "user") {
     bubbleDiv.style.cssText =
       "background-color: #9370db !important; color: white !important;"; // Purple background, white text for user
@@ -206,6 +206,10 @@ async function handleTextChat(text) {
     const timestamp = Date.now();
     addMessageToChat("user", text, timestamp);
 
+    // Add loading message
+    const loadingTimestamp = timestamp + 1;
+    const loadingId = addLoadingMessage(loadingTimestamp);
+
     const response = await fetch("http://localhost:3000/api/chat", {
       method: "POST",
       headers: {
@@ -222,6 +226,9 @@ async function handleTextChat(text) {
         },
       }),
     });
+
+    // Remove loading message
+    removeLoadingMessage(loadingId);
 
     const data = await response.json();
     console.log("💬 AI Response:", data);
@@ -258,6 +265,75 @@ async function handleTextChat(text) {
   } catch (error) {
     console.error("Error in text chat:", error);
     addMessageToChat("ai", "Sorry, I encountered an error. Please try again.");
+  }
+}
+
+// Update the addLoadingMessage function
+function addLoadingMessage(timestamp) {
+  const loadingId = `loading-${timestamp}`;
+  const messages = [
+    "......",
+    "searching",
+    "clicking",
+    "reading",
+    "thinking",
+    "scrolling",
+    "thinking",
+  ];
+  const colors = ["#9370DB", "#8A2BE2", "#9400D3", "#800080"];
+  let currentIndex = 0;
+
+  const messageDiv = document.createElement("div");
+  messageDiv.className = "message-wrapper ai-wrapper";
+  messageDiv.dataset.timestamp = timestamp;
+  messageDiv.id = loadingId;
+
+  const bubbleDiv = document.createElement("div");
+  bubbleDiv.className = "message-bubble loading-bubble";
+
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "message-content loading-content";
+
+  updateLoadingText(contentDiv, messages[0], colors[0]);
+
+  bubbleDiv.appendChild(contentDiv);
+  messageDiv.appendChild(bubbleDiv);
+
+  const chatMessages = document.getElementById("chat-messages");
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  // Slow down the interval to 3 seconds
+  const intervalId = setInterval(() => {
+    currentIndex = (currentIndex + 1) % messages.length;
+    updateLoadingText(contentDiv, messages[currentIndex], colors[currentIndex]);
+  }, 4000); // Slowed down to 3 seconds
+
+  messageDiv.dataset.intervalId = intervalId;
+  return loadingId;
+}
+
+function updateLoadingText(container, text, color) {
+  container.innerHTML = "";
+
+  [...text].forEach((char, index) => {
+    const span = document.createElement("span");
+    span.textContent = char;
+    span.style.color = color;
+    span.style.opacity = "0";
+    // Slow down the character animation to 3 seconds with longer delays between characters
+    span.style.animation = `fadeInOut 2s ease ${index * 0.2}s`;
+    container.appendChild(span);
+  });
+}
+
+function removeLoadingMessage(loadingId) {
+  const loadingDiv = document.getElementById(loadingId);
+  if (loadingDiv) {
+    // Clear the interval
+    clearInterval(loadingDiv.dataset.intervalId);
+    // Remove the element
+    loadingDiv.remove();
   }
 }
 
@@ -430,4 +506,3 @@ async function fetchThreadHistory() {
     console.error("Error fetching thread history:", error);
   }
 }
-
