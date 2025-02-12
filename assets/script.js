@@ -18,6 +18,9 @@ if (typeof currentThreadId === "undefined") {
   // Remove localStorage, just use null
   var currentThreadId = null;
 }
+if (typeof userPromptHistory === "undefined") {
+  var userPromptHistory = [];
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Set ACCESS_KEY value
@@ -206,9 +209,19 @@ async function handleTextChat(text) {
     const timestamp = Date.now();
     addMessageToChat("user", text, timestamp);
 
+    // Add current prompt to history
+    userPromptHistory.push(text);
+    // Keep only last 3 prompts (including current one)
+    if (userPromptHistory.length > 3) {
+      userPromptHistory = userPromptHistory.slice(-3);
+    }
+
     // Add loading message
     const loadingTimestamp = timestamp + 1;
     const loadingId = addLoadingMessage(loadingTimestamp);
+
+    // Get past 2 prompts (excluding current one)
+    const pastPrompts = userPromptHistory.slice(0, -1);
 
     const response = await fetch("http://localhost:3000/api/chat", {
       method: "POST",
@@ -220,6 +233,7 @@ async function handleTextChat(text) {
         message: text,
         threadId: currentThreadId,
         isVoiceInput: false,
+        pastPrompts: pastPrompts,
         context: {
           currentUrl: window.location.href,
           currentTitle: document.title,
