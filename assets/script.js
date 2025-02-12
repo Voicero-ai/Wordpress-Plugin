@@ -341,7 +341,7 @@ async function handleTextChat(text) {
 function addLoadingMessage(timestamp) {
   const loadingId = `loading-${timestamp}`;
   const messages = [
-    "......",
+    ".....",
     "searching",
     "clicking",
     "reading",
