@@ -36,20 +36,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   const textInterface = document.getElementById("text-interface");
   const voiceInterface = document.getElementById("voice-interface");
 
-  console.log("Elements found:", {
-    mainToggle: !!mainToggle,
-    interactionChooser: !!interactionChooser,
-    textInterface: !!textInterface,
-    voiceInterface: !!voiceInterface,
-  });
+  // Hide all elements initially
+  if (mainToggle) mainToggle.style.display = "none";
+  if (interactionChooser) {
+    interactionChooser.style.display = "none";
+    interactionChooser.style.visibility = "hidden";
+  }
+  if (textInterface) textInterface.style.display = "none";
+  if (voiceInterface) voiceInterface.style.display = "none";
 
-  // First check website active status
-  if (!(await checkConnection())) {
-    console.log("Website is not active");
+  // Check connection before showing anything
+  const isConnected = await checkConnection();
+  if (!isConnected) {
+    console.log("Website is not active - keeping AI interface hidden");
     return;
   }
 
-  // Show main toggle button
+  // Only show main toggle if connected
   if (mainToggle) {
     mainToggle.style.display = "flex";
     mainToggle.classList.add("visible");
@@ -522,10 +525,16 @@ function isHidden(element) {
   );
 }
 
-// Now checkConnection can access ACCESS_KEY
+// Update checkConnection to be more explicit about connection status
 async function checkConnection() {
   try {
     console.log("Checking connection with access key:", ACCESS_KEY);
+
+    // If no access key, return false immediately
+    if (!ACCESS_KEY) {
+      console.log("No access key available");
+      return false;
+    }
 
     const response = await fetch("http://localhost:3000/api/connect", {
       method: "GET",
@@ -538,8 +547,15 @@ async function checkConnection() {
     const data = await response.json();
     console.log("Connection response:", data);
 
-    if (!response.ok) {
-      throw new Error(data.error || "Connection failed");
+    if (!response.ok || data.error) {
+      console.log("Connection failed:", data.error || "Unknown error");
+      return false;
+    }
+
+    // Verify the website is active in the response
+    if (data.website && data.website.active === false) {
+      console.log("Website is not active");
+      return false;
     }
 
     return true;
