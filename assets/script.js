@@ -23,8 +23,12 @@ if (typeof userPromptHistory === "undefined") {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Set ACCESS_KEY value
+  // Set ACCESS_KEY value with debugging
   ACCESS_KEY = window.aiWebsiteConfig?.accessKey || "";
+  console.log(
+    "Initial ACCESS_KEY setup:",
+    ACCESS_KEY ? "Key exists" : "No key"
+  );
 
   // Check if this is an AI redirect
   const urlParams = new URLSearchParams(window.location.search);
@@ -47,6 +51,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Check connection before showing anything
   const isConnected = await checkConnection();
+  console.log("Connection check result:", isConnected);
+
   if (!isConnected) {
     console.log("Website is not active - keeping AI interface hidden");
     return;
@@ -54,6 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Only show main toggle if connected
   if (mainToggle) {
+    console.log("Showing main toggle button");
     mainToggle.style.display = "flex";
     mainToggle.classList.add("visible");
   }
@@ -525,12 +532,14 @@ function isHidden(element) {
   );
 }
 
-// Update checkConnection to be more explicit about connection status
+// Update checkConnection with more debugging
 async function checkConnection() {
   try {
-    console.log("Checking connection with access key:", ACCESS_KEY);
+    console.log(
+      "Checking connection with access key:",
+      ACCESS_KEY ? "Key exists" : "No key"
+    );
 
-    // If no access key, return false immediately
     if (!ACCESS_KEY) {
       console.log("No access key available");
       return false;
@@ -545,7 +554,7 @@ async function checkConnection() {
     });
 
     const data = await response.json();
-    console.log("Connection response:", data);
+    console.log("Connection response full data:", data);
 
     if (!response.ok || data.error) {
       console.log("Connection failed:", data.error || "Unknown error");
@@ -558,6 +567,7 @@ async function checkConnection() {
       return false;
     }
 
+    console.log("Connection successful, website is active");
     return true;
   } catch (error) {
     console.error("Connection check failed:", error);

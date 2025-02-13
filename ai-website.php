@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: AI-Website
- * Description: Example plugin that shows all pages in JSON on an admin page and sets up custom REST endpoints for AI usage.
- * Version: 1.1
- * Author: Your Name
+ * Plugin Name: Voicero.AI
+ * Description: A plugin that can connect your whole website to an AI Salesman to boost your sales. Increase your conversion rate by 10x with our AI that will answer all user questions and put them on the path to purchase.
+ * Version: 0.0.2
+ * Author: Voicero.AI
  */
 
 if (!defined('ABSPATH')) {
@@ -19,8 +19,8 @@ define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
 add_action('admin_menu', 'ai_website_add_admin_page');
 function ai_website_add_admin_page() {
     add_menu_page(
-        'AI-Website',         // Page <title>
-        'AI-Website',         // Menu label
+        'Voicero.AI',         // Page <title>
+        'Voicero.AI',         // Menu label
         'manage_options',     // Capability required
         'ai-website-admin',   // Menu slug (unique ID)
         'ai_website_render_admin_page', // Callback that renders the page
@@ -1797,10 +1797,10 @@ function ai_website_enqueue_scripts() {
         true
     );
 
-    // Pass data to the frontend script
-    wp_localize_script('ai-website-script', 'aiWebsiteData', [
+    // Pass data to the frontend script - make sure we're using the correct handle
+    wp_localize_script('ai-website-script', 'aiWebsiteConfig', [
+        'accessKey' => get_option('ai_website_access_key', ''),
         'apiUrl' => AI_WEBSITE_API_URL,
-        'accessKey' => ai_website_get_access_key(),
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('ai_website_frontend_nonce')
     ]);
