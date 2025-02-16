@@ -26,6 +26,13 @@ if (typeof userPromptHistory === "undefined") {
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
+let audioContext = null;
+let analyser = null;
+let silenceStart = null;
+const SILENCE_THRESHOLD = 0.03; // Increased from 0.01 to 0.03
+const SILENCE_DURATION = 1500; // Keep at 1.5 seconds
+let hasDetectedSpeech = false;
+const SPEECH_THRESHOLD = 0.05; // Higher than silence threshold to ensure it's actual speech
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Set ACCESS_KEY value with more detailed debugging
@@ -247,8 +254,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             voiceInterface.classList.add("recording");
           }
         } else {
-          // Stop recording and process audio
-          await stopRecording(true);
+          // Stop recording without processing audio
+          await stopRecording(false);
           micButton.classList.remove("recording");
           const voiceInterface = document.getElementById("voice-interface");
           if (voiceInterface) {
@@ -684,7 +691,7 @@ async function fetchThreadHistory() {
   }
 }
 
-// Add these new functions for voice handling
+// Update the startRecording function
 async function startRecording() {
   try {
     console.log(
@@ -695,6 +702,29 @@ async function startRecording() {
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 
+    // Reset detection states
+    hasDetectedSpeech = false;
+    silenceStart = null;
+
+    // Set isRecording to true BEFORE setting up audio analysis
+    isRecording = true;
+    console.log("Recording flag set to:", isRecording);
+
+    // Set up audio analysis
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    console.log("Audio analysis setup complete");
+    console.log("Starting speech detection with:", {
+      speechThreshold: SPEECH_THRESHOLD,
+      silenceThreshold: SILENCE_THRESHOLD,
+      duration: SILENCE_DURATION,
+      fftSize: analyser.fftSize,
+    });
+
     mediaRecorder.ondataavailable = (event) => {
       audioChunks.push(event.data);
     };
@@ -704,15 +734,96 @@ async function startRecording() {
       await processAudio(audioBlob);
     };
 
+    // Start the media recorder
     mediaRecorder.start();
-    isRecording = true;
+
+    // Start detection
+    console.log("Waiting for speech...");
+    detectSilence();
+
     console.log("Recording started");
   } catch (error) {
     console.error("Error starting recording:", error);
+    isRecording = false;
+    hasDetectedSpeech = false;
     throw error;
   }
 }
 
+// Update the detectSilence function to handle initial speech detection
+function detectSilence() {
+  if (!isRecording || !analyser) {
+    console.log("Not recording or no analyser available");
+    return;
+  }
+
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(dataArray);
+
+  // Calculate average volume
+  const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+  const normalizedAverage = average / 256; // Normalize to 0-1 range
+
+  // Log the audio levels periodically (every 500ms to avoid console spam)
+  if (Date.now() % 500 < 50) {
+    console.log(
+      `Current audio level: ${normalizedAverage.toFixed(4)} ${
+        !hasDetectedSpeech
+          ? "(WAITING FOR SPEECH)"
+          : normalizedAverage < SILENCE_THRESHOLD
+          ? "(SILENCE)"
+          : "(SOUND)"
+      }`
+    );
+  }
+
+  // First wait for speech to begin
+  if (!hasDetectedSpeech) {
+    if (normalizedAverage > SPEECH_THRESHOLD) {
+      hasDetectedSpeech = true;
+      console.log("🎤 Speech detected - now monitoring for silence");
+    }
+    // Continue checking if still recording
+    if (isRecording) {
+      requestAnimationFrame(detectSilence);
+    }
+    return;
+  }
+
+  // Only check for silence after speech has been detected
+  if (normalizedAverage < SILENCE_THRESHOLD) {
+    if (!silenceStart) {
+      silenceStart = Date.now();
+      console.log("🔇 Silence started");
+    } else {
+      const silenceDuration = Date.now() - silenceStart;
+      // Log silence duration every 500ms
+      if (silenceDuration % 500 < 50) {
+        console.log(
+          `⏱️ Silence duration: ${silenceDuration}ms / ${SILENCE_DURATION}ms`
+        );
+      }
+
+      if (silenceDuration >= SILENCE_DURATION) {
+        console.log("🛑 Silence threshold reached - stopping recording");
+        stopRecording(true);
+        return;
+      }
+    }
+  } else {
+    if (silenceStart) {
+      console.log("🔊 Silence broken - resetting timer");
+      silenceStart = null;
+    }
+  }
+
+  // Continue checking if still recording
+  if (isRecording) {
+    requestAnimationFrame(detectSilence);
+  }
+}
+
+// Update stopRecording to clean up audio analysis
 async function stopRecording(processAudioData = true) {
   if (mediaRecorder && isRecording) {
     // If we don't want to process the audio, remove both handlers
@@ -724,9 +835,17 @@ async function stopRecording(processAudioData = true) {
     // Stop all tracks in the stream first
     mediaRecorder.stream.getTracks().forEach((track) => track.stop());
 
+    // Clean up audio analysis
+    if (audioContext) {
+      await audioContext.close();
+      audioContext = null;
+      analyser = null;
+    }
+
     // Then stop the recorder
     mediaRecorder.stop();
     isRecording = false;
+    silenceStart = null;
     console.log("Recording stopped, process audio:", processAudioData);
 
     // Clear chunks if we're not processing
