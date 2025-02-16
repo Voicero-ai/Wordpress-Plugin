@@ -22,13 +22,20 @@ if (typeof userPromptHistory === "undefined") {
   var userPromptHistory = [];
 }
 
+// Add these variables at the top level
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
 document.addEventListener("DOMContentLoaded", async () => {
-  // Set ACCESS_KEY value with debugging
+  // Set ACCESS_KEY value with more detailed debugging
   ACCESS_KEY = window.aiWebsiteConfig?.accessKey || "";
-  console.log(
-    "Initial ACCESS_KEY setup:",
-    ACCESS_KEY ? "Key exists" : "No key"
-  );
+  console.log("Initial ACCESS_KEY setup:", {
+    exists: Boolean(ACCESS_KEY),
+    length: ACCESS_KEY?.length || 0,
+    fromConfig: Boolean(window.aiWebsiteConfig?.accessKey),
+    configObject: window.aiWebsiteConfig || "missing",
+  });
 
   // Check if this is an AI redirect
   const urlParams = new URLSearchParams(window.location.search);
@@ -71,7 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Prevent multiple event registrations
   if (mainToggle && !mainToggle.hasAttribute("data-handler-attached")) {
     // Set up click handlers - combine notification removal with main toggle
-    mainToggle.addEventListener("click", (e) => {
+    mainToggle.addEventListener("click", async (e) => {
       // Prevent event bubbling
       e.stopPropagation();
       e.preventDefault();
@@ -79,15 +86,38 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Remove notification on any click
       mainToggle.classList.remove("has-notification");
 
-      console.log("Main toggle clicked", Date.now()); // Add timestamp for debugging
+      console.log("Main toggle clicked", Date.now());
       const isVisible = interactionChooser.classList.contains("visible");
       console.log("Chooser visible:", isVisible);
 
       if (isVisible) {
+        // If we're closing the interface and recording is active, stop it
+        if (isRecording) {
+          try {
+            // Stop recording without processing audio
+            await stopRecording(false);
+            isRecording = false;
+            audioChunks = []; // Clear the chunks so no audio is processed
+
+            // Remove recording UI states
+            const micButton = document.querySelector(".mic-button-header");
+            micButton?.classList.remove("recording");
+            const voiceInterface = document.getElementById("voice-interface");
+            if (voiceInterface) {
+              voiceInterface.classList.remove("recording");
+            }
+          } catch (error) {
+            console.error("Error stopping recording:", error);
+          }
+        }
+
         interactionChooser.classList.remove("visible");
         setTimeout(() => {
           interactionChooser.style.display = "none";
           interactionChooser.style.visibility = "hidden";
+          // Also hide the interfaces
+          textInterface.style.display = "none";
+          voiceInterface.style.display = "none";
         }, 300);
         mainToggle.classList.remove("active");
       } else {
@@ -206,21 +236,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Add mic button click handler
   const micButton = document.querySelector(".mic-button-header");
   if (micButton && !micButton.hasAttribute("data-handler-attached")) {
-    micButton.addEventListener("click", () => {
-      // Toggle recording class
-      micButton.classList.toggle("recording");
-
-      // Toggle recording class on the voice interface container too
-      const voiceInterface = document.getElementById("voice-interface");
-      if (voiceInterface) {
-        voiceInterface.classList.toggle("recording");
+    micButton.addEventListener("click", async () => {
+      try {
+        if (!isRecording) {
+          // Start recording
+          await startRecording();
+          micButton.classList.add("recording");
+          const voiceInterface = document.getElementById("voice-interface");
+          if (voiceInterface) {
+            voiceInterface.classList.add("recording");
+          }
+        } else {
+          // Stop recording and process audio
+          await stopRecording(true);
+          micButton.classList.remove("recording");
+          const voiceInterface = document.getElementById("voice-interface");
+          if (voiceInterface) {
+            voiceInterface.classList.remove("recording");
+          }
+        }
+      } catch (error) {
+        console.error("Microphone error:", error);
+        alert("Could not access microphone. Please check your permissions.");
       }
-
-      // Here we'll add actual recording logic later
-      console.log(
-        "Mic button clicked, recording:",
-        micButton.classList.contains("recording")
-      );
     });
 
     // Mark that we've attached the handler
@@ -643,5 +681,240 @@ async function fetchThreadHistory() {
     }
   } catch (error) {
     console.error("Error fetching thread history:", error);
+  }
+}
+
+// Add these new functions for voice handling
+async function startRecording() {
+  try {
+    console.log(
+      "Access key when starting recording:",
+      ACCESS_KEY ? "exists" : "missing"
+    );
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      audioChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+      await processAudio(audioBlob);
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    console.log("Recording started");
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    throw error;
+  }
+}
+
+async function stopRecording(processAudioData = true) {
+  if (mediaRecorder && isRecording) {
+    // If we don't want to process the audio, remove both handlers
+    if (!processAudioData) {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onstop = null;
+    }
+
+    // Stop all tracks in the stream first
+    mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+
+    // Then stop the recorder
+    mediaRecorder.stop();
+    isRecording = false;
+    console.log("Recording stopped, process audio:", processAudioData);
+
+    // Clear chunks if we're not processing
+    if (!processAudioData) {
+      audioChunks = [];
+    }
+  }
+}
+
+async function processAudio(audioBlob) {
+  try {
+    // Add debug logging for access key
+    console.log("Access key being sent:", {
+      length: ACCESS_KEY?.length || 0,
+      firstChars: ACCESS_KEY ? ACCESS_KEY.substring(0, 5) + "..." : "none",
+    });
+
+    // First, show a loading message in the voice interface
+    const conversationContainer = document.querySelector(
+      ".conversation-container"
+    );
+    const userMessageLine = conversationContainer.querySelector(
+      ".message-line:first-child .content"
+    );
+    userMessageLine.textContent = "Processing your message...";
+
+    // Create form data with the audio file
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "recording.wav");
+
+    // Log the full request details (except the audio data)
+    console.log("Sending request to whisper API:", {
+      url: "http://localhost:3000/api/whisper",
+      headers: {
+        Authorization: `Bearer ${ACCESS_KEY.substring(0, 5)}...`,
+      },
+    });
+
+    // Send to Whisper API endpoint with proper Authorization header
+    const response = await fetch("http://localhost:3000/api/whisper", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ACCESS_KEY}`,
+      },
+      body: formData,
+    });
+
+    // Log response status and headers
+    console.log("Whisper API response:", {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+
+    if (!response.ok) {
+      // Add better error handling with full error details
+      const errorData = await response.json();
+      console.error("Full error response:", errorData);
+      throw new Error(
+        errorData.error || `HTTP error! status: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    console.log("Whisper response:", data);
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Show transcribed text in voice interface
+    userMessageLine.textContent = data.text;
+
+    // Now send the transcribed text to the chat API
+    await handleVoiceChat(data.text);
+  } catch (error) {
+    console.error("Error processing audio:", error);
+    const conversationContainer = document.querySelector(
+      ".conversation-container"
+    );
+    const userMessageLine = conversationContainer.querySelector(
+      ".message-line:first-child .content"
+    );
+    userMessageLine.textContent = `Error: ${
+      error.message || "Could not process audio"
+    }`;
+  }
+}
+
+async function handleVoiceChat(text) {
+  try {
+    const conversationContainer = document.querySelector(
+      ".conversation-container"
+    );
+    const aiMessageLine = conversationContainer.querySelector(
+      ".message-line:last-child .content"
+    );
+
+    // Show loading state
+    aiMessageLine.textContent = "Thinking...";
+
+    // Notice we're sending the currentThreadId here
+    const response = await fetch("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_KEY}`,
+      },
+      body: JSON.stringify({
+        message: text,
+        threadId: currentThreadId, // Using the same threadId variable as text chat
+        isVoiceInput: true,
+        pastPrompts: userPromptHistory,
+        context: {
+          currentUrl: window.location.href,
+          currentTitle: document.title,
+        },
+      }),
+    });
+
+    const data = await response.json();
+    console.log("💬 AI Voice Response:", data);
+
+    if (data.threadId) {
+      currentThreadId = data.threadId;
+    }
+
+    // Show AI response
+    if (data.response) {
+      const content = data.response.content.replace(
+        /\[([^\]]+)\]\([^)]+\)/g,
+        "$1"
+      );
+      aiMessageLine.textContent = content;
+
+      // Call text-to-speech API
+      try {
+        const ttsResponse = await fetch("http://localhost:3000/api/tts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${ACCESS_KEY}`,
+          },
+          body: JSON.stringify({
+            text: content,
+          }),
+        });
+
+        if (!ttsResponse.ok) {
+          throw new Error(`TTS API error: ${ttsResponse.status}`);
+        }
+
+        // The response will be audio data that you'll handle in your API implementation
+        const audioBlob = await ttsResponse.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        await audio.play();
+
+        // Clean up the blob URL after playing
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+      } catch (ttsError) {
+        console.error("Text-to-speech error:", ttsError);
+        // Continue with the rest of the function even if TTS fails
+      }
+
+      // Handle navigation after showing the message
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      if (data.response.scroll_to_text) {
+        const scrollSuccess = scrollToText(data.response.scroll_to_text.trim());
+        if (!scrollSuccess && data.response.redirect_url) {
+          handleRedirect(data.response.redirect_url);
+        }
+      } else if (data.response.redirect_url) {
+        handleRedirect(data.response.redirect_url);
+      }
+    }
+  } catch (error) {
+    console.error("Error in voice chat:", error);
+    const conversationContainer = document.querySelector(
+      ".conversation-container"
+    );
+    const aiMessageLine = conversationContainer.querySelector(
+      ".message-line:last-child .content"
+    );
+    aiMessageLine.textContent =
+      "Sorry, I encountered an error. Please try again.";
   }
 }
