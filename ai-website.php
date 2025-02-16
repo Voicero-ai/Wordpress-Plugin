@@ -1513,31 +1513,6 @@ add_action('rest_api_init', function() {
     });
 }, 15);
 
-/* ------------------------------------------------------------------------
-   4. ENQUEUE ASSETS (script.js & style.css)
------------------------------------------------------------------------- */
-function my_first_plugin_enqueue_scripts() {
-    // Remove any existing scripts first
-    wp_deregister_script('my-first-plugin-script');
-    wp_deregister_script('recordrtc');
-    
-    // Then enqueue them once
-    wp_enqueue_style('my-first-plugin-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
-    wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
-    wp_enqueue_script(
-        'my-first-plugin-script',
-        plugin_dir_url(__FILE__) . 'assets/script.js',
-        ['recordrtc'],
-        '1.1',
-        true
-    );
-
-    // Add the access key as a script variable
-    wp_localize_script('my-first-plugin-script', 'aiWebsiteConfig', [
-        'accessKey' => get_option('ai_website_access_key', ''),
-    ]);
-}
-add_action('wp_enqueue_scripts', 'my_first_plugin_enqueue_scripts');
 
 /* ------------------------------------------------------------------------
    5. ADD FRONT-END INTERFACES TO <body>

@@ -210,7 +210,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // If it's an AI redirect, show the interface and handle thread setup
   if (isAiRedirect) {
-    textInterface.style.display = "block";
+    const urlParams = new URLSearchParams(window.location.search);
+    const isVoiceChat = urlParams.get("voice_chat") === "true";
+
+    if (isVoiceChat) {
+      // Show voice interface instead of text interface
+      voiceInterface.style.display = "block";
+      textInterface.style.display = "none";
+
+      // Auto-start recording after a short delay
+      setTimeout(async () => {
+        const micButton = document.querySelector(".mic-button-header");
+        if (micButton) {
+          try {
+            await startRecording();
+            micButton.classList.add("recording");
+            voiceInterface.classList.add("recording");
+          } catch (error) {
+            console.error("Error auto-starting recording:", error);
+          }
+        }
+      }, 1000);
+    } else {
+      textInterface.style.display = "block";
+      voiceInterface.style.display = "none";
+    }
+
     interactionChooser.style.display = "none";
     mainToggle.classList.add("active");
 
@@ -225,6 +250,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.delete("ai_redirect");
     newUrl.searchParams.delete("thread_id");
+    newUrl.searchParams.delete("voice_chat");
     window.history.replaceState({}, "", newUrl.toString());
   }
 
@@ -935,6 +961,7 @@ async function processAudio(audioBlob) {
   }
 }
 
+// Update handleVoiceChat function to handle redirects better
 async function handleVoiceChat(text) {
   try {
     const conversationContainer = document.querySelector(
@@ -947,7 +974,13 @@ async function handleVoiceChat(text) {
     // Show loading state
     aiMessageLine.textContent = "Thinking...";
 
-    // Notice we're sending the currentThreadId here
+    // Add current prompt to history
+    userPromptHistory.push(text);
+    // Keep only last 3 prompts
+    if (userPromptHistory.length > 3) {
+      userPromptHistory = userPromptHistory.slice(-3);
+    }
+
     const response = await fetch("http://localhost:3000/api/chat", {
       method: "POST",
       headers: {
@@ -956,7 +989,7 @@ async function handleVoiceChat(text) {
       },
       body: JSON.stringify({
         message: text,
-        threadId: currentThreadId, // Using the same threadId variable as text chat
+        threadId: currentThreadId,
         isVoiceInput: true,
         pastPrompts: userPromptHistory,
         context: {
@@ -975,13 +1008,10 @@ async function handleVoiceChat(text) {
 
     // Show AI response
     if (data.response) {
-      const content = data.response.content.replace(
-        /\[([^\]]+)\]\([^)]+\)/g,
-        "$1"
-      );
-      aiMessageLine.textContent = content;
+      const content = formatMarkdownContent(data.response.content);
+      aiMessageLine.innerHTML = content;
 
-      // Call text-to-speech API
+      // Call text-to-speech API and wait for it to finish
       try {
         const ttsResponse = await fetch("http://localhost:3000/api/tts", {
           method: "POST",
@@ -998,31 +1028,59 @@ async function handleVoiceChat(text) {
           throw new Error(`TTS API error: ${ttsResponse.status}`);
         }
 
-        // The response will be audio data that you'll handle in your API implementation
         const audioBlob = await ttsResponse.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        await audio.play();
 
-        // Clean up the blob URL after playing
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-        };
+        // Wait for audio to finish playing before redirecting
+        await new Promise((resolve) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+          };
+          audio.play();
+        });
+
+        // Handle navigation after audio finishes
+        if (data.response.redirect_url || data.response.scroll_to_text) {
+          if (data.response.scroll_to_text) {
+            const scrollSuccess = scrollToText(
+              data.response.scroll_to_text.trim()
+            );
+            if (!scrollSuccess && data.response.redirect_url) {
+              // If scroll fails and we have a redirect URL, use that
+              const redirectUrl = new URL(
+                data.response.redirect_url,
+                window.location.origin
+              );
+              redirectUrl.searchParams.set("ai_redirect", "true");
+              redirectUrl.searchParams.set("thread_id", currentThreadId);
+              redirectUrl.searchParams.set("voice_chat", "true");
+
+              console.log("🔄 Redirecting to:", redirectUrl.toString());
+              window.location.href = redirectUrl.toString();
+            }
+          } else if (data.response.redirect_url) {
+            // Direct redirect if no scroll_to_text
+            const redirectUrl = new URL(
+              data.response.redirect_url,
+              window.location.origin
+            );
+            redirectUrl.searchParams.set("ai_redirect", "true");
+            redirectUrl.searchParams.set("thread_id", currentThreadId);
+            redirectUrl.searchParams.set("voice_chat", "true");
+
+            console.log("🔄 Redirecting to:", redirectUrl.toString());
+            window.location.href = redirectUrl.toString();
+          }
+        }
       } catch (ttsError) {
         console.error("Text-to-speech error:", ttsError);
-        // Continue with the rest of the function even if TTS fails
-      }
-
-      // Handle navigation after showing the message
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (data.response.scroll_to_text) {
-        const scrollSuccess = scrollToText(data.response.scroll_to_text.trim());
-        if (!scrollSuccess && data.response.redirect_url) {
+        // If TTS fails, still do the redirect after a short delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (data.response.redirect_url) {
           handleRedirect(data.response.redirect_url);
         }
-      } else if (data.response.redirect_url) {
-        handleRedirect(data.response.redirect_url);
       }
     }
   } catch (error) {
@@ -1036,4 +1094,32 @@ async function handleVoiceChat(text) {
     aiMessageLine.textContent =
       "Sorry, I encountered an error. Please try again.";
   }
+}
+
+// Add this helper function to format markdown content consistently
+function formatMarkdownContent(content) {
+  if (typeof content !== "string") return "";
+
+  return (
+    content
+      // First handle any [...](http...) pattern
+      .replace(/\[([^\]]+)\]\([^)]*http[^)]*\)/g, "$1")
+      // Then handle any remaining [...] pattern
+      .replace(/\[([^\]]+)\]/g, "$1")
+      // Finally remove any (http...) pattern
+      .replace(/\([^)]*http[^)]*\)/g, "")
+      // Convert markdown list items
+      .replace(/^- (.+)$/gm, "• $1")
+      // Handle bold text
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      // Convert newlines to proper spacing
+      .split("\n")
+      .map((line) => {
+        if (line.startsWith("• ")) {
+          return `<div class="bullet-point">${line}</div>`;
+        }
+        return line;
+      })
+      .join("<br>")
+  );
 }
