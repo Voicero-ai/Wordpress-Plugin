@@ -1032,7 +1032,7 @@ async function handleVoiceChat(text) {
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
 
-        // Wait for audio to finish playing before redirecting
+        // Wait for audio to finish playing before redirecting or restarting mic
         await new Promise((resolve) => {
           audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
@@ -1059,6 +1059,9 @@ async function handleVoiceChat(text) {
 
               console.log("🔄 Redirecting to:", redirectUrl.toString());
               window.location.href = redirectUrl.toString();
+            } else {
+              // If scroll succeeds or there's no redirect, restart recording
+              await startNewRecording();
             }
           } else if (data.response.redirect_url) {
             // Direct redirect if no scroll_to_text
@@ -1073,6 +1076,9 @@ async function handleVoiceChat(text) {
             console.log("🔄 Redirecting to:", redirectUrl.toString());
             window.location.href = redirectUrl.toString();
           }
+        } else {
+          // If no navigation needed, restart recording
+          await startNewRecording();
         }
       } catch (ttsError) {
         console.error("Text-to-speech error:", ttsError);
@@ -1080,6 +1086,9 @@ async function handleVoiceChat(text) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         if (data.response.redirect_url) {
           handleRedirect(data.response.redirect_url);
+        } else {
+          // If no redirect, restart recording
+          await startNewRecording();
         }
       }
     }
@@ -1093,6 +1102,9 @@ async function handleVoiceChat(text) {
     );
     aiMessageLine.textContent =
       "Sorry, I encountered an error. Please try again.";
+
+    // Even on error, try to restart recording
+    await startNewRecording();
   }
 }
 
@@ -1122,4 +1134,20 @@ function formatMarkdownContent(content) {
       })
       .join("<br>")
   );
+}
+
+// Add this helper function to handle starting a new recording
+async function startNewRecording() {
+  try {
+    const micButton = document.querySelector(".mic-button-header");
+    const voiceInterface = document.getElementById("voice-interface");
+
+    if (micButton && voiceInterface) {
+      await startRecording();
+      micButton.classList.add("recording");
+      voiceInterface.classList.add("recording");
+    }
+  } catch (error) {
+    console.error("Error starting new recording:", error);
+  }
 }
