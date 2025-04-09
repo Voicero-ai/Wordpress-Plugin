@@ -11,7 +11,56 @@ if (!defined('ABSPATH')) {
 }
 
 // Define the API base URL
-define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+define('AI_WEBSITE_API_URL', 'http://localhost:3000');
+
+// Define a debug function to log messages to the error log
+function voicero_debug_log($message, $data = null) {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        if (is_array($data) || is_object($data)) {
+            error_log('VOICERO DEBUG: ' . $message . ' - ' . print_r($data, true));
+        } else {
+            error_log('VOICERO DEBUG: ' . $message . ($data !== null ? ' - ' . $data : ''));
+        }
+    }
+}
+
+// Add AJAX endpoint to get debug info for troubleshooting
+add_action('wp_ajax_voicero_debug_info', 'voicero_debug_info');
+add_action('wp_ajax_nopriv_voicero_debug_info', 'voicero_debug_info');
+
+function voicero_debug_info() {
+    $response = array(
+        'wp_version' => get_bloginfo('version'),
+        'php_version' => phpversion(),
+        'theme' => wp_get_theme()->get('Name'),
+        'plugins' => array(),
+        'access_key' => !empty(get_option('ai_website_access_key', '')),
+        'script_handles' => array(),
+        'hooks' => array(
+            'wp_body_open' => has_action('wp_body_open'),
+            'wp_footer' => has_action('wp_footer')
+        )
+    );
+    
+    // Get active plugins
+    $active_plugins = get_option('active_plugins');
+    foreach ($active_plugins as $plugin) {
+        $plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin);
+        $response['plugins'][] = array(
+            'name' => $plugin_data['Name'],
+            'version' => $plugin_data['Version']
+        );
+    }
+    
+    // Check if scripts are properly registered
+    global $wp_scripts;
+    $voicero_scripts = array('voicero-core-js', 'voicero-text-js', 'voicero-voice-js');
+    foreach ($voicero_scripts as $handle) {
+        $response['script_handles'][$handle] = isset($wp_scripts->registered[$handle]);
+    }
+    
+    wp_send_json_success($response);
+}
 
 /* ------------------------------------------------------------------------
    1. ADMIN PAGE TO DISPLAY CONNECTION INTERFACE
@@ -1518,102 +1567,17 @@ add_action('rest_api_init', function() {
    5. ADD FRONT-END INTERFACES TO <body>
 ------------------------------------------------------------------------ */
 function my_first_plugin_add_toggle_button() {
+    $hook = current_filter(); // Get the current hook being used
+    voicero_debug_log('Adding Voicero container via ' . $hook . ' hook');
+    
+    // Only add a simple container div - the JavaScript will handle the rest
     ?>
-    <script>
-    function updateNavbarPositioning() {
-        // Find the navigation element - checking common WordPress nav classes/IDs
-        const nav = document.querySelector(
-            'header, ' + // Try header first
-            '#masthead, ' + // Common WordPress header ID
-            '.site-header, ' + // Common header class
-            'nav.navbar, ' + // Bootstrap navbar
-            'nav.main-navigation, ' + // Common nav classes
-            '.nav-primary, ' +
-            '#site-navigation, ' +
-            '.site-navigation'
-        );
-        
-        if (nav) {
-            const navRect = nav.getBoundingClientRect();
-            const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
-            
-            // Set the custom property for positioning
-            document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
-        }
-    }
-
-    // Run on load
-    document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
-    
-    // Run on resize
-    window.addEventListener('resize', updateNavbarPositioning);
-    
-    // Run after a short delay to catch any dynamic header changes
-    setTimeout(updateNavbarPositioning, 500);
-    </script>
-
-    <div id="voice-toggle-container">
-        <button id="chat-website-button">
-            <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-            </svg>
-        </button>
-    </div>
-
-    <div id="interaction-chooser">
-        <div class="interaction-option voice">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.svg" alt="Voice">
-            <span>Talk to Website</span>
-        </div>
-        <div class="interaction-option text">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.svg" alt="Text">
-            <span>Type to Website</span>
-        </div>
-    </div>
-
-    <!-- Voice Interface -->
-    <div id="voice-interface" class="interface-panel">
-        <div class="voice-header">
-            <div class="header-content">
-                <button class="mic-button-header">
-                    <svg class="mic-icon" viewBox="0 0 24 24" width="24" height="24">
-                        <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-                    </svg>
-                </button>
-                <span class="title">AI Assistant</span>
-                <button id="close-voice">×</button>
-            </div>
-        </div>
-        <div class="voice-content">
-            <div class="conversation-container">
-                <div class="message-line">
-                    <span class="label">User:</span>
-                    <span class="content"></span>
-                </div>
-                <div class="message-line">
-                    <span class="label">AI:</span>
-                    <span class="content"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Text Interface -->
-    <div id="text-interface" class="interface-panel">
-        <div class="interface-content">
-            <button id="close-text">×</button>
-            <div class="chat-container">
-                <div id="chat-messages"></div>
-                <div class="chat-input-container">
-                    <input type="text" id="chat-input" placeholder="Type your message...">
-                    <button id="send-message">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div id="voicero-app-container" data-hook="<?php echo esc_attr($hook); ?>"></div>
     <?php
+    voicero_debug_log('Voicero container added to the page');
 }
 add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
+add_action('wp_footer', 'my_first_plugin_add_toggle_button', 999); // Add to footer as fallback with high priority
 
 // Add this near the top of the file after the header
 function ai_website_get_access_key() {
@@ -1622,24 +1586,61 @@ function ai_website_get_access_key() {
 
 // Add this to make the access key and API URL available to frontend scripts
 function ai_website_enqueue_scripts() {
-    wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
+    voicero_debug_log('Enqueueing Voicero AI scripts');
+    
+    // First enqueue the core script
     wp_enqueue_script(
-        'ai-website-script',
-        plugin_dir_url(__FILE__) . 'assets/script.js',
-        ['recordrtc'],
+        'voicero-core-js',
+        plugin_dir_url(__FILE__) . 'assets/voicero-core.js',
+        ['jquery'],
+        '1.1',
+        true
+    );
+    
+    // Then enqueue the text script with core as dependency
+    wp_enqueue_script(
+        'voicero-text-js',
+        plugin_dir_url(__FILE__) . 'assets/voicero-text.js',
+        ['voicero-core-js', 'jquery'],
+        '1.1',
+        true
+    );
+    
+    // Then enqueue the voice script with core as dependency
+    wp_enqueue_script(
+        'voicero-voice-js',
+        plugin_dir_url(__FILE__) . 'assets/voicero-voice.js',
+        ['voicero-core-js', 'jquery'],
         '1.1',
         true
     );
 
-    // Pass data to the frontend script - make sure we're using the correct handle
-    wp_localize_script('ai-website-script', 'aiWebsiteConfig', [
-        'accessKey' => get_option('ai_website_access_key', ''),
+    // Get access key
+    $access_key = get_option('ai_website_access_key', '');
+    voicero_debug_log('Access key available', !empty($access_key));
+
+    // Pass data to the frontend script
+    wp_localize_script('voicero-core-js', 'aiWebsiteConfig', [
+        'accessKey' => $access_key,
         'apiUrl' => AI_WEBSITE_API_URL,
         'ajaxUrl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('ai_website_frontend_nonce')
+        'nonce' => wp_create_nonce('ai_website_frontend_nonce'),
+        'pluginUrl' => plugin_dir_url(__FILE__),
+        'debug' => defined('WP_DEBUG') && WP_DEBUG ? true : false
     ]);
 
-    wp_enqueue_style('ai-website-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
+    // Also create window.voiceroConfig for backwards compatibility
+    wp_add_inline_script('voicero-core-js', 'window.voiceroConfig = window.aiWebsiteConfig;', 'before');
+
+    // Enqueue the stylesheet
+    wp_enqueue_style(
+        'ai-website-style', 
+        plugin_dir_url(__FILE__) . 'assets/style.css', 
+        [], 
+        '1.1'
+    );
+    
+    voicero_debug_log('Voicero AI scripts enqueued successfully');
 }
 add_action('wp_enqueue_scripts', 'ai_website_enqueue_scripts');
 
@@ -1704,3 +1705,43 @@ function ai_website_clear_connection() {
     delete_option('ai_website_access_key');
     wp_send_json_success(['message' => 'Connection cleared']);
 }
+
+// Function to add inline debugging script
+function voicero_add_inline_debug_script() {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        ?>
+        <script>
+        (function() {
+            console.log('Voicero Debug Script: Checking for elements and scripts');
+            
+            // Wait for DOM to be fully loaded
+            window.addEventListener('DOMContentLoaded', function() {
+                // Check if container exists
+                const container = document.getElementById('voicero-app-container');
+                console.log('Voicero container found:', !!container);
+                if (container) {
+                    console.log('Voicero container hook:', container.getAttribute('data-hook'));
+                }
+                
+                // Check if scripts are loaded
+                console.log('Core script loaded:', typeof window.VoiceroCore !== 'undefined');
+                console.log('Text script loaded:', typeof window.VoiceroText !== 'undefined');
+                console.log('Voice script loaded:', typeof window.VoiceroVoice !== 'undefined');
+                
+                // Check for config
+                console.log('Config found:', typeof window.aiWebsiteConfig !== 'undefined');
+                
+                // Run a test after a short delay
+                setTimeout(function() {
+                    if (window.VoiceroCore) {
+                        console.log('VoiceroCore API connected:', window.VoiceroCore.apiConnected);
+                        console.log('VoiceroCore API URL:', window.VoiceroCore.apiBaseUrl);
+                    }
+                }, 2000);
+            });
+        })();
+        </script>
+        <?php
+    }
+}
+add_action('wp_footer', 'voicero_add_inline_debug_script', 9999);

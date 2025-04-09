@@ -56,11 +56,250 @@ const VoiceroVoice = {
         padding: 15px !important; 
         padding-top: 0 !important;
         margin: 0 !important;
+        background-color: #f2f2f7 !important; /* iOS light gray background */
+      }
+
+      #voice-messages::-webkit-scrollbar {
+        display: none !important;
       }
 
       #voice-controls-header {
         margin-bottom: 15px !important;
         margin-top: 0 !important;
+        background-color: #f2f2f7 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+        box-shadow: none !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+        border-radius: 0 !important;
+        width: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        padding: 10px 15px !important;
+        box-sizing: border-box !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+
+      @keyframes pulseListening {
+        0% { transform: scale(1); background: #ff4444; }
+        50% { transform: scale(1.1); background: #ff2222; }
+        100% { transform: scale(1); background: #ff4444; }
+      }
+      
+      @keyframes colorRotate {
+        0% { 
+          box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
+          background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+        }
+        20% { 
+          box-shadow: 0 0 20px 5px rgba(68, 124, 242, 0.7);
+          background: radial-gradient(circle, rgba(68, 124, 242, 0.8) 0%, rgba(68, 124, 242, 0.4) 70%);
+        }
+        33% { 
+          box-shadow: 0 0 20px 5px rgba(0, 204, 255, 0.7);
+          background: radial-gradient(circle, rgba(0, 204, 255, 0.8) 0%, rgba(0, 204, 255, 0.4) 70%);
+        }
+        50% { 
+          box-shadow: 0 0 20px 5px rgba(0, 220, 180, 0.7);
+          background: radial-gradient(circle, rgba(0, 220, 180, 0.8) 0%, rgba(0, 220, 180, 0.4) 70%);
+        }
+        66% { 
+          box-shadow: 0 0 20px 5px rgba(0, 230, 118, 0.7);
+          background: radial-gradient(circle, rgba(0, 230, 118, 0.8) 0%, rgba(0, 230, 118, 0.4) 70%);
+        }
+        83% { 
+          box-shadow: 0 0 20px 5px rgba(92, 92, 237, 0.7);
+          background: radial-gradient(circle, rgba(92, 92, 237, 0.8) 0%, rgba(92, 92, 237, 0.4) 70%);
+        }
+        100% { 
+          box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
+          background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+        }
+      }
+      
+      .siri-active {
+        position: relative !important;
+        animation: colorRotate 8s ease-in-out infinite !important;
+        border: none !important;
+        overflow: visible !important;
+      }
+      
+      .siri-active::before {
+        content: "" !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        border-radius: 50% !important;
+        z-index: -1 !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        animation: pulseSize 2s ease-in-out infinite !important;
+      }
+      
+      @keyframes pulseSize {
+        0% { transform: scale(1); opacity: 0.7; }
+        50% { transform: scale(1.2); opacity: 0.3; }
+        100% { transform: scale(1); opacity: 0.7; }
+      }
+
+      @keyframes thinkingDots {
+        0%, 20% { content: '.'; }
+        40%, 60% { content: '..'; }
+        80%, 100% { content: '...'; }
+      }
+
+      .thinking-animation {
+        display: inline-block;
+        position: relative;
+      }
+
+      .thinking-animation::after {
+        content: '';
+        animation: thinkingDots 1.5s infinite;
+      }
+
+      .listening-active {
+        animation: pulseListening 1.5s infinite !important;
+      }
+
+      .voice-prompt {
+        text-align: center;
+        color: #666;
+        font-size: 14px;
+        margin: 15px auto;
+        padding: 10px 15px;
+        background: #e5e5ea;
+        border-radius: 18px;
+        width: 80%;
+        transition: all 0.3s ease;
+        line-height: 1.4;
+      }
+      
+      .welcome-message {
+        text-align: center;
+        background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%);
+        border-radius: 18px;
+        padding: 12px 15px;
+        margin: 12px auto;
+        width: 85%;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(136, 43, 230, 0.1);
+      }
+      
+      .welcome-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 5px;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(90deg, #882be6, #ff6b6b, #4a90e2);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: 0.5px;
+      }
+      
+      .welcome-subtitle {
+        font-size: 14px;
+        line-height: 1.4;
+        color: #666;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        margin-bottom: 3px;
+      }
+      
+      .welcome-highlight {
+        color: #882be6;
+        font-weight: 600;
+      }
+      
+      .welcome-note {
+        font-size: 12px;
+        opacity: 0.75;
+        font-style: italic;
+        margin-top: 5px;
+        color: #888;
+      }
+      
+      .welcome-pulse {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #ff4444;
+        border-radius: 50%;
+        margin-right: 4px;
+        animation: welcomePulse 1.5s infinite;
+      }
+      
+      @keyframes welcomePulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.3); opacity: 0.7; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      
+      .user-message {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+        position: relative;
+        padding-right: 8px;
+      }
+
+      .user-message .message-content {
+        background: #882be6;
+        color: white;
+        border-radius: 18px;
+        padding: 12px 16px;
+        max-width: 70%;
+        word-wrap: break-word;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: left;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      .ai-message {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 16px;
+        position: relative;
+        padding-left: 8px;
+      }
+
+      .ai-message .message-content {
+        background: #e5e5ea;
+        color: #333;
+        border-radius: 18px;
+        padding: 12px 16px;
+        max-width: 70%;
+        word-wrap: break-word;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: left;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      
+      /* iPhone-style message grouping */
+      .user-message:not(:last-child) .message-content {
+        margin-bottom: 3px;
+      }
+      
+      .ai-message:not(:last-child) .message-content {
+        margin-bottom: 3px;
+      }
+      
+      /* Message delivery status */
+      .read-status {
+        font-size: 11px;
+        color: #8e8e93;
+        text-align: right;
+        margin-top: 2px;
+        margin-right: 8px;
       }
     `;
     document.head.appendChild(resetStyle);
@@ -80,6 +319,9 @@ const VoiceroVoice = {
       z-index: 2147483647;
       user-select: none;
       margin: 0;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
     `;
 
     // Create messages container
@@ -88,16 +330,22 @@ const VoiceroVoice = {
     messagesContainer.setAttribute(
       "style",
       `
-      background: white;
-      border-radius: 12px 12px 0 0;
-      padding: 15px;
+      background: #f2f2f7 !important;
+      background-color: #f2f2f7 !important;
+      border-radius: 12px 12px 0 0 !important;
+      padding: 15px !important;
       padding-top: 0 !important;
       margin: 0 !important;
       max-height: 35vh;
       overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none !important; /* Firefox */
+      -ms-overflow-style: none !important; /* IE and Edge */
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       position: relative;
       transition: all 0.3s ease, max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+      width: 100% !important;
+      box-sizing: border-box !important;
     `,
     );
 
@@ -111,17 +359,22 @@ const VoiceroVoice = {
       top: 0 !important;
       left: 0 !important;
       right: 0 !important;
-      height: 28px !important;
-      background: white !important;
+      height: 40px !important;
+      background-color: #f2f2f7 !important;
       z-index: 20 !important;
       display: flex !important;
       justify-content: space-between !important;
       align-items: center !important;
-      padding: 5px 10px !important;
-      border-bottom: 1px solid #f0f0f0 !important;
-      border-radius: 12px 12px 0 0 !important;
+      padding: 10px 15px !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+      border-radius: 0 !important;
       margin: 0 !important;
       margin-bottom: 15px !important;
+      width: 100% !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+      margin-left: 0 !important; 
+      margin-right: 0 !important;
     `,
     );
 
@@ -133,16 +386,15 @@ const VoiceroVoice = {
       background: none;
       border: none;
       cursor: pointer;
-      padding: 5px;
-      border-radius: 50%;
+      padding: 5px 8px;
+      border-radius: 15px;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      background-color: #f0f0f0;
+      background-color: rgba(0, 0, 0, 0.07);
       font-size: 12px;
       color: #666;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     `;
     clearButton.innerHTML = `
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="margin-right: 4px;">
@@ -170,7 +422,7 @@ const VoiceroVoice = {
     `;
     minimizeButton.innerHTML = `
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-        <path d="M8 3h8m-8 18h8M4 8v8m16-8v8"/>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
       </svg>
     `;
     controlsHeader.appendChild(minimizeButton);
@@ -229,14 +481,16 @@ const VoiceroVoice = {
     rightButtonsContainer.appendChild(closeButton);
     controlsHeader.appendChild(rightButtonsContainer);
 
-    // Add loading bar directly to the messages container
+    // First add the controls header to the messages container
     messagesContainer.appendChild(loadingBar);
-
-    // Insert the controls header at the top of the messages container
-    messagesContainer.insertBefore(
-      controlsHeader,
-      messagesContainer.firstChild,
-    );
+    messagesContainer.appendChild(controlsHeader);
+    
+    // Add a padding div similar to the text interface
+    const paddingDiv = document.createElement("div");
+    paddingDiv.style.cssText = `
+      padding-top: 15px;
+    `;
+    messagesContainer.appendChild(paddingDiv);
 
     // Create user message div
     const userMessageDiv = document.createElement("div");
@@ -245,7 +499,7 @@ const VoiceroVoice = {
       margin-bottom: 15px;
       animation: fadeIn 0.3s ease forwards;
     `;
-    messagesContainer.appendChild(userMessageDiv);
+    paddingDiv.appendChild(userMessageDiv);
 
     // Create input container with border - for the mic button
     const inputContainer = document.createElement("div");
@@ -259,48 +513,47 @@ const VoiceroVoice = {
       animation: gradientBorder 3s linear infinite;
       transition: all 0.3s ease;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0;
     `;
 
-    // Add maximize button and microphone button
+    // Add maximize button and microphone button - updated with new styles to match text interface
     inputContainer.innerHTML = `
       <button
         id="maximize-voice-chat"
         onclick="VoiceroVoice.maximizeVoiceChat()"
         style="
           position: absolute;
-          top: -30px;
-          right: 10px;
-          background: white;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #882be6;
           border: none;
+          color: white;
+          padding: 10px 20px;
+          border-radius: 20px 20px 0 0;
+          font-size: 14px;
+          font-weight: 500;
           cursor: pointer;
-          padding: 5px;
-          border-radius: 50%;
+          box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
           display: none;
           align-items: center;
           justify-content: center;
-          transition: all 0.2s ease;
-          z-index: 1001;
-          width: 32px;
-          height: 32px;
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+          min-width: 160px;
+          z-index: 999999;
+          margin-bottom: -1px;
+          height: 40px;
+          overflow: visible;
         "
       >
-        <svg
-          id="voice-mic-icon"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-          <path d="M12 19v4"/>
-          <path d="M8 23h8"/>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
         </svg>
+        Open Voice Chat
       </button>
       <div
         style="
@@ -309,7 +562,7 @@ const VoiceroVoice = {
           justify-content: center;
           background: white;
           border-radius: 0 0 12px 12px;
-          padding: 10px;
+          padding: 10px 15px;
           height: 60px;
         "
       >
@@ -328,6 +581,7 @@ const VoiceroVoice = {
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
           "
         >
           <svg
@@ -379,221 +633,209 @@ const VoiceroVoice = {
     setTimeout(() => {
       const messagesEl = document.getElementById("voice-messages");
       if (messagesEl) {
-        messagesEl.style.paddingTop = "0 !important";
         messagesEl.style.padding = "15px";
-        messagesEl.style.paddingTop = "0";
+        messagesEl.style.paddingTop = "0"; // Keep top padding at 0 for header
+        messagesEl.style.backgroundColor = "#f2f2f7";
+        messagesEl.style.width = "100%";
+        messagesEl.style.boxSizing = "border-box";
+        messagesEl.style.margin = "0";
+      }
+      
+      // Ensure header styling is applied
+      const headerEl = document.getElementById("voice-controls-header");
+      if (headerEl) {
+        headerEl.style.position = "sticky";
+        headerEl.style.top = "0";
+        headerEl.style.backgroundColor = "#f2f2f7";
+        headerEl.style.zIndex = "20";
+        headerEl.style.borderRadius = "0";
+        headerEl.style.borderBottom = "1px solid rgba(0, 0, 0, 0.1)";
+        headerEl.style.width = "100%";
+        headerEl.style.left = "0";
+        headerEl.style.right = "0";
+        headerEl.style.margin = "0 0 15px 0";
+        headerEl.style.boxShadow = "none";
+        headerEl.style.boxSizing = "border-box";
+        headerEl.style.padding = "10px 15px";
+      }
+      
+      // Ensure input wrapper styling
+      const inputWrapperEl = document.getElementById("voice-input-wrapper");
+      if (inputWrapperEl) {
+        inputWrapperEl.style.width = "100%";
+        inputWrapperEl.style.boxSizing = "border-box";
+        inputWrapperEl.style.margin = "0";
+        inputWrapperEl.style.borderRadius = "0 0 12px 12px";
+      }
+      
+      // Ensure maximize button styling when visible
+      const maximizeBtn = document.getElementById("maximize-voice-chat");
+      if (maximizeBtn) {
+        maximizeBtn.style.marginBottom = "-2px"; // Slight overlap with container for seamless appearance
+        maximizeBtn.style.height = "40px";
+        maximizeBtn.style.overflow = "visible";
+        maximizeBtn.style.width = "auto"; // Allow button to size to content
+        maximizeBtn.style.minWidth = "160px"; // Ensure minimum width
+        maximizeBtn.style.position = "absolute";
+        maximizeBtn.style.bottom = "100%";
+        maximizeBtn.style.left = "50%";
+        maximizeBtn.style.transform = "translateX(-50%)";
       }
     }, 100);
   },
 
   // Open voice chat interface
-  openVoiceChat: function (isRestoring = false) {
-    // First, make sure the interface exists
-    this.createVoiceChatInterface();
-    const voiceChat = document.getElementById("voice-chat-interface");
-    if (!voiceChat) {
-      return;
-    }
-
-    // Verify that messages container exists
-    const messagesContainer = document.getElementById("voice-messages");
-    if (!messagesContainer) {
-      // Try one more recreation
-      voiceChat.remove();
-      this.createVoiceChatInterface();
-      if (!document.getElementById("voice-messages")) {
-        return;
-      }
-    }
-
-    // Hide the core buttons container
-    const coreButtonsContainer = document.getElementById(
-      "voice-toggle-container",
-    );
-    if (coreButtonsContainer) {
-      coreButtonsContainer.style.display = "none";
-    }
-
-    // Check if we're restoring from a minimized state
-    if (isRestoring && VoiceroCore && VoiceroCore.appState.isVoiceMinimized) {
-      // If minimized, just show the interface but keep messages area hidden
-      messagesContainer.style.maxHeight = "0";
-      messagesContainer.style.opacity = "0";
-      messagesContainer.style.padding = "0";
-      messagesContainer.style.overflow = "hidden";
-      voiceChat.style.borderRadius = "12px";
-
-      // Show reopen button
-      let reopenButton = document.getElementById("reopen-voice-chat");
-      if (!reopenButton) {
-        reopenButton = document.createElement("button");
-        reopenButton.id = "reopen-voice-chat";
-        reopenButton.setAttribute("onclick", "VoiceroVoice.reopenVoiceChat()");
-        reopenButton.innerHTML = `
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-            <polyline points="18 15 12 9 6 15"></polyline>
-          </svg>
-        `;
-        reopenButton.style.cssText = `
-          position: absolute;
-          top: -30px;
-          right: 10px;
-          background: white;
-          border: none;
-          cursor: pointer;
-          padding: 5px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-          z-index: 1001;
-          width: 32px;
-          height: 32px;
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        `;
-        const inputContainer = document.getElementById("voice-input-wrapper");
-        if (inputContainer) {
-          inputContainer.appendChild(reopenButton);
-        }
+  openVoiceChat: function () {
+    // Close text interface if it's open
+    const textInterface = document.getElementById("voicero-text-chat-container");
+    if (textInterface && textInterface.style.display === "block") {
+      if (window.VoiceroText && window.VoiceroText.closeTextChat) {
+        window.VoiceroText.closeTextChat();
       } else {
-        reopenButton.style.display = "flex";
-      }
-    } else {
-      // Ensure messages area is fully visible when not minimized
-      messagesContainer.style.maxHeight = "50vh";
-      messagesContainer.style.opacity = "1";
-      messagesContainer.style.padding = "15px";
-      messagesContainer.style.paddingTop = "35px";
-      messagesContainer.style.overflow = "auto";
-      voiceChat.style.borderRadius = "12px 12px 0 0";
-
-      // Hide reopen button if it exists
-      const reopenButton = document.getElementById("reopen-voice-chat");
-      if (reopenButton) {
-        reopenButton.style.display = "none";
+        textInterface.style.display = "none";
       }
     }
+    
+    // First make sure we have created the interface
+    this.createVoiceChatInterface();
 
-    // Add control buttons to the voice interface
-    if (VoiceroCore) {
-      VoiceroCore.addControlButtons(voiceChat, "voice");
-    }
-
-    // Hide the maximize button if it exists (legacy)
-    const maximizeVoiceButton = document.getElementById("maximize-voice-chat");
-    if (maximizeVoiceButton) {
-      maximizeVoiceButton.style.display = "none";
-      maximizeVoiceButton.style.opacity = "0";
-    }
-
-    // Show chat interface with animation
-    voiceChat.style.display = "block";
-    voiceChat.style.opacity = "0";
-    voiceChat.style.transform = "translate(-50%, 20px)";
-    setTimeout(() => {
-      voiceChat.style.opacity = "1";
-      voiceChat.style.transform = "translate(-50%, 0)";
-
-      // Show welcome message AFTER the interface is visible
-      if (
-        VoiceroCore &&
-        !isRestoring &&
-        !VoiceroCore.appState.hasShownVoiceWelcome
-      ) {
-        // Use a small delay to ensure DOM is ready
-        setTimeout(() => {
-          this.addMessage(
-            "Hi there I'm here to help you navigate the online store. When you're ready click the microphone icon to start speaking.",
-            "ai",
-          );
-          VoiceroCore.appState.hasShownVoiceWelcome = true;
-          VoiceroCore.saveState();
-
-          // Don't try to speak the welcome message automatically - browsers block autoplay
-          // Instead we just show the text message
-          // The user can click the microphone to start interacting
-        }, 100);
+    // Hide the toggle container when opening on mobile
+    if (window.innerWidth <= 768) {
+      const toggleContainer = document.getElementById("voice-toggle-container");
+      if (toggleContainer) {
+        toggleContainer.style.display = "none";
+        toggleContainer.style.visibility = "hidden";
+        toggleContainer.style.opacity = "0";
       }
-    }, 50);
-
-    // Hide the chooser
+    }
+    
+    // Hide the chooser popup
     const chooser = document.getElementById("interaction-chooser");
     if (chooser) {
+      chooser.style.display = "none";
       chooser.style.visibility = "hidden";
       chooser.style.opacity = "0";
     }
 
-    // Set active interface
-    if (VoiceroCore) {
-      VoiceroCore.appState.isOpen = true;
-      VoiceroCore.appState.activeInterface = "voice";
-      VoiceroCore.appState.isVoiceMinimized = false;
-      // Initialize the conversation state flag if it doesn't exist
-      if (typeof VoiceroCore.appState.hasHadFirstConversation === "undefined") {
-        VoiceroCore.appState.hasHadFirstConversation = false;
+    // Set active interface in the core state
+    if (window.VoiceroCore && window.VoiceroCore.appState) {
+      window.VoiceroCore.appState.isOpen = true;
+      window.VoiceroCore.appState.activeInterface = "voice";
+      window.VoiceroCore.saveState();
+    }
+
+    // Show the voice interface
+    const voiceInterface = document.getElementById("voice-chat-interface");
+    if (voiceInterface) {
+      // Position in lower middle of screen
+      voiceInterface.style.position = "fixed";
+      voiceInterface.style.left = "50%";
+      voiceInterface.style.bottom = "20px";
+      voiceInterface.style.transform = "translateX(-50%)";
+      voiceInterface.style.display = "block";
+      voiceInterface.style.zIndex = "999999";
+      voiceInterface.style.width = "85%";
+      voiceInterface.style.maxWidth = "480px";
+      voiceInterface.style.minWidth = "280px";
+      voiceInterface.style.boxSizing = "border-box";
+      voiceInterface.style.overflow = "hidden";
+      voiceInterface.style.borderRadius = "12px 12px 0 0";
+    }
+
+    // Add a welcome message if interface is empty or welcome hasn't been shown yet
+    const messagesContainer = document.getElementById("voice-messages");
+    const hasShownWelcome = 
+      window.VoiceroCore && 
+      window.VoiceroCore.appState && 
+      window.VoiceroCore.appState.hasShownVoiceWelcome;
+    
+    if (messagesContainer && (messagesContainer.childElementCount <= 2 || !hasShownWelcome)) {
+      // Add welcome message with clear prompt
+      this.addSystemMessage(`
+        <div class="welcome-message">
+          <div class="welcome-title">Aura, your website concierge</div>
+          <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
+          <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
+        </div>
+      `);
+      
+      // Mark welcome as shown
+      if (window.VoiceroCore && window.VoiceroCore.appState) {
+        window.VoiceroCore.appState.hasShownVoiceWelcome = true;
+        window.VoiceroCore.saveState();
       }
-      VoiceroCore.saveState();
     }
   },
 
   // Minimize voice chat interface
   minimizeVoiceChat: function () {
-    // Get the messages container and input wrapper
+    console.log('Minimizing voice chat interface');
+    
+    // Get the messages container
     const messagesContainer = document.getElementById("voice-messages");
-    const inputContainer = document.getElementById("voice-input-wrapper");
-    const voiceChat = document.getElementById("voice-chat-interface");
-
-    if (!messagesContainer || !inputContainer) {
-      return;
+    const headerContainer = document.getElementById("voice-controls-header");
+    const inputWrapper = document.getElementById("voice-input-wrapper");
+    const maximizeButton = document.getElementById("maximize-voice-chat");
+    
+    if (messagesContainer) {
+      // Hide all message content
+      const allMessages = messagesContainer.querySelectorAll('.user-message, .ai-message');
+      allMessages.forEach(msg => {
+        msg.style.display = 'none';
+      });
+      
+      // Collapse the messages container
+      messagesContainer.style.maxHeight = "0";
+      messagesContainer.style.minHeight = "0";
+      messagesContainer.style.height = "0";
+      messagesContainer.style.opacity = "0";
+      messagesContainer.style.padding = "0";
+      messagesContainer.style.overflow = "hidden";
+      messagesContainer.style.border = "none";
     }
-
-    // Hide only the messages container with animation
-    messagesContainer.style.maxHeight = "0";
-    messagesContainer.style.opacity = "0";
-    messagesContainer.style.padding = "0";
-    messagesContainer.style.overflow = "hidden";
-
-    // Update the interface container to only contain the input area
-    voiceChat.style.borderRadius = "12px";
-
-    // Add a reopen button to the input container
-    let reopenButton = document.getElementById("reopen-voice-chat");
-    if (!reopenButton) {
-      reopenButton = document.createElement("button");
-      reopenButton.id = "reopen-voice-chat";
-      reopenButton.setAttribute("onclick", "VoiceroVoice.reopenVoiceChat()");
-      reopenButton.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-          <polyline points="18 15 12 9 6 15"></polyline>
-        </svg>
-      `;
-      reopenButton.style.cssText = `
-        position: absolute;
-        top: -30px;
-        right: 10px;
-        background: white;
-        border: none;
-        cursor: pointer;
-        padding: 5px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        z-index: 1001;
-        width: 32px;
-        height: 32px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      `;
-      inputContainer.appendChild(reopenButton);
-    } else {
-      reopenButton.style.display = "flex";
+    
+    // Hide the header
+    if (headerContainer) {
+      headerContainer.style.display = "none";
     }
-
-    if (VoiceroCore) {
-      VoiceroCore.appState.isVoiceMinimized = true;
-      VoiceroCore.saveState();
+    
+    // Adjust the input wrapper to connect with the button
+    if (inputWrapper) {
+      inputWrapper.style.borderRadius = "12px";
+      inputWrapper.style.marginTop = "36px"; // Space for the button (slightly less than height to overlap)
+    }
+    
+    // Show the maximize button
+    if (maximizeButton) {
+      maximizeButton.style.display = "flex";
+      maximizeButton.style.zIndex = "999999";
+      maximizeButton.style.marginBottom = "-2px"; // Slight overlap to ensure connection
+      maximizeButton.style.height = "40px";
+      maximizeButton.style.overflow = "visible";
+      maximizeButton.style.bottom = inputWrapper ? (inputWrapper.offsetTop - 38) + "px" : "100%";
+    }
+    
+    // Update state in VoiceroCore
+    if (window.VoiceroCore && window.VoiceroCore.appState) {
+      window.VoiceroCore.appState.isVoiceMinimized = true;
+      window.VoiceroCore.saveState();
+    }
+    
+    // Force a redraw to ensure button is visible
+    const voiceInterface = document.getElementById("voice-chat-interface");
+    if (voiceInterface) {
+      voiceInterface.style.display = "none";
+      setTimeout(() => {
+        voiceInterface.style.display = "block";
+        
+        // Position the button properly
+        if (maximizeButton && inputWrapper) {
+          maximizeButton.style.position = "absolute";
+          maximizeButton.style.bottom = "100%";
+          maximizeButton.style.left = "50%";
+          maximizeButton.style.transform = "translateX(-50%)";
+        }
+      }, 10);
     }
   },
 
@@ -604,85 +846,22 @@ const VoiceroVoice = {
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
-    // Set flag to prevent auto microphone activation on shutdown
-    this.isShuttingDown = true;
-
-    // Stop any ongoing recording
-    if (this.isRecording) {
-      // CHANGED: pass "manual" here just to clarify user action:
-      this.toggleMic("manual");
-    }
-
-    // Stop any audio streams that might be active
-    if (this.currentAudioStream) {
-      this.currentAudioStream.getTracks().forEach((track) => track.stop());
-      this.currentAudioStream = null;
-    }
-
-    // Reset the shutdown flag after a moment
-    setTimeout(() => {
-      this.isShuttingDown = false;
-    }, 500);
-
-    // Get voice chat element
-    const voiceChat = document.getElementById("voice-chat-interface");
-    if (voiceChat) {
-      voiceChat.style.display = "none";
-
-      // Reset any minimized state styling
-      const messagesContainer = document.getElementById("voice-messages");
-      if (messagesContainer) {
-        messagesContainer.style.maxHeight = "50vh";
-        messagesContainer.style.opacity = "1";
-        messagesContainer.style.padding = "15px";
-        messagesContainer.style.paddingTop = "35px";
-        messagesContainer.style.overflow = "auto";
-      }
-      voiceChat.style.borderRadius = "12px 12px 0 0";
-
-      // Hide reopen button if exists
-      const reopenButton = document.getElementById("reopen-voice-chat");
-      if (reopenButton) {
-        reopenButton.style.display = "none";
+    const voiceInterface = document.getElementById("voice-chat-interface");
+    if (voiceInterface) {
+      voiceInterface.style.display = "none";
+      // Show the microphone button when closing
+      const toggleContainer = document.getElementById("voice-toggle-container");
+      if (toggleContainer) {
+        toggleContainer.style.display = "block";
+        toggleContainer.style.visibility = "visible";
+        toggleContainer.style.opacity = "1";
       }
     }
-
-    // Hide the maximize button if it exists (legacy)
-    const maximizeVoiceButton = document.getElementById("maximize-voice-chat");
-    if (maximizeVoiceButton) {
-      maximizeVoiceButton.style.display = "none";
-      maximizeVoiceButton.style.opacity = "0";
-    }
-
-    // Update app state
-    if (VoiceroCore) {
-      VoiceroCore.appState.isOpen = false;
-      VoiceroCore.appState.activeInterface = null;
-      VoiceroCore.appState.isVoiceMinimized = false; // Reset minimized state
-      VoiceroCore.saveState();
-
-      // Show the container that holds the buttons
-      const coreButtonsContainer = document.getElementById(
-        "voice-toggle-container",
-      );
-      if (coreButtonsContainer) {
-        coreButtonsContainer.style.display = "block";
-      }
-
-      // Reopen the chooser interface
-      if (VoiceroCore.showChooser) {
-        VoiceroCore.showChooser();
-      } else {
-        // Fallback to direct manipulation if the method isn't available
-        const chooser = document.getElementById("interaction-chooser");
-        if (chooser) {
-          chooser.style.display = "flex";
-          chooser.style.visibility = "visible";
-          chooser.style.opacity = "1";
-        } else if (VoiceroCore.init) {
-          VoiceroCore.init();
-        }
-      }
+    // Reset state
+    if (window.VoiceroCore && window.VoiceroCore.appState) {
+      window.VoiceroCore.appState.isOpen = false;
+      window.VoiceroCore.appState.activeInterface = null;
+      window.VoiceroCore.saveState();
     }
   },
 
@@ -706,69 +885,63 @@ const VoiceroVoice = {
     }
 
     if (this.isRecording) {
-      // Stop recording
-
+      // Stop listening
       this.isRecording = false;
 
-      // CHANGED: Only set `manuallyStoppedRecording` if source is "manual"
       if (source === "manual") {
         this.manuallyStoppedRecording = true;
       }
 
-      // Update UI
-      micButton.classList.remove("active");
+      // Update UI - remove siri animation
+      micButton.classList.remove("siri-active");
+      micButton.style.background = "#882be6";
       micButton.style.borderColor = "transparent";
+      micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
       micIcon.style.stroke = "white";
 
-      // Stop the media recorder if it exists
+      // Add thinking animation
+      this.addSystemMessage(`
+        <div class="voice-prompt thinking-animation">
+          Processing
+        </div>
+      `);
+
+      // Rest of the existing stop listening logic
       if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
-        // Cancel/reset any audio chunks instead of processing them
         this.audioChunks = [];
-
         this.mediaRecorder.stop();
-
-        // Clear the recording timeout
         if (this.recordingTimeout) {
           clearTimeout(this.recordingTimeout);
           this.recordingTimeout = null;
         }
-
-        // Clear silence detection
         if (this.silenceDetectionTimer) {
           clearInterval(this.silenceDetectionTimer);
           this.silenceDetectionTimer = null;
         }
       }
 
-      // Clean up audio stream
       if (this.currentAudioStream) {
         this.currentAudioStream.getTracks().forEach((track) => track.stop());
         this.currentAudioStream = null;
       }
-
-      // Clean up audio context
-      if (this.audioContext) {
-        this.audioContext
-          .close()
-          .then(() => {
-            this.audioContext = null;
-            this.analyser = null;
-          })
-          .catch((err) => {
-            this.audioContext = null;
-            this.analyser = null;
-          });
-      }
     } else {
-      // Start recording
-
-      // Reset manual stop flag when starting a new recording
+      // Start listening
+      this.isRecording = true;
       this.manuallyStoppedRecording = false;
 
-      // Update UI first to give immediate feedback
-      micButton.classList.add("active");
-      micButton.style.borderColor = "#ff4444";
+      // Update UI - add siri-like animation
+      micButton.classList.add("siri-active");
       micIcon.style.stroke = "white";
+
+      // Add listening indicator message
+      this.addSystemMessage(`
+        <div class="welcome-message" style="padding: 10px 15px; margin: 10px auto;">
+          <div class="welcome-title" style="background: linear-gradient(90deg, #ff4444, #ff8866, #ff4444); -webkit-background-clip: text; background-clip: text; margin-bottom: 2px;">
+            🎤 I'm listening...
+          </div>
+          <div class="welcome-subtitle" style="font-size: 13px;">Speak now</div>
+        </div>
+      `);
 
       // Reset silence detection variables
       this.silenceTime = 0;
@@ -895,7 +1068,7 @@ const VoiceroVoice = {
                 );
 
                 const whisperResponse = await fetch(
-                  "https://www.voicero.ai/api/whisper",
+                  "http://localhost:3000/api/whisper",
                   {
                     method: "POST",
                     headers: {
@@ -928,7 +1101,7 @@ const VoiceroVoice = {
 
                 // Now send the transcription to the Shopify chat endpoint
                 const chatResponse = await fetch(
-                  "https://www.voicero.ai/api/shopify/chat",
+                  "http://localhost:3000/api/shopify/chat",
                   {
                     method: "POST",
                     headers: {
@@ -980,7 +1153,7 @@ const VoiceroVoice = {
                 try {
                   // Request audio generation using TTS endpoint
                   const ttsResponse = await fetch(
-                    "https://www.voicero.ai/api/tts",
+                    "http://localhost:3000/api/tts",
                     {
                       method: "POST",
                       headers: {
@@ -1090,11 +1263,11 @@ const VoiceroVoice = {
             }
           };
 
-          // Start recording
+          // Start the audio capture
           this.mediaRecorder.start();
           this.isRecording = true;
 
-          // Set a timeout to automatically stop recording after 30 seconds
+          // Set a timeout to automatically end the conversation after 30 seconds
           this.recordingTimeout = setTimeout(() => {
             if (
               this.isRecording &&
@@ -1102,15 +1275,16 @@ const VoiceroVoice = {
               this.mediaRecorder.state !== "inactive"
             ) {
               // CHANGED: pass "auto" to differentiate from user stop
-              this.toggleMic("auto"); // Call toggleMic again to stop recording
+              this.toggleMic("auto"); // End the conversation
             }
-          }, 30000); // Increased from 15000 to 30000 (30 seconds)
+          }, 30000); // 30 seconds
         })
         .catch((error) => {
           // Reset UI
-          micButton.classList.remove("active");
+          micButton.classList.remove("siri-active");
+          micButton.style.background = "#882be6";
           micButton.style.borderColor = "transparent";
-          micIcon.style.stroke = "white";
+          micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
           this.isRecording = false;
 
           // Show error message in the voice interface
@@ -1330,22 +1504,23 @@ const VoiceroVoice = {
       display: flex;
       gap: 4px;
       padding: 8px 12px;
-      background: #f0f0f0;
-      border-radius: 12px 12px 12px 0;
-      margin-bottom: 15px;
+      background: #e5e5ea;
+      border-radius: 18px;
+      margin-bottom: 12px;
       width: fit-content;
       align-items: center;
       animation: fadeIn 0.3s ease forwards;
+      margin-left: 5px;
     `;
 
     for (let i = 0; i < 3; i++) {
       const dot = document.createElement("div");
       dot.style.cssText = `
-        width: 8px;
-        height: 8px;
-        background: #882be6;
+        width: 7px;
+        height: 7px;
+        background: #999999;
         border-radius: 50%;
-        animation: bounce 1.5s infinite;
+        animation: typingAnimation 1s infinite;
         animation-delay: ${i * 0.2}s;
       `;
       indicator.appendChild(dot);
@@ -1353,13 +1528,9 @@ const VoiceroVoice = {
 
     const animStyle = document.createElement("style");
     animStyle.innerHTML = `
-      @keyframes bounce {
-        0%, 60%, 100% {
-          transform: translateY(0);
-        }
-        30% {
-          transform: translateY(-4px);
-        }
+      @keyframes typingAnimation {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-6px); }
       }
     `;
     document.head.appendChild(animStyle);
@@ -1437,11 +1608,12 @@ const VoiceroVoice = {
     }
 
     messageEl.style.cssText = `
-      margin-bottom: 15px;
+      margin-bottom: 16px;
       animation: fadeIn 0.3s ease forwards;
       display: flex;
       justify-content: ${role === "user" ? "flex-end" : "flex-start"};
-      width: 100%;
+      position: relative;
+      ${role === "user" ? "padding-right: 8px;" : "padding-left: 8px;"}
     `;
 
     let messageContent = document.createElement("div");
@@ -1457,14 +1629,22 @@ const VoiceroVoice = {
       messageContent.style.cssText = `
         background: #882be6;
         color: white;
-        border-radius: 18px 18px 0 18px;
-        padding: 10px 14px;
-        max-width: 80%;
+        border-radius: 18px;
+        padding: 12px 16px;
+        max-width: 70%;
         word-wrap: break-word;
         font-size: 14px;
         line-height: 1.4;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        text-align: left;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
       `;
+      
+      // Add delivery status for user messages (iPhone-style)
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'read-status';
+      statusDiv.textContent = 'Delivered';
+      messageEl.appendChild(statusDiv);
     } else if (role === "ai") {
       if (
         content === "Generating response..." ||
@@ -1472,29 +1652,40 @@ const VoiceroVoice = {
         content === "..."
       ) {
         messageContent.style.cssText = `
-          background: #f9f9f9;
+          background: #e5e5ea;
           color: #666;
-          border-radius: 18px 18px 18px 0;
-          padding: 10px 14px;
-          max-width: 80%;
+          border-radius: 18px;
+          padding: 12px 16px;
+          max-width: 70%;
           word-wrap: break-word;
           font-size: 14px;
           line-height: 1.4;
           font-style: italic;
-          border: 1px dashed #ddd;
+          text-align: left;
+          box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+          font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
         `;
       } else {
         messageContent.style.cssText = `
-          background: #f0f0f0;
+          background: #e5e5ea;
           color: #333;
-          border-radius: 18px 18px 18px 0;
-          padding: 10px 14px;
-          max-width: 80%;
+          border-radius: 18px;
+          padding: 12px 16px;
+          max-width: 70%;
           word-wrap: break-word;
           font-size: 14px;
           line-height: 1.4;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+          text-align: left;
+          box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+          font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
         `;
+        
+        // Update all previous user message statuses to "Read" after AI responds
+        const userStatusDivs = messagesContainer.querySelectorAll('.read-status');
+        userStatusDivs.forEach(div => {
+          div.textContent = 'Read';
+          div.style.color = '#882be6';
+        });
       }
     }
 
@@ -1519,29 +1710,72 @@ const VoiceroVoice = {
 
   // Reopen the voice chat from minimized state
   reopenVoiceChat: function () {
-    const messagesContainer = document.getElementById("voice-messages");
-    const voiceChat = document.getElementById("voice-chat-interface");
-    const reopenButton = document.getElementById("reopen-voice-chat");
-
-    if (!messagesContainer) {
-      return;
-    }
-
-    messagesContainer.style.maxHeight = "50vh";
-    messagesContainer.style.opacity = "1";
-    messagesContainer.style.padding = "15px";
-    messagesContainer.style.paddingTop = "35px";
-    messagesContainer.style.overflow = "auto";
-
-    voiceChat.style.borderRadius = "12px 12px 0 0";
-
-    if (reopenButton) {
-      reopenButton.style.display = "none";
-    }
-
-    if (VoiceroCore) {
-      VoiceroCore.appState.isVoiceMinimized = false;
-      VoiceroCore.saveState();
+    const voiceInterface = document.getElementById("voice-chat-interface");
+    if (voiceInterface) {
+      // Get all necessary elements
+      const messagesContainer = document.getElementById("voice-messages");
+      const headerContainer = document.getElementById("voice-controls-header");
+      const inputWrapper = document.getElementById("voice-input-wrapper");
+      const maximizeButton = document.getElementById("maximize-voice-chat");
+      
+      // Restore messages container
+      if (messagesContainer) {
+        // Show all messages
+        const allMessages = messagesContainer.querySelectorAll('.user-message, .ai-message');
+        allMessages.forEach(msg => {
+          msg.style.display = 'flex';
+        });
+        
+        // Restore container styles
+        messagesContainer.style.maxHeight = "35vh";
+        messagesContainer.style.minHeight = "auto";
+        messagesContainer.style.height = "auto";
+        messagesContainer.style.opacity = "1";
+        messagesContainer.style.padding = "15px";
+        messagesContainer.style.paddingTop = "0";
+        messagesContainer.style.overflow = "auto";
+        messagesContainer.style.border = "none";
+        messagesContainer.style.display = "block";
+        messagesContainer.style.visibility = "visible";
+      }
+      
+      // Restore header
+      if (headerContainer) {
+        headerContainer.style.display = "flex";
+        headerContainer.style.visibility = "visible";
+        headerContainer.style.opacity = "1";
+      }
+      
+      // Restore input wrapper
+      if (inputWrapper) {
+        inputWrapper.style.borderRadius = "0 0 12px 12px";
+        inputWrapper.style.marginTop = "0";
+        inputWrapper.style.display = "block";
+        inputWrapper.style.visibility = "visible";
+      }
+      
+      // Hide maximize button
+      if (maximizeButton) {
+        maximizeButton.style.display = "none";
+      }
+      
+      // Update main interface
+      voiceInterface.style.display = "block";
+      voiceInterface.style.visibility = "visible";
+      voiceInterface.style.opacity = "1";
+      voiceInterface.style.borderRadius = "12px 12px 0 0";
+      
+      // Update state
+      if (window.VoiceroCore) {
+        window.VoiceroCore.appState.isVoiceMinimized = false;
+        window.VoiceroCore.saveState();
+      }
+      
+      // Force a redraw
+      voiceInterface.style.display = "none";
+      setTimeout(() => {
+        voiceInterface.style.display = "block";
+      }, 10);
     }
   },
 
@@ -1556,19 +1790,117 @@ const VoiceroVoice = {
     return;
   },
 
-  // Clear chat history
-  clearChatHistory: function () {
+  // Add a system message to the voice interface
+  addSystemMessage: function(text) {
     const messagesContainer = document.getElementById("voice-messages");
-    if (messagesContainer) {
-      const existingMessages = messagesContainer.querySelectorAll(
-        ".user-message, .ai-message",
-      );
-      existingMessages.forEach((el) => el.remove());
+    if (!messagesContainer) return;
+    
+    // Create a message element
+    const messageDiv = document.createElement("div");
+    messageDiv.className = "ai-message";
+    messageDiv.style.cssText = `
+      display: flex;
+      justify-content: center;
+      margin-bottom: 16px;
+    `;
+    
+    // Create the message content
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "message-content";
+    contentDiv.innerHTML = text;
+    contentDiv.style.cssText = `
+      background: #e5e5ea;
+      color: #333;
+      border-radius: 18px;
+      padding: 12px 16px;
+      max-width: 80%;
+      word-wrap: break-word;
+      font-size: 14px;
+      line-height: 1.4;
+      text-align: center;
+    `;
+    
+    // Add content to message
+    messageDiv.appendChild(contentDiv);
+    
+    // Add message to container
+    messagesContainer.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  },
+  
+  // Clear chat history from the voice interface
+  clearChatHistory: function() {
+    const messagesContainer = document.getElementById("voice-messages");
+    if (!messagesContainer) return;
+    
+    // Remove all message elements except the user message input container
+    const messages = messagesContainer.querySelectorAll(".ai-message, .user-message");
+    if (messages.length === 0) return;
+    
+    messages.forEach(msg => {
+      // If this is the first user-message and it's empty (just the container), keep it
+      if (msg.classList.contains('user-message') && 
+          !msg.querySelector('.message-content')) {
+        return;
+      }
+      msg.remove();
+    });
+    
+    // Add welcome message again with the same format as in openVoiceChat
+    this.addSystemMessage(`
+      <div class="welcome-message">
+        <div class="welcome-title">Aura, your website concierge</div>
+        <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
+        <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
+      </div>
+    `);
+    
+    // Reset in VoiceroCore state if available
+    if (window.VoiceroCore && window.VoiceroCore.appState) {
+      window.VoiceroCore.appState.hasShownVoiceWelcome = false;
+      window.VoiceroCore.saveState();
     }
-    if (VoiceroCore && VoiceroCore.appState) {
-      VoiceroCore.appState.voiceMessages = {};
-      VoiceroCore.saveState();
+  },
+
+  // Stop any ongoing recording
+  stopRecording: function(processAudioData = true) {
+    // Set flag to indicate recording is stopped
+    this.isRecording = false;
+    this.manuallyStoppedRecording = !processAudioData;
+    
+    // Stop any audio streams that might be active
+    if (this.currentAudioStream) {
+      this.currentAudioStream.getTracks().forEach((track) => track.stop());
+      this.currentAudioStream = null;
     }
+    
+    // Stop the media recorder if it exists
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+    }
+    
+    // Clear any timers
+    if (this.silenceDetectionTimer) {
+      clearInterval(this.silenceDetectionTimer);
+      this.silenceDetectionTimer = null;
+    }
+    
+    if (this.recordingTimeout) {
+      clearTimeout(this.recordingTimeout);
+      this.recordingTimeout = null;
+    }
+    
+    // Reset audio related variables
+    this.audioContext = null;
+    this.analyser = null;
+    this.audioChunks = [];
+    this.silenceTime = 0;
+    this.isSpeaking = false;
+    this.hasStartedSpeaking = false;
+    
+    console.log("Recording stopped, process audio:", processAudioData);
   },
 };
 
@@ -1581,6 +1913,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (typeof VoiceroCore !== "undefined") {
     VoiceroVoice.init();
+
+    // Initialize the hasShownVoiceWelcome flag if it doesn't exist
+    if (VoiceroCore && VoiceroCore.appState && VoiceroCore.appState.hasShownVoiceWelcome === undefined) {
+      VoiceroCore.appState.hasShownVoiceWelcome = false;
+      VoiceroCore.saveState();
+    }
 
     // Check for voice reactivation after navigation
     const shouldReactivate =
@@ -1620,6 +1958,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (typeof VoiceroCore !== "undefined") {
         clearInterval(checkCoreInterval);
         VoiceroVoice.init();
+
+        // Initialize the hasShownVoiceWelcome flag if it doesn't exist
+        if (VoiceroCore && VoiceroCore.appState && VoiceroCore.appState.hasShownVoiceWelcome === undefined) {
+          VoiceroCore.appState.hasShownVoiceWelcome = false;
+          VoiceroCore.saveState();
+        }
 
         // Check for voice reactivation after VoiceroCore loads
         const shouldReactivate =
