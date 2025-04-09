@@ -1,10 +1,10 @@
 /* MAIN TOGGLE (AI Assistant) */
 #voice-toggle-container {
   position: fixed;
-  top: 25vh; /* 25% of viewport height */
-  left: 10px;
+  bottom: 20px;
+  right: 20px;
   z-index: 10000;
-  display: none; /* Hidden by default */
+  display: block; /* Make visible by default */
 }
 
 #chat-website-button {
@@ -18,7 +18,7 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   padding: 0;
-  display: none !important; /* Hidden by default */
+  display: flex !important; /* Make visible by default */
   align-items: center;
   justify-content: center;
   opacity: 1 !important;
@@ -136,8 +136,8 @@
 /* INTERACTION CHOOSER */
 #interaction-chooser {
   position: fixed;
-  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
-  left: 10px;
+  bottom: 80px;
+  right: 20px;
   z-index: 10001;
   background-color: #e6e6fa;
   border-radius: 8px;
@@ -187,8 +187,9 @@
 /* VOICE INTERFACE */
 #voice-interface {
   position: fixed;
-  top: calc(25vh + 60px);
-  left: 10px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 9997;
   background-color: #ffffff;
   border-radius: 12px;
@@ -202,7 +203,6 @@
 
 /* Add hover effect to entire container */
 #voice-interface:hover {
-  transform: translateY(-2px); /* Slight lift effect */
   box-shadow: 0 4px 20px rgba(147, 112, 219, 0.2); /* Larger, colored shadow */
   border-color: #9370db; /* Highlight border */
 }
@@ -299,17 +299,17 @@
 /* TEXT INTERFACE - bottom-right, lavender style */
 #text-interface {
   position: fixed;
-  top: calc(25vh + 60px); /* 25% of viewport height + spacing */
-  left: 10px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 9997;
-
-  background-color: #e6e6fa;
-  border-radius: 10px;
+  background-color: #ffffff;
+  border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 320px;
   display: none;
   border: 1px solid #e0e0e0;
-  padding: 0;
+  overflow: hidden;
 }
 
 #close-text {
@@ -395,6 +395,100 @@ div.message-bubble.user-bubble {
 /* Message content */
 .message-content {
   white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.4;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  border-radius: 18px;
+  padding: 12px 16px;
+  max-width: 70%;
+  word-wrap: break-word;
+}
+
+/* User message styling */
+.user-message .message-content {
+  background: #882be6;
+  color: white;
+}
+
+/* AI message styling */
+.ai-message .message-content {
+  background: #e5e5ea;
+  color: #333;
+}
+
+/* Message wrapper styling */
+.user-message, .ai-message {
+  display: flex;
+  margin-bottom: 16px;
+  position: relative;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.user-message {
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.ai-message {
+  justify-content: flex-start;
+  padding-left: 8px;
+}
+
+/* Message delivery status */
+.read-status {
+  font-size: 11px;
+  color: #8e8e93;
+  text-align: right;
+  margin-top: 2px;
+  margin-right: 8px;
+}
+
+/* Welcome message styling */
+.welcome-message {
+  text-align: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%);
+  border-radius: 18px;
+  padding: 12px 15px;
+  margin: 12px auto;
+  width: 85%;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(136, 43, 230, 0.1);
+}
+
+.welcome-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 5px;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(90deg, #882be6, #ff6b6b, #4a90e2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.5px;
+}
+
+.welcome-subtitle {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #666;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin-bottom: 3px;
+}
+
+.welcome-highlight {
+  color: #882be6;
+  font-weight: 600;
+}
+
+.welcome-note {
+  font-size: 12px;
+  opacity: 0.75;
+  font-style: italic;
+  margin-top: 5px;
+  color: #888;
 }
 
 /* Style markdown links in messages */
@@ -634,4 +728,29 @@ div.message-bubble.user-bubble {
 /* Remove ALL other mic-related styles */
 .voice-header .mic-icon {
   color: #9370db !important; /* Override any inherited colors */
+}
+
+/* Mobile styles for when interfaces are open */
+@media (max-width: 768px) {
+  #voice-chat-interface[style*="display: block"] ~ #voice-toggle-container,
+  #voicero-text-chat-container[style*="display: block"] ~ #voice-toggle-container {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+}
+
+/* Desktop styles - ensure chat icon is always visible */
+@media (min-width: 769px) {
+  #voice-toggle-container {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  #chat-website-button {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
 }
