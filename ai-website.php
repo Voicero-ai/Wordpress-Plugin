@@ -1,10 +1,13 @@
 <?php
 /**
  * Plugin Name: Voicero.AI
- * Description: A plugin that can connect your whole website to an AI Salesman to boost your sales. Increase your conversion rate by 10x with our AI that will answer all user questions and put them on the path to purchase.
- * Version: 0.0.2
+ * Description: Connect your site to an AI Salesman. It answers questions, guides users, and boosts sales.
+ * Version: 1.0
  * Author: Voicero.AI
+ * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 if (!defined('ABSPATH')) {
     exit; // Prevent direct access
@@ -35,6 +38,12 @@ add_action('wp_ajax_ai_website_sync_content', 'ai_website_sync_content');
 add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
 add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
 add_action('wp_ajax_ai_website_clear_connection', 'ai_website_clear_connection');
+
+// Add new AJAX handlers for training steps
+add_action('wp_ajax_ai_website_train_page', 'ai_website_train_page');
+add_action('wp_ajax_ai_website_train_post', 'ai_website_train_post');
+add_action('wp_ajax_ai_website_train_product', 'ai_website_train_product');
+add_action('wp_ajax_ai_website_train_general', 'ai_website_train_general');
 
 function ai_website_check_connection() {
     check_ajax_referer('ai_website_ajax_nonce', 'nonce');
@@ -94,9 +103,10 @@ function ai_website_sync_content() {
     }
 
     try {
-        // 1. First sync the content
+        // 1. Sync the content
         $data = collect_wordpress_data();
-        $sync_response = wp_remote_post('http://localhost:3000/api/wordpress/sync', [
+
+        $sync_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/sync', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $access_key,
                 'Content-Type' => 'application/json',
@@ -116,56 +126,26 @@ function ai_website_sync_content() {
             ]);
         }
 
-        // 2. Then vectorize the content
-        $vectorize_response = wp_remote_post('http://localhost:3000/api/wordpress/vectorize', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_key,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ],
-            'timeout' => 120,
-            'sslverify' => false
-        ]);
-
-        if (is_wp_error($vectorize_response)) {
+        $response_code = wp_remote_retrieve_response_code($sync_response);
+        if ($response_code !== 200) {
             wp_send_json_error([
-                'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
-                'code' => $vectorize_response->get_error_code(),
-                'stage' => 'vectorize',
-                'progress' => 33
+                'message' => 'Sync failed: Server returned ' . $response_code,
+                'code' => $response_code,
+                'stage' => 'sync',
+                'progress' => 0,
+                'body' => wp_remote_retrieve_body($sync_response)
             ]);
         }
 
-        // 3. Finally set up the assistant
-        $assistant_response = wp_remote_post('http://localhost:3000/api/wordpress/assistant', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_key,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ],
-            'timeout' => 120,
-            'sslverify' => false
-        ]);
 
-        if (is_wp_error($assistant_response)) {
-            wp_send_json_error([
-                'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
-                'code' => $assistant_response->get_error_code(),
-                'stage' => 'assistant',
-                'progress' => 66
-            ]);
-        }
-
-        // All operations successful
+        // Return success after sync is complete
         wp_send_json_success([
-            'message' => 'All operations completed successfully!',
-            'stage' => 'complete',
-            'progress' => 100,
-            'complete' => true,
+            'message' => 'Content sync completed, ready for vectorization...',
+            'stage' => 'sync',
+            'progress' => 17, // Updated progress
+            'complete' => false,
             'details' => [
-                'sync' => json_decode(wp_remote_retrieve_body($sync_response), true),
-                'vectorize' => json_decode(wp_remote_retrieve_body($vectorize_response), true),
-                'assistant' => json_decode(wp_remote_retrieve_body($assistant_response), true)
+                'sync' => json_decode(wp_remote_retrieve_body($sync_response), true)
             ]
         ]);
 
@@ -178,6 +158,7 @@ function ai_website_sync_content() {
     }
 }
 
+
 // Add new endpoint for vectorization
 function ai_website_vectorize_content() {
     check_ajax_referer('ai_website_ajax_nonce', 'nonce');
@@ -187,7 +168,7 @@ function ai_website_vectorize_content() {
         wp_send_json_error(['message' => 'No access key found']);
     }
 
-    $vectorize_response = wp_remote_post('http://localhost:3000/api/wordpress/vectorize', [
+    $vectorize_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/vectorize', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -202,15 +183,27 @@ function ai_website_vectorize_content() {
             'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
             'code' => $vectorize_response->get_error_code(),
             'stage' => 'vectorize',
-            'progress' => 33
+            'progress' => 17 // Keep progress at previous step
+        ]);
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($vectorize_response);
+    if ($response_code !== 200) {
+         wp_send_json_error([
+            'message' => 'Vectorization failed: Server returned ' . $response_code,
+            'code' => $response_code,
+            'stage' => 'vectorize',
+            'progress' => 17,
+            'body' => wp_remote_retrieve_body($vectorize_response)
         ]);
     }
 
     wp_send_json_success([
         'message' => 'Vectorization completed, setting up assistant...',
         'stage' => 'vectorize',
-        'progress' => 66,
-        'complete' => false
+        'progress' => 34, // Updated progress
+        'complete' => false,
+        'details' => json_decode(wp_remote_retrieve_body($vectorize_response), true)
     ]);
 }
 
@@ -223,7 +216,7 @@ function ai_website_setup_assistant() {
         wp_send_json_error(['message' => 'No access key found']);
     }
 
-    $assistant_response = wp_remote_post('http://localhost:3000/api/wordpress/assistant', [
+    $assistant_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/assistant', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -238,15 +231,143 @@ function ai_website_setup_assistant() {
             'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
             'code' => $assistant_response->get_error_code(),
             'stage' => 'assistant',
-            'progress' => 66
+            'progress' => 34 // Keep progress at previous step
+        ]);
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($assistant_response);
+    $body = wp_remote_retrieve_body($assistant_response);
+    
+    if ($response_code !== 200) {
+         wp_send_json_error([
+            'message' => 'Assistant setup failed: Server returned ' . $response_code,
+            'code' => $response_code,
+            'stage' => 'assistant',
+            'progress' => 34,
+            'body' => $body
+        ]);
+    }
+
+    $data = json_decode($body, true);
+     if (json_last_error() !== JSON_ERROR_NONE || !$data) {
+        wp_send_json_error([
+            'message' => 'Invalid response from assistant setup',
+            'code' => 'invalid_json',
+            'stage' => 'assistant',
+            'progress' => 34
         ]);
     }
 
     wp_send_json_success([
-        'message' => 'All operations completed successfully!',
-        'stage' => 'complete',
-        'progress' => 100,
-        'complete' => true
+        'message' => 'Assistant setup complete, preparing individual training...',
+        'stage' => 'assistant',
+        'progress' => 50, // Updated progress
+        'complete' => false,
+        'data' => $data // Pass the response data back to JS
+    ]);
+}
+
+// Training Endpoints (Page, Post, Product, General)
+function ai_website_train_page() {
+    _handle_training_request('page', 'pageId');
+}
+function ai_website_train_post() {
+    _handle_training_request('post', 'postId');
+}
+function ai_website_train_product() {
+    _handle_training_request('product', 'productId');
+}
+function ai_website_train_general() {
+    _handle_training_request('general');
+}
+
+// Helper for training requests
+function _handle_training_request($type, $id_key = null) {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key found']);
+    }
+
+    $api_url = AI_WEBSITE_API_URL . '/wordpress/train/' . $type;
+    $request_body = [];
+    
+    // Add required parameters to the body based on type
+    if ($type === 'general') {
+        // For general training, we only need websiteId
+        if (isset($_POST['websiteId'])) {
+            $request_body['websiteId'] = sanitize_text_field($_POST['websiteId']);
+        } else {
+            wp_send_json_error(['message' => "Missing required parameter: websiteId"]);
+            return;
+        }
+    } else {
+        // For content-specific training, we need both wpId and websiteId
+        // 1. Check for content ID (for our internal reference only)
+        if ($id_key && isset($_POST[$id_key])) {
+            // We don't need to send the page/post/product ID to the API
+            // $request_body[$id_key] = sanitize_text_field($_POST[$id_key]);
+        } elseif ($id_key) {
+            wp_send_json_error(['message' => "Missing required parameter: $id_key"]);
+            return;
+        }
+        
+        // 2. Add wpId - required for content-specific training
+        if (isset($_POST['wpId'])) {
+            $request_body['wpId'] = sanitize_text_field($_POST['wpId']);
+        } else {
+            wp_send_json_error(['message' => "Missing required parameter: wpId"]);
+            return;
+        }
+        
+        // 3. Add websiteId - required for all types
+        if (isset($_POST['websiteId'])) {
+            $request_body['websiteId'] = sanitize_text_field($_POST['websiteId']);
+        } else {
+            wp_send_json_error(['message' => "Missing required parameter: websiteId"]);
+            return;
+        }
+    }
+
+    // Set a longer timeout for general training
+    $timeout = ($type === 'general') ? 180 : 60; // 3 minutes for general, 1 minute for others
+
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($request_body),
+        'timeout' => $timeout, // Use the dynamic timeout
+        'sslverify' => false
+    ]);
+
+    if (is_wp_error($response)) {
+        wp_send_json_error([
+            'message' => ucfirst($type) . ' training failed: ' . $response->get_error_message(),
+            'code' => $response->get_error_code(),
+            'type' => $type
+        ]);
+    }
+
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($response_code !== 200) {
+        wp_send_json_error([
+            'message' => ucfirst($type) . ' training failed: Server returned ' . $response_code,
+            'code' => $response_code,
+            'body' => $body,
+            'type' => $type
+        ]);
+    }
+
+    wp_send_json_success([
+        'message' => ucfirst($type) . ' training successful.',
+        'type' => $type,
+        'details' => json_decode($body, true)
     ]);
 }
 
@@ -311,21 +432,19 @@ function collect_wordpress_data() {
             'description' => $media->post_content,
             'caption' => $media->post_excerpt,
             'mimeType' => $media->post_mime_type,
-            'metadata' => $metadata ? $metadata : new stdClass(),
-            'createdAt' => $media->post_date,
-            'updatedAt' => $media->post_modified
+            'metadata' => $metadata
         ];
     }
 
     // Get Custom Fields for Posts and Products
     foreach ($posts as $post) {
-        $custom_fields = get_post_meta($post->ID);
+        $custom_fields = get_post_custom($post->ID);
         foreach ($custom_fields as $key => $values) {
             if (strpos($key, '_') !== 0) { // Skip private meta
                 $data['customFields'][] = [
                     'postId' => $post->ID,
                     'metaKey' => $key,
-                    'metaValue' => maybe_serialize($values[0]),
+                    'metaValue' => $values[0],
                     'postType' => 'post'
                 ];
             }
@@ -387,7 +506,7 @@ function collect_wordpress_data() {
                 $data['customFields'][] = [
                     'postId' => $product->ID,
                     'metaKey' => $key,
-                    'metaValue' => maybe_serialize($values[0]),
+                    'metaValue' => $values[0],
                     'postType' => 'product'
                 ];
             }
@@ -773,88 +892,200 @@ function ai_website_render_admin_page() {
 
         const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
         const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
+        const savedAccessKey = '<?php echo esc_js($saved_key); ?>'; // Get saved key for JS
 
         // Handle sync form submission
         $('#sync-form').on('submit', function(e) {
             e.preventDefault();
             const syncButton = $('#sync-button');
-            const syncStatus = $('#sync-status');
+            const syncStatusContainer = $('#sync-status'); 
 
             // Reset initial state
             syncButton.prop('disabled', true);
 
-            // Create status elements for each step
-            syncStatus.html(`
-                <div class="sync-steps">
-                    <div id="sync-step">⏳ Syncing content...</div>
-                    <div id="vectorize-step">Vectorizing content (waiting...)</div>
-                    <div id="assistant-step">Setting up assistant (waiting...)</div>
+            // Create progress bar and status text elements
+            syncStatusContainer.html(`
+                <div id="sync-progress-bar-container" style="width: 100%; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 5px; height: 24px; position: relative; margin-top: 15px;">
+                    <div id="sync-progress-bar" style="width: 0%; height: 100%; background-color: #0073aa; transition: width 0.3s ease;"></div>
+                    <div id="sync-progress-percentage" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; line-height: 24px; text-align: center; color: #fff; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,0.2);">
+                        0%
+                    </div>
+                </div>
+                <div id="sync-progress-text" style="font-style: italic; text-align: center;">Initiating sync...</div>
+                <div id="sync-warning" style="margin-top: 10px; padding: 8px; background-color: #f0f6fc; border-left: 4px solid #2271b1; color: #1d2327; font-size: 13px; text-align: left;">
+                    <p><strong>⚠️ Important:</strong> Please do not close this page during training. You can leave the page and do other things while the training is happening. This process could take up to 20 minutes to complete depending on the size of your website.</p>
                 </div>
             `);
 
+            const progressBar = $('#sync-progress-bar');
+            const progressPercentage = $('#sync-progress-percentage');
+            const progressText = $('#sync-progress-text');
+
+            function updateProgress(percentage, text, isError = false) {
+                const p = Math.min(100, Math.max(0, Math.round(percentage))); // Clamp between 0 and 100
+                progressBar.css('width', p + '%');
+                progressPercentage.text(p + '%');
+                progressText.text(text);
+                
+                if (isError) {
+                    progressBar.css('background-color', '#d63638'); // Red for error
+                    progressPercentage.css('color', '#fff'); 
+                } else {
+                     progressBar.css('background-color', '#0073aa'); // Blue for progress/success
+                     progressPercentage.css('color', p < 40 ? '#333' : '#fff'); 
+                }
+            }
+
+            updateProgress(5, '⏳ Syncing content...'); 
+
             try {
-                // Step 1: Initial Sync
-                $.post(ajaxurl, {
-                    action: 'ai_website_sync_content',
-                    nonce: nonce
+                let assistantData = null; // To store assistant response
+                let websiteId = null; // Declare websiteId at a higher scope level
+
+                // Step 1: Initial Sync (to 17%)
+                $.post(ajaxurl, { action: 'ai_website_sync_content', nonce: nonce })
+                .then(function(response) {
+                    if (!response.success) throw new Error(response.data.message || "Sync failed");
+                    updateProgress(response.data.progress || 17, '⏳ Vectorizing content...');
+                    // Step 2: Vectorization (to 34%)
+                    return $.post(ajaxurl, { action: 'ai_website_vectorize_content', nonce: nonce });
                 })
                 .then(function(response) {
-                    if (!response.success) {
-                        throw new Error(response.data.message || "Sync failed");
+                    if (!response.success) throw new Error(response.data.message || "Vectorization failed");
+                    updateProgress(response.data.progress || 34, '⏳ Setting up assistant...');
+                    // Step 3: Assistant Setup (to 50%)
+                    return $.post(ajaxurl, { action: 'ai_website_setup_assistant', nonce: nonce });
+                })
+                .then(function(response) {
+                    if (!response.success) throw new Error(response.data.message || "Assistant setup failed");
+                    updateProgress(response.data.progress || 50, '⏳ Preparing content training...');
+                    assistantData = response.data.data; // Store the content IDs
+                    
+                    // Store websiteId at the higher scope
+                    if (assistantData && assistantData.websiteId) {
+                        websiteId = assistantData.websiteId;
+                    } else {
+                        console.warn("No websiteId found in assistant response");
+                        // Try to use the first content item's websiteId as fallback
+                        if (assistantData && assistantData.content && 
+                            assistantData.content.pages && assistantData.content.pages.length > 0) {
+                            websiteId = assistantData.content.pages[0].websiteId;
+                        }
+                        // If still no websiteId, we'll need to handle that error case
+                        if (!websiteId) {
+                            throw new Error("No websiteId available for training");
+                        }
                     }
-                    // Update sync step with checkmark
-                    $("#sync-step").html("✅ Content synced successfully");
+                    
+                    // --- Step 4: All Training (50% to 100%) ---
+                    if (!assistantData || !assistantData.content) {
+                         console.warn("No content data received from assistant setup, skipping content training.");
+                         // Even if no content items, we still need to do general training
+                    }
+                    
+                    const trainingPromises = [];
+                    const pages = assistantData && assistantData.content ? (assistantData.content.pages || []) : [];
+                    const posts = assistantData && assistantData.content ? (assistantData.content.posts || []) : [];
+                    const products = assistantData && assistantData.content ? (assistantData.content.products || []) : [];
+                    
+                    // Calculate total items including general training which we'll do last
+                    const totalItems = pages.length + posts.length + products.length + 1; // +1 for general training
+                    let completedItems = 0;
+                    const progressRange = 50; // 100 - 50 = 50% range for all training calls
+                    
+                    updateProgress(50, `⏳ Starting training for ${totalItems} items...`);
 
-                    // Step 2: Vectorization
-                    $("#vectorize-step").html("⏳ Vectorizing content...");
-                    return $.post(ajaxurl, {
-                        action: 'ai_website_vectorize_content',
-                        nonce: nonce
+                    // Create promises for pages
+                    pages.forEach(page => {
+                        const promise = $.post(ajaxurl, { 
+                            action: 'ai_website_train_page', 
+                            nonce: nonce,
+                            pageId: page.id, // Keep for our reference
+                            wpId: page.id, // This is the actual WordPress ID
+                            websiteId: websiteId // Website ID from higher scope
+                        }).then(() => {
+                             completedItems++;
+                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
+                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
+                        });
+                        trainingPromises.push(promise);
                     });
-                })
-                .then(function(response) {
-                    if (!response.success) {
-                        throw new Error(response.data.message || "Vectorization failed");
-                    }
-                    // Update vectorize step with checkmark
-                    $("#vectorize-step").html("✅ Content vectorized successfully");
 
-                    // Step 3: Assistant Setup
-                    $("#assistant-step").html("⏳ Setting up assistant...");
-                    return $.post(ajaxurl, {
-                        action: 'ai_website_setup_assistant',
-                        nonce: nonce
+                    // Create promises for posts
+                    posts.forEach(post => {
+                         const promise = $.post(ajaxurl, { 
+                             action: 'ai_website_train_post', 
+                             nonce: nonce,
+                             postId: post.id, // Keep for our reference
+                             wpId: post.id, // This is the actual WordPress ID
+                             websiteId: websiteId // Website ID from higher scope
+                         }).then(() => {
+                             completedItems++;
+                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
+                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
+                         });
+                         trainingPromises.push(promise);
                     });
-                })
-                .then(function(response) {
-                    if (!response.success) {
-                        throw new Error(response.data.message || "Assistant setup failed");
-                    }
-                    // Update assistant step with checkmark
-                    $("#assistant-step").html("✅ Assistant setup complete");
+                    
+                    // Create promises for products
+                    products.forEach(product => {
+                         const promise = $.post(ajaxurl, { 
+                             action: 'ai_website_train_product', 
+                             nonce: nonce,
+                             productId: product.id, // Keep for our reference
+                             wpId: product.id, // This is the actual WordPress ID
+                             websiteId: websiteId // Website ID from higher scope
+                         }).then(() => {
+                             completedItems++;
+                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
+                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
+                         });
+                         trainingPromises.push(promise);
+                    });
 
-                    // Update website info after a short delay
+                    // Always add general training as the last item in our training set
+                    // This ensures it runs after all individual items are trained
+                    trainingPromises.push(
+                        // Create a promise for general training
+                        $.post(ajaxurl, { 
+                            action: 'ai_website_train_general', 
+                            nonce: nonce,
+                            websiteId: websiteId // Website ID from higher scope
+                        }).then(() => {
+                            completedItems++;
+                            const currentProgress = 50 + (completedItems / totalItems) * progressRange;
+                            updateProgress(currentProgress, `⏳ Finalizing training (${completedItems}/${totalItems})...`);
+                            // Should be at 100% now
+                            if (completedItems === totalItems) {
+                                updateProgress(100, '✅ Sync & Training Complete!');
+                            }
+                        })
+                    );
+
+                    // Wait for all training calls to complete (including general)
+                    return Promise.all(trainingPromises);
+                })
+                .then(function() {
+                    // All training is complete (both individual and general)
+                    // Update website info after completion
                     setTimeout(() => {
                         loadWebsiteInfo();
                     }, 1500);
                 })
                 .catch(function(error) {
-                    // Error handling - mark current step as failed with X
-                    console.error("Operation failed:", error);
-                    if (!$("#sync-step").text().includes("✅")) {
-                        $("#sync-step").html("❌ Sync failed: " + error.message);
-                    } else if (!$("#vectorize-step").text().includes("✅")) {
-                        $("#vectorize-step").html("❌ Vectorization failed: " + error.message);
-                    } else if (!$("#assistant-step").text().includes("✅")) {
-                        $("#assistant-step").html("❌ Assistant setup failed: " + error.message);
-                    }
+                    // General Error handling for the entire chain
+                    console.error("Sync/Training process failed:", error);
+                    const currentProgress = parseFloat(progressBar.css('width')) / progressBar.parent().width() * 100;
+                    updateProgress(currentProgress, `❌ Error: ${error.message}`, true); 
                 })
                 .always(function() {
+                    // Re-enable button regardless of success or failure
                     syncButton.prop('disabled', false);
                 });
             } catch (error) {
+                // Catch synchronous errors (should be rare)
                 syncButton.prop('disabled', false);
-                syncStatus.html(`<span style="color: #d63638;">✗ Error: ${error.message}</span>`);
+                updateProgress(0, `❌ Error: ${error.message}`, true);
             }
         });
 
@@ -866,11 +1097,20 @@ function ai_website_render_admin_page() {
                 nonce: nonce
             })
             .done(function(response) {
-                if (!response.success) {
-                    throw new Error(response.data.message || 'Failed to load website info');
+                if (!response || !response.success) {
+                     let errorMsg = 'Failed to load website info';
+                     if(response && response.data && response.data.message) {
+                         errorMsg = response.data.message;
+                     } else if (response && response.data && response.data.body) {
+                         try {
+                            const body = JSON.parse(response.data.body);
+                            errorMsg = body.message || errorMsg;
+                         } catch(e) {}
+                     }
+                     throw new Error(errorMsg);
                 }
 
-                const website = response.data;
+                const website = response.data; // The API returns website data directly under 'data'
                 
                 // Only show first-time modal if we have a valid website connection
                 // AND it has never been synced
@@ -890,76 +1130,11 @@ function ai_website_render_admin_page() {
                         }
                     });
 
-                    // Handle first sync button click in modal
+                    // Handle first sync button click in modal (uses the main sync logic)
                     $('#first-sync-button').on('click', function() {
                         const $modalContent = $(this).closest('.notice');
-                        
-                        // Replace modal content with sync progress
-                        $modalContent.html(`
-                            <h2 style="margin-top: 0;">🔄 Syncing Your Website</h2>
-                            <div class="sync-steps">
-                                <div id="sync-step">⏳ Syncing content...</div>
-                                <div id="vectorize-step">Vectorizing content (waiting...)</div>
-                                <div id="assistant-step">Setting up assistant (waiting...)</div>
-                            </div>
-                        `);
-
-                        // Trigger the sync process
-                        $.post(ajaxurl, {
-                            action: 'ai_website_sync_content',
-                            nonce: nonce
-                        })
-                        .then(function(response) {
-                            if (!response.success) {
-                                throw new Error(response.data.message || "Sync failed");
-                            }
-                            $("#sync-step").html("✅ Content synced successfully");
-                            
-                            // Continue with vectorization
-                            return $.post(ajaxurl, {
-                                action: 'ai_website_vectorize_content',
-                                nonce: nonce
-                            });
-                        })
-                        .then(function(response) {
-                            if (!response.success) {
-                                throw new Error(response.data.message || "Vectorization failed");
-                            }
-                            $("#vectorize-step").html("✅ Content vectorized successfully");
-                            
-                            // Finally set up the assistant
-                            return $.post(ajaxurl, {
-                                action: 'ai_website_setup_assistant',
-                                nonce: nonce
-                            });
-                        })
-                        .then(function(response) {
-                            if (!response.success) {
-                                throw new Error(response.data.message || "Assistant setup failed");
-                            }
-                            $("#assistant-step").html("✅ Assistant setup complete");
-                            
-                            // Show success message and close button
-                            setTimeout(() => {
-                                $modalContent.html(`
-                                    <h2 style="margin-top: 0;">✅ Setup Complete!</h2>
-                                    <p>Your website is now ready to use AI features.</p>
-                                    <button class="button button-primary modal-close">
-                                        Get Started
-                                    </button>
-                                `);
-                                
-                                // Reload website info in background
-                                loadWebsiteInfo();
-                            }, 1000);
-                        })
-                        .catch(function(error) {
-                            $modalContent.append(`
-                                <div class="notice notice-error">
-                                    <p>Error: ${error.message || 'Something went wrong'}</p>
-                                </div>
-                            `);
-                        });
+                         $('#first-time-modal').fadeOut(); // Close modal immediately
+                         $('#sync-button').trigger('click'); // Trigger the main sync button
                     });
                 }
 
@@ -969,7 +1144,10 @@ function ai_website_render_admin_page() {
                         <tbody>
                             <tr>
                                 <th>Website Name</th>
-                                <td>${website.name || 'Unnamed Site'}</td>
+                                <td>
+                                    ${website.name || 'Unnamed Site'}
+                                    
+                                </td>
                             </tr>
                             <tr>
                                 <th>URL</th>
@@ -979,6 +1157,15 @@ function ai_website_render_admin_page() {
                                 <th>Plan</th>
                                 <td>${website.plan || 'Free'}</td>
                             </tr>
+                            ${website.color ? `
+                            <tr>
+                                <th>Color</th>
+                                <td style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${website.color}; border: 1px solid #ddd;"></div>
+                                    <code style="font-size: 13px; padding: 4px 8px; background: #f0f0f1; border-radius: 3px;">${website.color}</code>
+                                </td>
+                            </tr>
+                            ` : ''}
                             <tr>
                                 <th>Status</th>
                                 <td>
@@ -987,7 +1174,7 @@ function ai_website_render_admin_page() {
                                     </span>
                                     <button class="button button-small toggle-status-btn" 
                                             data-website-id="${website.id || ''}" 
-                                            data-access-key="${'<?php echo esc_js($saved_key); ?>'}'"
+                                            data-access-key="${savedAccessKey}"
                                             ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
                                         ${website.active ? 'Deactivate' : 'Activate'}
                                     </button>
@@ -1017,20 +1204,17 @@ function ai_website_render_admin_page() {
                                 <th>Last Synced</th>
                                 <td>${website.lastSyncedAt ? new Date(website.lastSyncedAt).toLocaleString() : 'Never'}</td>
                             </tr>
-                            <tr>
-                                <th>Sync Frequency</th>
-                                <td>${website.syncFrequency || 'Manual'}</td>
-                            </tr>
+                           
                         </tbody>
                     </table>
 
                     <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="http://localhost:3000/app" target="_blank" class="button button-primary">
+                        <a href="http://localhost:3000/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
                             Open Dashboard
                         </a>
                         <button class="button toggle-status-btn" 
                                 data-website-id="${website.id || ''}"
-                                data-access-key="${'<?php echo esc_js($saved_key); ?>'}'"
+                                data-access-key="${savedAccessKey}"
                                 ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
                             ${website.active ? 'Deactivate Plugin' : 'Activate Plugin'}
                         </button>
@@ -1081,12 +1265,12 @@ function ai_website_render_admin_page() {
         }
 
         // Load website info on page load if we have an access key
-        if ('<?php echo esc_js($saved_key); ?>') {
+        if (savedAccessKey) {
             loadWebsiteInfo();
         }
 
-        // If there was an error, show the connect button prominently
-        if ($('.notice-error').length > 0) {
+        // If there was an error on page load, show the connect button prominently
+        if ($('#website-info-container .notice-error').length > 0) {
             $('.button-secondary').addClass('button-primary').css({
                 'margin-top': '10px',
                 'font-weight': 'bold'
@@ -1108,7 +1292,7 @@ function ai_website_render_admin_page() {
             // Disable button during request
             $button.prop('disabled', true);
             
-            fetch('http://localhost:3000/api/websites/toggle-status', {
+            fetch( '<?php echo AI_WEBSITE_API_URL; ?>' + '/websites/toggle-status', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1128,7 +1312,7 @@ function ai_website_render_admin_page() {
             })
             .catch(error => {
                 console.error('Error toggling status:', error);
-                alert('Failed to toggle website status. Please try again.');
+                alert('Failed to toggle website status: ' + error.message + '. Please try again.');
             })
             .finally(() => {
                 $button.prop('disabled', false);
@@ -1142,9 +1326,18 @@ function ai_website_render_admin_page() {
                 $key = get_option("ai_website_access_key", "");
                 echo esc_js($key); 
                 // Debug log the key to PHP error log
-                error_log("Access key being used: " . substr($key, 0, 10) . "...");
+                // error_log("Access key being used: " + substr($key, 0, 10) + "..."); // Be careful logging keys
             ?>';
-            console.log("Access key loaded:", ACCESS_KEY.substring(0, 10) + "..."); // Debug log
+            // console.log("Access key loaded:", ACCESS_KEY.substring(0, 10) + "..."); // Debug log
+            
+            // Expose config globally (or use a more structured approach if needed)
+             window.aiWebsiteConfig = {
+                accessKey: ACCESS_KEY,
+                apiUrl: '<?php echo esc_js(AI_WEBSITE_API_URL); ?>',
+                ajaxUrl: '<?php echo esc_js(admin_url('admin-ajax.php')); ?>',
+                nonce: '<?php echo esc_js(wp_create_nonce('ai_website_frontend_nonce')); ?>', // Frontend nonce
+                adminNonce: nonce // Admin nonce already defined above
+             };
         });
 
         // Add script to detect nav height and position button
@@ -1188,7 +1381,7 @@ function ai_website_render_admin_page() {
 ------------------------------------------------------------------------ */
 // Optional debug logs for REST initialization
 add_action('rest_api_init', function() {
-    error_log('REST API initialized from My First Plugin');
+    // error_log('REST API initialized from My First Plugin');
 });
 
 // Force-enable the REST API if something else is blocking it
@@ -1479,14 +1672,22 @@ add_action('rest_api_init', function() {
 ------------------------------------------------------------------------ */
 add_action('init', function() {
     if (isset($_SERVER['HTTP_ORIGIN'])) {
-        header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+        $origin = $_SERVER['HTTP_ORIGIN'];
+        // Add allowed origins here if needed, otherwise '*' might be okay for development
+        $allowed_origins = ['http://localhost:3000', 'http://localhost:5173']; // Add frontend dev server if different
+        if (in_array($origin, $allowed_origins) || $origin === get_site_url()) { // Allow own origin
+             header("Access-Control-Allow-Origin: {$origin}");
         header('Access-Control-Allow-Credentials: true');
     } else {
-        header("Access-Control-Allow-Origin: *");
+            // Potentially restrict to known origins in production
+            header("Access-Control-Allow-Origin: *"); // More permissive for dev
+        }
+    } else {
+        header("Access-Control-Allow-Origin: *"); // Fallback
     }
     
-    header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-    header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept");
+    header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE"); // Allow common methods
+    header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-Requested-With"); // Allow common headers
     
     // Handle preflight requests
     if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
@@ -1500,14 +1701,20 @@ add_action('rest_api_init', function() {
     remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
     add_filter('rest_pre_serve_request', function($value) {
         if (isset($_SERVER['HTTP_ORIGIN'])) {
-            header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+            $origin = $_SERVER['HTTP_ORIGIN'];
+            $allowed_origins = ['http://localhost:3000', 'http://localhost:5173']; 
+             if (in_array($origin, $allowed_origins) || $origin === get_site_url()) {
+                 header("Access-Control-Allow-Origin: {$origin}");
             header('Access-Control-Allow-Credentials: true');
+            } else {
+                 header("Access-Control-Allow-Origin: *"); 
+            }
         } else {
             header("Access-Control-Allow-Origin: *");
         }
         
-        header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-        header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept");
+        header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
+        header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-Requested-With"); // Added X-WP-Nonce
         header("Access-Control-Expose-Headers: X-WP-Total, X-WP-TotalPages");
         return $value;
     });
@@ -1518,6 +1725,19 @@ add_action('rest_api_init', function() {
    5. ADD FRONT-END INTERFACES TO <body>
 ------------------------------------------------------------------------ */
 function my_first_plugin_add_toggle_button() {
+     // Only add the button if the website is active AND synced
+    $saved_key = get_option('ai_website_access_key', '');
+    $is_active = false; // Default
+    $is_synced = false; // Default
+
+    if ($saved_key) {
+        // We need to fetch the status - this is tricky without duplicating the API call.
+        // Simplification: Assume if key exists, we *might* add the button,
+        // JS will handle showing/hiding based on actual fetched status later.
+        // Or better: Check a transient or option set during sync/activation.
+        // For now, let's just enqueue scripts regardless and let JS decide to show the button.
+    }
+
     ?>
     <script>
     function updateNavbarPositioning() {
@@ -1552,7 +1772,8 @@ function my_first_plugin_add_toggle_button() {
     setTimeout(updateNavbarPositioning, 500);
     </script>
 
-    <div id="voice-toggle-container">
+    <!-- Container will be hidden by default via CSS, JS will show it if active/synced -->
+    <div id="voice-toggle-container" style="display: none;"> 
         <button id="chat-website-button">
             <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
                 <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
@@ -1560,7 +1781,7 @@ function my_first_plugin_add_toggle_button() {
         </button>
     </div>
 
-    <div id="interaction-chooser">
+    <div id="interaction-chooser" style="display: none;">
         <div class="interaction-option voice">
             <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.svg" alt="Voice">
             <span>Talk to Website</span>
@@ -1572,7 +1793,7 @@ function my_first_plugin_add_toggle_button() {
     </div>
 
     <!-- Voice Interface -->
-    <div id="voice-interface" class="interface-panel">
+    <div id="voice-interface" class="interface-panel" style="display: none;">
         <div class="voice-header">
             <div class="header-content">
                 <button class="mic-button-header">
@@ -1599,7 +1820,7 @@ function my_first_plugin_add_toggle_button() {
     </div>
 
     <!-- Text Interface -->
-    <div id="text-interface" class="interface-panel">
+    <div id="text-interface" class="interface-panel" style="display: none;">
         <div class="interface-content">
             <button id="close-text">×</button>
             <div class="chat-container">
@@ -1613,7 +1834,7 @@ function my_first_plugin_add_toggle_button() {
     </div>
     <?php
 }
-add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
+add_action('wp_footer', 'my_first_plugin_add_toggle_button'); // Use wp_footer instead of wp_body_open
 
 // Add this near the top of the file after the header
 function ai_website_get_access_key() {
@@ -1622,43 +1843,74 @@ function ai_website_get_access_key() {
 
 // Add this to make the access key and API URL available to frontend scripts
 function ai_website_enqueue_scripts() {
-    wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], '1.0.0', true);
+    // Enqueue scripts only on the frontend, not in admin
+    if (!is_admin()) {
+        wp_enqueue_script('recordrtc', 'https://www.WebRTC-Experiment.com/RecordRTC.js', [], null, true); // Use null for version
     wp_enqueue_script(
         'ai-website-script',
         plugin_dir_url(__FILE__) . 'assets/script.js',
-        ['recordrtc'],
-        '1.1',
+            ['jquery', 'recordrtc'], // Add jQuery dependency
+            '1.2', // Incremented version
         true
     );
 
-    // Pass data to the frontend script - make sure we're using the correct handle
+        // Get frontend nonce
+        $frontend_nonce = wp_create_nonce('ai_website_frontend_nonce');
+
+        // Pass data to the frontend script
     wp_localize_script('ai-website-script', 'aiWebsiteConfig', [
-        'accessKey' => get_option('ai_website_access_key', ''),
+            'accessKey' => get_option('ai_website_access_key', ''), // Pass the key
         'apiUrl' => AI_WEBSITE_API_URL,
         'ajaxUrl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('ai_website_frontend_nonce')
-    ]);
+            'nonce' => $frontend_nonce // Use frontend nonce for frontend actions
+            // We don't pass admin nonce to frontend
+        ]);
 
-    wp_enqueue_style('ai-website-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.1');
+        wp_enqueue_style('ai-website-style', plugin_dir_url(__FILE__) . 'assets/style.css', [], '1.2'); // Incremented version
+    } else {
+         // Enqueue admin-specific scripts if needed (e.g., for the admin page JS)
+         // wp_enqueue_script('ai-website-admin-script', ...);
+    }
 }
 add_action('wp_enqueue_scripts', 'ai_website_enqueue_scripts');
 
-// Add AJAX handler for frontend access
-add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_get_info');
-add_action('wp_ajax_ai_website_get_info', 'ai_website_get_info');
+// Add AJAX handler for frontend access AND admin access
+add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_get_info'); // For logged-out users (frontend)
+add_action('wp_ajax_ai_website_get_info', 'ai_website_get_info'); // For logged-in users (admin and frontend)
 
 function ai_website_get_info() {
-    // Verify nonce for both admin and frontend
-    $is_admin = check_admin_referer('ai_website_ajax_nonce', 'nonce', false); 
-    $is_frontend = check_ajax_referer('ai_website_frontend_nonce', 'nonce', false);
-    
-    if (!$is_admin && !$is_frontend) {
-        wp_send_json_error(['message' => 'Invalid nonce']);
+    // Determine if it's an admin or frontend request and check appropriate nonce
+    $nonce_to_check = '';
+    $action = '';
+
+    if (defined('DOING_AJAX') && DOING_AJAX) {
+        $action = isset($_REQUEST['action']) ? sanitize_key($_REQUEST['action']) : '';
+        $nonce_value = isset($_REQUEST['nonce']) ? sanitize_text_field($_REQUEST['nonce']) : '';
+
+        if (is_admin()) { // Check if context is admin area
+            $nonce_to_check = 'ai_website_ajax_nonce'; // Admin nonce
+             if (!check_ajax_referer($nonce_to_check, 'nonce', false)) {
+                 wp_send_json_error(['message' => 'Invalid admin nonce']);
+                 return;
+             }
+        } else { // Assume frontend context
+             $nonce_to_check = 'ai_website_frontend_nonce'; // Frontend nonce
+             if (!check_ajax_referer($nonce_to_check, 'nonce', false)) {
+                 wp_send_json_error(['message' => 'Invalid frontend nonce']);
+                 return;
+             }
+        }
+    } else {
+        // Not an AJAX request? Should not happen for this endpoint.
+        wp_send_json_error(['message' => 'Invalid request type']);
+        return;
     }
     
     $access_key = get_option('ai_website_access_key', '');
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        // Send different errors depending on context maybe?
+        // For now, same error.
+        wp_send_json_error(['message' => 'No access key configured for this site.']);
     }
 
     $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
@@ -1668,10 +1920,11 @@ function ai_website_get_info() {
             'Accept' => 'application/json'
         ],
         'timeout' => 15,
-        'sslverify' => false
+        'sslverify' => false // Keep false for local dev
     ]);
 
     if (is_wp_error($response)) {
+         error_log('AI Website Get Info Error (WP_Error): ' . $response->get_error_message());
         wp_send_json_error([
             'message' => 'Connection failed: ' . $response->get_error_message()
         ]);
@@ -1681,17 +1934,19 @@ function ai_website_get_info() {
     $body = wp_remote_retrieve_body($response);
 
     if ($response_code !== 200) {
+        error_log('AI Website Get Info Error (API): Code ' . $response_code . ' Body: ' . $body);
         wp_send_json_error([
             'message' => 'Server returned error: ' . $response_code,
-            'body' => $body
+            'body' => $body // Avoid sending full body to frontend in prod
         ]);
     }
 
     $data = json_decode($body, true);
+    // The /connect endpoint returns { website: {...} }
     if (!$data || !isset($data['website'])) {
-        error_log('AI Website response body: ' . $body);
+        error_log('AI Website Get Info Error: Invalid response body: ' . $body);
         wp_send_json_error([
-            'message' => 'Invalid response from server'
+            'message' => 'Invalid response structure from server.'
         ]);
     }
 
@@ -1701,6 +1956,11 @@ function ai_website_get_info() {
 
 function ai_website_clear_connection() {
     check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied']);
+        return;
+    }
     delete_option('ai_website_access_key');
-    wp_send_json_success(['message' => 'Connection cleared']);
+    // Optionally: delete other related options or transients
+    wp_send_json_success(['message' => 'Connection cleared successfully']);
 }
