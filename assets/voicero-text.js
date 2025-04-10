@@ -55,6 +55,52 @@ const VoiceroText = {
 
   // Open text chat interface
   openTextChat: function () {
+    console.log("Opening text chat interface");
+
+    // Check if thread has messages
+    const hasMessages = this.messages && this.messages.length > 0;
+
+    // Check if welcome message should be shown based on session data
+    let shouldShowWelcome = !hasMessages;
+
+    // If we have a session with textWelcome defined, use that value instead
+    if (this.session && typeof this.session.textWelcome !== "undefined") {
+      shouldShowWelcome = this.session.textWelcome;
+      console.log(
+        "Voicero Text: Using welcome message state from session:",
+        shouldShowWelcome ? "show welcome" : "hide welcome"
+      );
+    }
+
+    // Get current state of textOpenWindowUp if available
+    let shouldBeMaximized = true;
+
+    // Check if there's already a session with textOpenWindowUp defined
+    if (this.session && typeof this.session.textOpenWindowUp !== "undefined") {
+      shouldBeMaximized = this.session.textOpenWindowUp;
+      console.log(
+        "Voicero Text: Using existing window state from session:",
+        shouldBeMaximized ? "maximized" : "minimized"
+      );
+    }
+
+    // Update window state if it hasn't been done already
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log("Voicero Text: Updating window state to open");
+      window.VoiceroCore.updateWindowState({
+        textOpen: true,
+        textOpenWindowUp: shouldBeMaximized, // Respect existing window state if available
+        textWelcome: shouldShowWelcome, // Keep the existing welcome message state
+        coreOpen: false,
+        voiceOpen: false,
+        voiceOpenWindowUp: false,
+      });
+    } else {
+      console.warn(
+        "Voicero Text: VoiceroCore not available for window state update"
+      );
+    }
+
     // Close voice interface if it's open
     const voiceInterface = document.getElementById("voice-chat-interface");
     if (voiceInterface && voiceInterface.style.display === "block") {
@@ -113,68 +159,147 @@ const VoiceroText = {
       shadowHost.style.minWidth = "280px";
     }
 
+    // Important: If shouldBeMaximized is false, immediately apply minimized state
+    // without waiting for the minimization to occur after showing maximized first
+    if (!shouldBeMaximized) {
+      console.log("Voicero Text: Immediately applying minimized state");
+
+      // Get the necessary elements from shadow root
+      const shadowRoot = document.getElementById(
+        "voicero-text-chat-container"
+      )?.shadowRoot;
+      if (shadowRoot) {
+        const messagesContainer = shadowRoot.getElementById("chat-messages");
+        const headerContainer = shadowRoot.getElementById(
+          "chat-controls-header"
+        );
+        const inputWrapper = shadowRoot.getElementById("chat-input-wrapper");
+        const maximizeBtn = shadowRoot.getElementById("maximize-chat");
+
+        // Make the maximize button visible first
+        if (maximizeBtn) {
+          maximizeBtn.style.display = "block";
+          maximizeBtn.style.marginTop = "10px";
+        }
+
+        if (messagesContainer) {
+          // Hide all message content
+          const allMessages = messagesContainer.querySelectorAll(
+            ".user-message, .ai-message, #initial-suggestions"
+          );
+          allMessages.forEach((msg) => {
+            msg.style.display = "none";
+          });
+
+          // Completely hide the messages container
+          messagesContainer.style.maxHeight = "0";
+          messagesContainer.style.minHeight = "0";
+          messagesContainer.style.height = "0";
+          messagesContainer.style.padding = "0";
+          messagesContainer.style.margin = "0";
+          messagesContainer.style.overflow = "hidden";
+          messagesContainer.style.border = "none";
+          messagesContainer.style.display = "none";
+          messagesContainer.style.visibility = "hidden";
+          messagesContainer.style.opacity = "0";
+          messagesContainer.style.position = "absolute";
+          messagesContainer.style.pointerEvents = "none";
+
+          // Also hide padding container inside
+          const paddingContainer = messagesContainer.querySelector(
+            "div[style*='padding-top']"
+          );
+          if (paddingContainer) {
+            paddingContainer.style.display = "none";
+            paddingContainer.style.height = "0";
+            paddingContainer.style.padding = "0";
+            paddingContainer.style.margin = "0";
+          }
+        }
+
+        // Hide the header
+        if (headerContainer) {
+          headerContainer.style.display = "none";
+        }
+
+        // Adjust the input wrapper to connect with the button
+        if (inputWrapper) {
+          inputWrapper.style.borderRadius = "12px";
+          inputWrapper.style.marginTop = "0";
+        }
+      }
+    }
+
     // Set up input and button listeners
     this.setupEventListeners();
 
     // Set up button event handlers (ensure minimize/maximize work)
     this.setupButtonHandlers();
 
-    // Check if we should show welcome message
-    const hasMessages = this.messages && this.messages.length > 0;
+    // Only add welcome message and show suggestions if we're maximized
+    if (shouldBeMaximized) {
+      // Check if we should show welcome message based on session data
+      if (shouldShowWelcome) {
+        console.log(
+          "Voicero Text: Adding welcome message (textWelcome is true)"
+        );
+        // Add welcome message with clear prompt - formatted like voice interface
+        this.addMessage(
+          `
+          <div class="welcome-message">
+            <div class="welcome-title">Aura, your website concierge</div>
+            <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
+            <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+          </div>
+        `,
+          "ai",
+          false,
+          true
+        );
+      } else {
+        console.log(
+          "Voicero Text: Skipping welcome message (textWelcome is false)"
+        );
+      }
 
-    if (!hasMessages) {
-      // Add welcome message with clear prompt - formatted like voice interface
-      this.addMessage(
-        `
-        <div class="welcome-message">
-          <div class="welcome-title">Aura, your website concierge</div>
-          <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
-          <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
-        </div>
-      `,
-        "ai",
-        false,
-        true
-      );
-    }
-
-    // Show initial suggestions if available and if we haven't chatted before
-    if (
-      this.websiteData &&
-      this.websiteData.website &&
-      this.websiteData.website.popUpQuestions
-    ) {
-      // Check if we already have messages (don't show suggestions if we do)
-      if (this.messages && this.messages.length > 0) {
-        // Hide suggestions in both DOM contexts
-        if (this.shadowRoot) {
-          const suggestions = this.shadowRoot.getElementById(
-            "initial-suggestions"
-          );
+      // Show initial suggestions if available and if we should show welcome content
+      if (
+        this.websiteData &&
+        this.websiteData.website &&
+        this.websiteData.website.popUpQuestions
+      ) {
+        // Check if we should show suggestions (same condition as welcome message)
+        if (!shouldShowWelcome) {
+          // Hide suggestions in both DOM contexts
+          if (this.shadowRoot) {
+            const suggestions = this.shadowRoot.getElementById(
+              "initial-suggestions"
+            );
+            if (suggestions) {
+              suggestions.style.display = "none";
+            }
+          }
+          const suggestions = document.getElementById("initial-suggestions");
           if (suggestions) {
             suggestions.style.display = "none";
           }
-        }
-        const suggestions = document.getElementById("initial-suggestions");
-        if (suggestions) {
-          suggestions.style.display = "none";
+        } else {
+          // Show and update suggestions
+          if (this.shadowRoot) {
+            const suggestions = this.shadowRoot.getElementById(
+              "initial-suggestions"
+            );
+            if (suggestions) {
+              suggestions.style.display = "block";
+              suggestions.style.opacity = "1";
+            }
+          }
+          // Update with the latest popup questions
+          this.updatePopupQuestions();
         }
       } else {
-        // Show and update suggestions
-        if (this.shadowRoot) {
-          const suggestions = this.shadowRoot.getElementById(
-            "initial-suggestions"
-          );
-          if (suggestions) {
-            suggestions.style.display = "block";
-            suggestions.style.opacity = "1";
-          }
-        }
-        // Update with the latest popup questions
-        this.updatePopupQuestions();
+        this.fetchWebsiteData(this.accessKey);
       }
-    } else {
-      this.fetchWebsiteData(this.accessKey);
     }
   },
 
@@ -1344,7 +1469,49 @@ const VoiceroText = {
 
   // Clear chat history
   clearChatHistory: function () {
-    // Clear localStorage message history
+    console.log("Clearing chat history");
+
+    // Call the session/clear API endpoint
+    if (window.VoiceroCore && window.VoiceroCore.sessionId) {
+      const proxyUrl = "/wp-json/voicero/v1/session_clear";
+
+      fetch(proxyUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: window.VoiceroCore.sessionId,
+        }),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Session clear failed: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          console.log("Chat history cleared on server:", data);
+
+          // Update the session and thread in VoiceroCore
+          if (data.session) {
+            if (window.VoiceroCore) {
+              window.VoiceroCore.session = data.session;
+
+              // Set the new thread (should be the first one in the array)
+              if (data.session.threads && data.session.threads.length > 0) {
+                window.VoiceroCore.thread = data.session.threads[0];
+                window.VoiceroCore.currentThreadId =
+                  data.session.threads[0].threadId;
+              }
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Error clearing chat history:", error);
+        });
+    }
 
     // Also update the UI if the chat is currently open
     const messagesContainer = this.shadowRoot
@@ -1371,8 +1538,23 @@ const VoiceroText = {
         initialSuggestions.style.padding = "";
         initialSuggestions.style.overflow = "visible";
       }
+
+      // Add welcome message again
+      this.addMessage(
+        `
+        <div class="welcome-message">
+          <div class="welcome-title">Aura, your website concierge</div>
+          <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
+          <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+        </div>
+        `,
+        "ai",
+        false,
+        true
+      );
     }
 
+    // Reset messages array
     this.messages = [];
   },
 
@@ -1525,6 +1707,16 @@ const VoiceroText = {
   sendMessageToAPI: function (text) {
     // Set loading state
     this.isWaitingForResponse = true;
+
+    // Update window state to indicate we've shown welcome message
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log(
+        "Voicero Text: Updating textWelcome to false after sending message"
+      );
+      window.VoiceroCore.updateWindowState({
+        textWelcome: false, // Once a message is sent, don't show welcome again
+      });
+    }
 
     // Apply rainbow animation to send button while waiting for response
     if (this.shadowRoot) {
@@ -1722,6 +1914,22 @@ const VoiceroText = {
   closeTextChat: function () {
     console.log("Closing text chat interface");
 
+    // Update window state first (set text closed, core open)
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log("Voicero Text: Updating window state to closed");
+      window.VoiceroCore.updateWindowState({
+        textOpen: false,
+        textOpenWindowUp: false,
+        coreOpen: true,
+        voiceOpen: false,
+        voiceOpenWindowUp: false,
+      });
+    } else {
+      console.warn(
+        "Voicero Text: VoiceroCore not available for window state update"
+      );
+    }
+
     // Hide the shadow host (which contains the chat interface)
     const shadowHost = document.getElementById("voicero-text-chat-container");
     if (shadowHost) {
@@ -1740,6 +1948,24 @@ const VoiceroText = {
   // Minimize the chat interface
   minimizeChat: function () {
     console.log("Minimizing text chat interface");
+
+    // Update window state first (text open but window minimized)
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log(
+        "Voicero Text: Updating window state to minimized (textOpenWindowUp=false)"
+      );
+      window.VoiceroCore.updateWindowState({
+        textOpen: true,
+        textOpenWindowUp: false, // Set to false when minimized
+        coreOpen: false,
+        voiceOpen: false,
+        voiceOpenWindowUp: false,
+      });
+    } else {
+      console.warn(
+        "Voicero Text: VoiceroCore not available for window state update"
+      );
+    }
 
     // Get the necessary elements from shadow root
     const shadowRoot = document.getElementById(
@@ -1818,6 +2044,24 @@ const VoiceroText = {
   maximizeChat: function () {
     console.log("Maximizing text chat interface");
 
+    // Update window state first (text open with window up)
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log(
+        "Voicero Text: Updating window state to maximized (textOpenWindowUp=true)"
+      );
+      window.VoiceroCore.updateWindowState({
+        textOpen: true,
+        textOpenWindowUp: true, // Set to true when maximized
+        coreOpen: false,
+        voiceOpen: false,
+        voiceOpenWindowUp: false,
+      });
+    } else {
+      console.warn(
+        "Voicero Text: VoiceroCore not available for window state update"
+      );
+    }
+
     // Get the necessary elements from shadow root
     const shadowRoot = document.getElementById(
       "voicero-text-chat-container"
@@ -1828,6 +2072,40 @@ const VoiceroText = {
     const headerContainer = shadowRoot.getElementById("chat-controls-header");
     const inputWrapper = shadowRoot.getElementById("chat-input-wrapper");
     const maximizeBtn = shadowRoot.getElementById("maximize-chat");
+
+    // Check if we need to add welcome message based on session state
+    let shouldShowWelcome = false;
+    if (this.session && typeof this.session.textWelcome !== "undefined") {
+      shouldShowWelcome = this.session.textWelcome;
+      console.log(
+        "Voicero Text: Checking welcome state during maximize:",
+        shouldShowWelcome
+      );
+    }
+
+    // Check if we have any messages already visible in the container
+    const existingMessages = messagesContainer.querySelectorAll(
+      ".ai-message:not(.typing-wrapper), .user-message"
+    );
+    const hasVisibleMessages = existingMessages.length > 0;
+    console.log("Voicero Text: Has visible messages:", hasVisibleMessages);
+
+    // If welcome should be shown and no messages are visible, add it
+    if (shouldShowWelcome && !hasVisibleMessages) {
+      console.log("Voicero Text: Adding welcome message during maximize");
+      this.addMessage(
+        `
+        <div class="welcome-message">
+          <div class="welcome-title">Aura, your website concierge</div>
+          <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
+          <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+        </div>
+      `,
+        "ai",
+        false,
+        true
+      );
+    }
 
     // Hide maximize button first
     if (maximizeBtn) {
@@ -1861,12 +2139,15 @@ const VoiceroText = {
       });
 
       // Check if initial suggestions should be shown
-      if (this.messages && this.messages.length === 0) {
+      if (shouldShowWelcome) {
         const suggestions = messagesContainer.querySelector(
           "#initial-suggestions"
         );
         if (suggestions) {
           suggestions.style.display = "block";
+          suggestions.style.opacity = "1";
+          // Update suggestions
+          this.updatePopupQuestions();
         }
       }
 

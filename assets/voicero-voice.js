@@ -698,6 +698,58 @@ const VoiceroVoice = {
 
   // Open voice chat interface
   openVoiceChat: function () {
+    // Check if we have existing messages
+    const hasMessages =
+      VoiceroCore &&
+      VoiceroCore.appState &&
+      VoiceroCore.appState.voiceMessages &&
+      (VoiceroCore.appState.voiceMessages.user ||
+        VoiceroCore.appState.voiceMessages.ai);
+
+    // Check if welcome message should be shown based on session data
+    let shouldShowWelcome = !hasMessages;
+
+    // If we have a session with voiceWelcome defined, use that value instead
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      typeof window.VoiceroCore.session.voiceWelcome !== "undefined"
+    ) {
+      shouldShowWelcome = window.VoiceroCore.session.voiceWelcome;
+      console.log(
+        "Voicero Voice: Using welcome message state from session:",
+        shouldShowWelcome ? "show welcome" : "hide welcome"
+      );
+    }
+
+    // Get current state of voiceOpenWindowUp if available
+    let shouldBeMaximized = true;
+
+    // Check if there's already a session with voiceOpenWindowUp defined
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      typeof window.VoiceroCore.session.voiceOpenWindowUp !== "undefined"
+    ) {
+      shouldBeMaximized = window.VoiceroCore.session.voiceOpenWindowUp;
+      console.log(
+        "Voicero Voice: Using existing window state from session:",
+        shouldBeMaximized ? "maximized" : "minimized"
+      );
+    }
+
+    // Update window state
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      window.VoiceroCore.updateWindowState({
+        voiceOpen: true,
+        voiceOpenWindowUp: shouldBeMaximized, // Respect existing state
+        voiceWelcome: shouldShowWelcome, // Respect existing welcome state
+        coreOpen: false,
+        textOpen: false,
+        textOpenWindowUp: false,
+      });
+    }
+
     // Close text interface if it's open
     const textInterface = document.getElementById(
       "voicero-text-chat-container"
@@ -749,14 +801,26 @@ const VoiceroVoice = {
       voiceInterface.style.borderRadius = "12px 12px 0 0";
     }
 
-    // Add a welcome message if interface is empty
+    // If window should be minimized, apply minimized state immediately
+    if (!shouldBeMaximized) {
+      console.log("Voicero Voice: Immediately applying minimized state");
+      this.minimizeVoiceChat();
+      return;
+    }
+
+    // Add a welcome message if needed based on the shouldShowWelcome flag
     const messagesContainer = document.getElementById("voice-messages");
     if (messagesContainer) {
       // Check for existing message elements rather than just child count
       const existingMessages = messagesContainer.querySelectorAll(
         ".user-message .message-content, .ai-message .message-content"
       );
-      if (existingMessages.length === 0) {
+
+      // Show welcome message if needed
+      if (shouldShowWelcome && existingMessages.length === 0) {
+        console.log(
+          "Voicero Voice: Adding welcome message (voiceWelcome is true)"
+        );
         // Add welcome message with clear prompt
         this.addSystemMessage(`
           <div class="welcome-message">
@@ -765,6 +829,10 @@ const VoiceroVoice = {
             <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
           </div>
         `);
+      } else {
+        console.log(
+          "Voicero Voice: Skipping welcome message (voiceWelcome is false)"
+        );
       }
     }
   },
@@ -772,6 +840,17 @@ const VoiceroVoice = {
   // Minimize voice chat interface
   minimizeVoiceChat: function () {
     console.log("Minimizing voice chat interface");
+
+    // Update window state
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      window.VoiceroCore.updateWindowState({
+        voiceOpen: true,
+        voiceOpenWindowUp: false,
+        coreOpen: false,
+        textOpen: false,
+        textOpenWindowUp: false,
+      });
+    }
 
     // Get the messages container
     const messagesContainer = document.getElementById("voice-messages");
@@ -841,11 +920,33 @@ const VoiceroVoice = {
 
   // Maximize voice chat interface
   maximizeVoiceChat: function () {
+    // Update window state
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      window.VoiceroCore.updateWindowState({
+        voiceOpen: true,
+        voiceOpenWindowUp: true,
+        coreOpen: false,
+        textOpen: false,
+        textOpenWindowUp: false,
+      });
+    }
+
     this.reopenVoiceChat();
   },
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    // Update window state
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      window.VoiceroCore.updateWindowState({
+        voiceOpen: false,
+        voiceOpenWindowUp: false,
+        coreOpen: true,
+        textOpen: false,
+        textOpenWindowUp: false,
+      });
+    }
+
     const voiceInterface = document.getElementById("voice-chat-interface");
     if (voiceInterface) {
       voiceInterface.style.display = "none";
@@ -922,6 +1023,14 @@ const VoiceroVoice = {
       // Start listening
       this.isRecording = true;
       this.manuallyStoppedRecording = false;
+
+      // Update window state to indicate welcome has been shown
+      if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+        window.VoiceroCore.updateWindowState({
+          voiceWelcome: false, // Once user starts recording, don't show welcome again
+          autoMic: true, // Set autoMic to true to remember user's preference
+        });
+      }
 
       // Update UI - add siri-like animation
       micButton.classList.add("siri-active");
@@ -1702,11 +1811,29 @@ const VoiceroVoice = {
         messagesContainer.style.display = "block";
         messagesContainer.style.visibility = "visible";
 
-        // Make sure there's a welcome message if no other messages exist
+        // Check if we should show a welcome message
         const existingMessages = messagesContainer.querySelectorAll(
           ".user-message .message-content, .ai-message .message-content"
         );
-        if (existingMessages.length === 0) {
+
+        // Check if welcome message should be shown based on session data
+        let shouldShowWelcome = existingMessages.length === 0;
+
+        // If we have a session with voiceWelcome defined, use that value instead
+        if (
+          window.VoiceroCore &&
+          window.VoiceroCore.session &&
+          typeof window.VoiceroCore.session.voiceWelcome !== "undefined"
+        ) {
+          shouldShowWelcome = window.VoiceroCore.session.voiceWelcome;
+          console.log(
+            "Voicero Voice: Using welcome state during maximize:",
+            shouldShowWelcome ? "show welcome" : "hide welcome"
+          );
+        }
+
+        if (shouldShowWelcome && existingMessages.length === 0) {
+          console.log("Voicero Voice: Adding welcome message during maximize");
           // Add welcome message
           this.addSystemMessage(`
             <div class="welcome-message">
@@ -1781,8 +1908,7 @@ const VoiceroVoice = {
     const contentDiv = document.createElement("div");
     contentDiv.className = "message-content";
     contentDiv.innerHTML = text;
-    contentDiv.style.cssText = `
-      background: #e5e5ea;
+    contentDiv.style.cssText = `      background: #e5e5ea;
       color: #333;
       border-radius: 18px;
       padding: 12px 16px;
@@ -1805,6 +1931,50 @@ const VoiceroVoice = {
 
   // Clear chat history from the voice interface
   clearChatHistory: function () {
+    console.log("Clearing voice chat history");
+
+    // Call the session/clear API endpoint
+    if (window.VoiceroCore && window.VoiceroCore.sessionId) {
+      const proxyUrl = "/wp-json/voicero/v1/session_clear";
+
+      fetch(proxyUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: window.VoiceroCore.sessionId,
+        }),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Session clear failed: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          console.log("Voice chat history cleared on server:", data);
+
+          // Update the session and thread in VoiceroCore
+          if (data.session) {
+            if (window.VoiceroCore) {
+              window.VoiceroCore.session = data.session;
+
+              // Set the new thread (should be the first one in the array)
+              if (data.session.threads && data.session.threads.length > 0) {
+                window.VoiceroCore.thread = data.session.threads[0];
+                window.VoiceroCore.currentThreadId =
+                  data.session.threads[0].threadId;
+              }
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Error clearing voice chat history:", error);
+        });
+    }
+
     const messagesContainer = document.getElementById("voice-messages");
     if (!messagesContainer) return;
 
