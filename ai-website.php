@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define the API base URL
-define('AI_WEBSITE_API_URL', 'http://localhost:3000');
+define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
 
 // Define a debug function to log messages to the error log
 function voicero_debug_log($message, $data = null) {
@@ -1791,99 +1791,8 @@ function my_first_plugin_add_toggle_button() {
     }
 
     ?>
-    <script>
-    function updateNavbarPositioning() {
-        // Find the navigation element - checking common WordPress nav classes/IDs
-        const nav = document.querySelector(
-            'header, ' + // Try header first
-            '#masthead, ' + // Common WordPress header ID
-            '.site-header, ' + // Common header class
-            'nav.navbar, ' + // Bootstrap navbar
-            'nav.main-navigation, ' + // Common nav classes
-            '.nav-primary, ' +
-            '#site-navigation, ' +
-            '.site-navigation'
-        );
-        
-        if (nav) {
-            const navRect = nav.getBoundingClientRect();
-            const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
-            
-            // Set the custom property for positioning
-            document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
-        }
-    }
 
-    // Run on load
-    document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
-    
-    // Run on resize
-    window.addEventListener('resize', updateNavbarPositioning);
-    
-    // Run after a short delay to catch any dynamic header changes
-    setTimeout(updateNavbarPositioning, 500);
-    </script>
-
-    <!-- Container will be hidden by default via CSS, JS will show it if active/synced -->
-    <div id="voice-toggle-container" style="display: none;"> 
-        <button id="chat-website-button">
-            <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-            </svg>
-        </button>
-    </div>
-
-    <div id="interaction-chooser" style="display: none;">
-        <div class="interaction-option voice">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.svg" alt="Voice">
-            <span>Talk to Website</span>
-        </div>
-        <div class="interaction-option text">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.svg" alt="Text">
-            <span>Type to Website</span>
-        </div>
-    </div>
-
-    <!-- Voice Interface -->
-    <div id="voice-interface" class="interface-panel" style="display: none;">
-        <div class="voice-header">
-            <div class="header-content">
-                <button class="mic-button-header">
-                    <svg class="mic-icon" viewBox="0 0 24 24" width="24" height="24">
-                        <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-                    </svg>
-                </button>
-                <span class="title">AI Assistant</span>
-                <button id="close-voice">×</button>
-            </div>
-        </div>
-        <div class="voice-content">
-            <div class="conversation-container">
-                <div class="message-line">
-                    <span class="label">User:</span>
-                    <span class="content"></span>
-                </div>
-                <div class="message-line">
-                    <span class="label">AI:</span>
-                    <span class="content"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Text Interface -->
-    <div id="text-interface" class="interface-panel" style="display: none;">
-        <div class="interface-content">
-            <button id="close-text">×</button>
-            <div class="chat-container">
-                <div id="chat-messages"></div>
-                <div class="chat-input-container">
-                    <input type="text" id="chat-input" placeholder="Type your message...">
-                    <button id="send-message">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
+   
 
     <!-- Main container for Voicero app -->
     <div id="voicero-app-container" data-hook="<?php echo esc_attr($hook); ?>"></div>
