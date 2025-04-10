@@ -2285,6 +2285,68 @@ function voicero_session_clear_proxy($request) {
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
 
+/**
+ * Proxy for the /chat endpoint
+ * Handles text chat messages between client and AI
+ */
+function voicero_chat_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Get the request body
+    $body = $request->get_body();
+    error_log('Chat request body: ' . $body);
+    
+    // Decode the body to validate it has the required fields
+    $decoded_body = json_decode($body, true);
+    if (!isset($decoded_body['message'])) {
+        error_log('Invalid chat request: Missing message');
+        return new WP_REST_Response(['error' => 'Message is required'], 400);
+    }
+    
+    // Make sure type is set to "text"
+    $decoded_body['type'] = 'text';
+    
+    // Re-encode the body with any modifications
+    $body = json_encode($decoded_body);
+    
+    // Construct the API endpoint - Updated to use /wordpress/chat instead of /chat
+    $endpoint = AI_WEBSITE_API_URL . '/wordpress/chat';
+    error_log('Making chat request to: ' . $endpoint);
+    
+    // Make the POST request with the key (server-side)
+    $response = wp_remote_post($endpoint, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => $body,
+        'timeout' => 60, // Longer timeout for chat responses
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero chat proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Debug response
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . $response_body);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
 // Register REST API endpoints
 add_action('rest_api_init', function() {
     if (!function_exists('register_rest_route')) {
@@ -2319,6 +2381,13 @@ add_action('rest_api_init', function() {
     register_rest_route('voicero/v1', '/session_clear', [
         'methods'  => ['POST'],
         'callback' => 'voicero_session_clear_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the chat endpoint
+    register_rest_route('voicero/v1', '/chat', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_chat_proxy',
         'permission_callback' => '__return_true'
     ]);
     

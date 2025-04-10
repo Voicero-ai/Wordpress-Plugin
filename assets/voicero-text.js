@@ -16,6 +16,7 @@ const VoiceroText = {
   messages: [], // Initialize messages array
   initialized: false, // Initialize initialized flag
   lastProductUrl: null, // Store the last product URL for redirect
+  isInterfaceBuilt: false, // Flag to check if interface is already built
 
   // Initialize the text module
   init: function () {
@@ -55,7 +56,7 @@ const VoiceroText = {
 
   // Open text chat interface
   openTextChat: function () {
-    console.log("Opening text chat interface");
+    console.log("Voicero Text Script: Opening text chat interface");
 
     // Check if thread has messages
     const hasMessages = this.messages && this.messages.length > 0;
@@ -153,10 +154,20 @@ const VoiceroText = {
       shadowHost.style.left = "50%";
       shadowHost.style.bottom = "20px";
       shadowHost.style.transform = "translateX(-50%)";
-      shadowHost.style.zIndex = "999999";
+      shadowHost.style.zIndex = "9999999";
       shadowHost.style.width = "85%";
       shadowHost.style.maxWidth = "480px";
       shadowHost.style.minWidth = "280px";
+    }
+
+    // Make sure the header has high z-index
+    if (this.shadowRoot) {
+      const headerContainer = this.shadowRoot.getElementById(
+        "chat-controls-header"
+      );
+      if (headerContainer) {
+        headerContainer.style.zIndex = "9999999";
+      }
     }
 
     // Important: If shouldBeMaximized is false, immediately apply minimized state
@@ -236,71 +247,197 @@ const VoiceroText = {
     // Set up button event handlers (ensure minimize/maximize work)
     this.setupButtonHandlers();
 
-    // Only add welcome message and show suggestions if we're maximized
-    if (shouldBeMaximized) {
-      // Check if we should show welcome message based on session data
-      if (shouldShowWelcome) {
-        console.log(
-          "Voicero Text: Adding welcome message (textWelcome is true)"
-        );
-        // Add welcome message with clear prompt - formatted like voice interface
-        this.addMessage(
-          `
-          <div class="welcome-message">
-            <div class="welcome-title">Aura, your website concierge</div>
-            <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
-            <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
-          </div>
-        `,
-          "ai",
-          false,
-          true
-        );
-      } else {
-        console.log(
-          "Voicero Text: Skipping welcome message (textWelcome is false)"
-        );
-      }
+    // Load existing messages from session
+    this.loadMessagesFromSession();
+  },
 
-      // Show initial suggestions if available and if we should show welcome content
+  // Load existing messages from session and display them
+  loadMessagesFromSession: function () {
+    console.log("Voicero Text: Loading messages from session");
+
+    // Check if we have a session with threads
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.threads &&
+      window.VoiceroCore.session.threads.length > 0
+    ) {
+      // Find the most recent thread by sorting the threads by lastMessageAt or createdAt
+      const threads = [...window.VoiceroCore.session.threads];
+      const sortedThreads = threads.sort((a, b) => {
+        // First try to sort by lastMessageAt if available
+        if (a.lastMessageAt && b.lastMessageAt) {
+          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        }
+        // Fall back to createdAt if lastMessageAt is not available
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      // Use the most recent thread (first after sorting)
+      const currentThread = sortedThreads[0];
+
+      console.log("Voicero Text: Selected thread ID:", currentThread.threadId);
+
       if (
-        this.websiteData &&
-        this.websiteData.website &&
-        this.websiteData.website.popUpQuestions
+        currentThread &&
+        currentThread.messages &&
+        currentThread.messages.length > 0
       ) {
-        // Check if we should show suggestions (same condition as welcome message)
-        if (!shouldShowWelcome) {
-          // Hide suggestions in both DOM contexts
-          if (this.shadowRoot) {
-            const suggestions = this.shadowRoot.getElementById(
-              "initial-suggestions"
-            );
-            if (suggestions) {
-              suggestions.style.display = "none";
+        console.log(
+          `Voicero Text: Found ${currentThread.messages.length} messages in thread`
+        );
+
+        // Sort messages by createdAt (oldest first)
+        const sortedMessages = [...currentThread.messages].sort((a, b) => {
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+
+        // Clear existing messages if any
+        const messagesContainer = this.shadowRoot
+          ? this.shadowRoot.getElementById("chat-messages")
+          : document.getElementById("chat-messages");
+
+        if (messagesContainer) {
+          // Keep the container but remove children (except initial suggestions)
+          const children = Array.from(messagesContainer.children);
+          for (const child of children) {
+            if (child.id !== "initial-suggestions") {
+              messagesContainer.removeChild(child);
             }
           }
-          const suggestions = document.getElementById("initial-suggestions");
-          if (suggestions) {
-            suggestions.style.display = "none";
-          }
-        } else {
-          // Show and update suggestions
-          if (this.shadowRoot) {
-            const suggestions = this.shadowRoot.getElementById(
-              "initial-suggestions"
-            );
-            if (suggestions) {
-              suggestions.style.display = "block";
-              suggestions.style.opacity = "1";
+        }
+
+        // Add each message to the UI
+        sortedMessages.forEach((msg) => {
+          if (msg.role === "user") {
+            // Add user message
+            this.addMessage(msg.content, "user", true); // true = skip adding to messages array
+          } else if (msg.role === "assistant") {
+            try {
+              // Parse the content which is a JSON string
+              let content = msg.content;
+              let aiMessage = "";
+
+              try {
+                // Try to parse as JSON
+                const parsedContent = JSON.parse(content);
+                if (parsedContent.answer) {
+                  aiMessage = parsedContent.answer;
+                }
+              } catch (e) {
+                // If parsing fails, use the raw content
+                console.warn("Failed to parse assistant message as JSON", e);
+                aiMessage = content;
+              }
+
+              // Add AI message
+              this.addMessage(aiMessage, "ai", true); // true = skip adding to messages array
+            } catch (e) {
+              console.error("Error displaying assistant message:", e);
             }
           }
-          // Update with the latest popup questions
-          this.updatePopupQuestions();
+        });
+
+        // Store the complete message objects with metadata in the local array
+        this.messages = sortedMessages.map((msg) => ({
+          ...msg, // Keep all original properties (id, createdAt, threadId, etc.)
+          // Ensure 'content' is properly formatted for assistant messages
+          content:
+            msg.role === "assistant"
+              ? this.extractAnswerFromJson(msg.content)
+              : msg.content,
+        }));
+
+        // Store the thread ID
+        this.currentThreadId = currentThread.threadId;
+
+        // Scroll to bottom
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
       } else {
-        this.fetchWebsiteData(this.accessKey);
+        console.log("Voicero Text: Selected thread has no messages");
+        // Still store the thread ID even if no messages
+        this.currentThreadId = currentThread.threadId;
       }
     }
+  },
+
+  // Helper to extract answer from JSON string
+  extractAnswerFromJson: function (jsonString) {
+    try {
+      const parsed = JSON.parse(jsonString);
+      return parsed.answer || jsonString;
+    } catch (e) {
+      return jsonString;
+    }
+  },
+
+  // Add a message to the chat
+  addMessage: function (text, role, skipAddToMessages = false) {
+    // Create message element
+    const message = document.createElement("div");
+    message.className = role === "user" ? "user-message" : "ai-message";
+
+    // Create message content
+    const messageContent = document.createElement("div");
+    messageContent.className = "message-content";
+
+    // Set the content (handle HTML if needed)
+    if (role === "ai") {
+      messageContent.innerHTML = this.formatContent(text);
+    } else {
+      messageContent.textContent = text;
+    }
+
+    // Append content to message
+    message.appendChild(messageContent);
+
+    // Find messages container
+    const messagesContainer = this.shadowRoot
+      ? this.shadowRoot.getElementById("chat-messages")
+      : document.getElementById("chat-messages");
+
+    if (messagesContainer) {
+      // Append message to container
+      messagesContainer.appendChild(message);
+      // Scroll to bottom
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Store message locally for context (unless skipAddToMessages is true)
+    if (!skipAddToMessages) {
+      // Add with metadata similar to what comes from the server
+      const messageObj = {
+        role: role,
+        content: text,
+        createdAt: new Date().toISOString(), // Add timestamp
+        id: this.generateId(), // Generate a temporary ID
+        type: "text",
+      };
+
+      // Add threadId if available
+      if (this.currentThreadId) {
+        messageObj.threadId = this.currentThreadId;
+      } else if (
+        window.VoiceroCore &&
+        window.VoiceroCore.thread &&
+        window.VoiceroCore.thread.threadId
+      ) {
+        messageObj.threadId = window.VoiceroCore.thread.threadId;
+      }
+
+      this.messages.push(messageObj);
+    }
+  },
+
+  // Generate a temporary ID for messages
+  generateId: function () {
+    return (
+      "temp-" +
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   },
 
   // Fetch website data from /api/connect endpoint
@@ -644,6 +781,7 @@ const VoiceroText = {
           width: 100% !important;
           left: 0 !important;
           right: 0 !important;
+          z-index: 9999999 !important; /* Very high z-index to ensure it stays on top */
         }
 
         .typing-indicator {
@@ -993,6 +1131,7 @@ const VoiceroText = {
             width: 100% !important;
             left: 0 !important;
             right: 0 !important;
+            z-index: 9999999 !important; /* Very high z-index to ensure it stays on top */
           }
 
           .typing-indicator {
@@ -1211,7 +1350,7 @@ const VoiceroText = {
             right: 0 !important;
             height: 40px !important;
             background: #f2f2f7 !important;
-            z-index: 20 !important;
+            z-index: 9999999 !important;
             display: flex !important;
             justify-content: space-between !important;
             align-items: center !important;
@@ -1301,29 +1440,8 @@ const VoiceroText = {
               opacity: 1;
               transition: all 0.3s ease;
             ">
-              <div style="
-                color: #666;
-                font-size: 13px;
-                margin-bottom: 10px;
-                text-align: center;
-              ">
-                Try asking one of these questions:
-              </div>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <!-- Suggestions will be populated from API -->
-                <div class="suggestion" style="
-                  background: #882be6;
-                  padding: 10px 15px;
-                  border-radius: 17px;
-                  cursor: pointer;
-                  transition: all 0.2s ease;
-                  color: white;
-                  font-weight: 400;
-                  text-align: left;
-                  font-size: 14px;
-                  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
-                ">Loading suggestions...</div>
-              </div>
+              
+              
             </div>
           </div>
         </div>
@@ -1567,46 +1685,159 @@ const VoiceroText = {
     // Show loading indicator
     this.setLoadingIndicator(true);
 
-    // Get current URL to send as context
-    const currentUrl = window.location.href;
-
-    // Format the request body according to the API's expected structure
+    // Format the request body according to the NextJS API's expected structure
     const requestBody = {
       message: messageText,
-      url: currentUrl,
       type: "text",
-      source: "chat",
-      context: {
-        currentUrl: currentUrl,
-        currentContent: document.body.innerText.substring(0, 1000), // snippet of page content
-      },
     };
 
-    // Add thread ID if available
+    // Add thread ID if available (priority order: passed in > current instance > most recent from session)
     if (threadId) {
       requestBody.threadId = threadId;
     } else if (this.currentThreadId) {
       requestBody.threadId = this.currentThreadId;
+    } else if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.threads &&
+      window.VoiceroCore.session.threads.length > 0
+    ) {
+      // Find the most recent thread by sorting the threads
+      const threads = [...window.VoiceroCore.session.threads];
+      const sortedThreads = threads.sort((a, b) => {
+        // First try to sort by lastMessageAt if available
+        if (a.lastMessageAt && b.lastMessageAt) {
+          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        }
+        // Fall back to createdAt if lastMessageAt is not available
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      // Use the most recent thread ID
+      requestBody.threadId = sortedThreads[0].threadId;
+      console.log(
+        "Voicero Text: Using most recent thread ID from session:",
+        requestBody.threadId
+      );
+    } else if (
+      window.VoiceroCore &&
+      window.VoiceroCore.thread &&
+      window.VoiceroCore.thread.threadId
+    ) {
+      requestBody.threadId = window.VoiceroCore.thread.threadId;
     }
 
-    // Add chat history if available
-    if (this.messages && this.messages.length > 0) {
-      requestBody.chatHistory = this.messages.map((msg) => ({
-        role: msg.role,
-        message: msg.content,
-      }));
+    // Add website ID if available
+    if (window.VoiceroCore && window.VoiceroCore.websiteId) {
+      requestBody.websiteId = window.VoiceroCore.websiteId;
     }
 
-    // Add custom instructions if available
-    if (this.customInstructions) {
-      requestBody.customInstructions = this.customInstructions;
+    // Initialize pastContext array
+    requestBody.pastContext = [];
+
+    // Check if we have session thread messages available
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.threads &&
+      window.VoiceroCore.session.threads.length > 0
+    ) {
+      // Find the most recent thread with the same approach
+      const threads = [...window.VoiceroCore.session.threads];
+      const sortedThreads = threads.sort((a, b) => {
+        if (a.lastMessageAt && b.lastMessageAt) {
+          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        }
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      const recentThread = sortedThreads[0];
+
+      // Check if this thread has messages
+      if (recentThread.messages && recentThread.messages.length >= 2) {
+        const threadMessages = recentThread.messages;
+
+        // Sort messages by creation time to ensure proper order
+        const sortedMessages = [...threadMessages].sort((a, b) => {
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+
+        // Find the latest user message and AI response pair
+        let latestUserMsgIndex = -1;
+
+        // Skip the current message by starting from length-2
+        for (let i = sortedMessages.length - 2; i >= 0; i--) {
+          if (sortedMessages[i].role === "user") {
+            latestUserMsgIndex = i;
+            break;
+          }
+        }
+
+        // If we found a user message and there's an AI response after it
+        if (
+          latestUserMsgIndex >= 0 &&
+          latestUserMsgIndex + 1 < sortedMessages.length &&
+          sortedMessages[latestUserMsgIndex + 1].role === "assistant"
+        ) {
+          // Add the latest exchange with all metadata
+          const userMsg = sortedMessages[latestUserMsgIndex];
+          const aiMsg = sortedMessages[latestUserMsgIndex + 1];
+
+          // Add with complete metadata
+          requestBody.pastContext.push({
+            question: userMsg.content,
+            answer: aiMsg.content,
+            createdAt: userMsg.createdAt,
+            pageUrl: userMsg.pageUrl,
+            id: userMsg.id,
+            threadId: userMsg.threadId,
+          });
+
+          console.log("Adding session thread message to context with metadata");
+        }
+      } else {
+        console.log(
+          "Voicero Text: Most recent thread has fewer than 2 messages, no context to add"
+        );
+      }
+    }
+    // Fallback to local messages array if session data isn't available
+    else if (this.messages && this.messages.length >= 2) {
+      // Get the last user message (excluding the current message being sent)
+      let lastUserIndex = -1;
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        if (this.messages[i].role === "user") {
+          lastUserIndex = i;
+          break;
+        }
+      }
+
+      // If we found a user message and there's an AI response after it
+      if (
+        lastUserIndex >= 0 &&
+        lastUserIndex + 1 < this.messages.length &&
+        this.messages[lastUserIndex + 1].role === "assistant"
+      ) {
+        // Add only the most recent pair
+        requestBody.pastContext.push({
+          question: this.messages[lastUserIndex].content,
+          answer: this.messages[lastUserIndex + 1].content,
+        });
+
+        console.log(
+          "Adding only the most recent Q&A pair from local messages to context"
+        );
+      }
     }
 
-    return fetch(`${this.apiBaseUrl}/api/shopify/chat`, {
+    console.log("Sending chat message to WordPress proxy:", requestBody);
+
+    // Use WordPress proxy endpoint instead of direct API call
+    return fetch("/wp-json/voicero/v1/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${window.voiceroConfig.accessKey}`,
+        Accept: "application/json",
       },
       body: JSON.stringify(requestBody),
     });
@@ -1708,16 +1939,6 @@ const VoiceroText = {
     // Set loading state
     this.isWaitingForResponse = true;
 
-    // Update window state to indicate we've shown welcome message
-    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      console.log(
-        "Voicero Text: Updating textWelcome to false after sending message"
-      );
-      window.VoiceroCore.updateWindowState({
-        textWelcome: false, // Once a message is sent, don't show welcome again
-      });
-    }
-
     // Apply rainbow animation to send button while waiting for response
     if (this.shadowRoot) {
       const sendButton = this.shadowRoot.getElementById("send-message-btn");
@@ -1769,59 +1990,122 @@ const VoiceroText = {
         .then((data) => {
           // Turn off loading indicator
           this.setLoadingIndicator(false);
+
           // Remove typing indicator before showing response
           removeTypingIndicator();
 
-          // Extract message
-          let message =
-            typeof data.response === "string"
-              ? data.response
-              : data.response || "I'm sorry, I couldn't process that request.";
+          // Log the complete response data
+          console.log("Received chat response:", data);
 
-          // Extract URLs
-          const urlRegex =
-            /(https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi;
-          const urls = message.match(urlRegex) || [];
+          // Extract message from new response format
+          let message = "";
+          let action = null;
+          let url = null;
 
-          // If there's a product URL, do a redirect
-          const productUrl = urls.find((url) => url.includes("/products/"));
-          if (productUrl) {
-            this.lastProductUrl = productUrl;
-            // Redirect to the product page
-            window.location.href = productUrl;
+          // Check for the nested response object structure
+          if (data && data.response && data.response.answer) {
+            console.log("Using nested response.answer field");
+            message = data.response.answer;
+
+            // Get action and URL from the nested response
+            if (data.response.action) {
+              action = data.response.action;
+              console.log("Action from response:", action);
+            }
+            if (data.response.url) {
+              url = data.response.url;
+              console.log("URL from response:", url);
+            }
           }
+          // Fall back to previous format with direct 'answer' field
+          else if (data && data.answer) {
+            console.log("Using top-level answer field");
+            message = data.answer;
 
-          // Clean up URLs in the message
-          message = message.replace(
-            /check out (https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi,
-            "check it out"
-          );
-          message = message.replace(
-            /at (https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi,
-            "here"
-          );
-          message = message.replace(
-            /here: (https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi,
-            "here"
-          );
-          message = message.replace(
-            /at this link: (https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi,
-            "here"
-          );
-          message = message.replace(
-            /visit (https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.(com|org|net|io|co|shop|store|app)(\/?[^\s]*)?)/gi,
-            "visit this page"
-          );
-          message = message.replace(urlRegex, "this link");
-          message = message.replace(/\s\s+/g, " ").trim();
+            if (data.action) {
+              action = data.action;
+              console.log("Action from response:", action);
+            }
+            if (data.url) {
+              url = data.url;
+              console.log("URL from response:", url);
+            }
+          }
+          // Fall back to direct 'response' string
+          else if (data && data.response && typeof data.response === "string") {
+            console.log("Using response as direct string");
+            message = data.response;
+          }
+          // Default fallback
+          else {
+            console.warn("Response format not recognized");
+            message = "I'm sorry, I couldn't process that request.";
+          }
 
           // Add AI response to chat
           this.addMessage(message, "ai");
 
-          // Save the thread ID if provided
+          // Save the thread ID if provided - AFTER receiving response
           if (data.threadId) {
             this.currentThreadId = data.threadId;
+
+            // Update window state after receiving response
+            if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+              console.log("Updating session after chat completion");
+              window.VoiceroCore.updateWindowState({
+                textWelcome: false, // Don't show welcome again
+                threadId: data.threadId, // Update with the latest thread ID
+              });
+            }
+
+            // Ensure VoiceroCore.thread is updated with the new thread
+            if (
+              window.VoiceroCore &&
+              window.VoiceroCore.session &&
+              window.VoiceroCore.session.threads
+            ) {
+              // Find the matching thread in the threads array
+              const matchingThread = window.VoiceroCore.session.threads.find(
+                (thread) => thread.threadId === data.threadId
+              );
+
+              if (matchingThread) {
+                // Update VoiceroCore.thread reference
+                window.VoiceroCore.thread = matchingThread;
+                console.log(
+                  "Voicero Text: Updated core thread reference to:",
+                  data.threadId
+                );
+
+                // Update local messages array with the complete message objects
+                if (
+                  matchingThread.messages &&
+                  matchingThread.messages.length > 0
+                ) {
+                  console.log(
+                    `Voicero Text: Updating local messages array with ${matchingThread.messages.length} messages from thread`
+                  );
+
+                  this.messages = matchingThread.messages.map((msg) => ({
+                    ...msg,
+                    content:
+                      msg.role === "assistant"
+                        ? this.extractAnswerFromJson(msg.content)
+                        : msg.content,
+                  }));
+                }
+              }
+            }
           }
+
+          // Handle redirect if needed
+          if (action === "redirect" && url) {
+            console.log("Performing redirect to:", url);
+            setTimeout(() => {
+              window.location.href = url;
+            }, 1000); // Small delay to let the user see the message
+          }
+
           // Reset waiting state
           this.isWaitingForResponse = false;
         })
@@ -2010,7 +2294,7 @@ const VoiceroText = {
 
       // Also hide padding container inside
       const paddingContainer = messagesContainer.querySelector(
-        "div[style*='padding-top: 15px']"
+        "div[style*='padding-top']"
       );
       if (paddingContainer) {
         paddingContainer.style.display = "none";
@@ -2165,6 +2449,7 @@ const VoiceroText = {
     // Show the header
     if (headerContainer) {
       headerContainer.style.display = "flex";
+      headerContainer.style.zIndex = "9999999"; // Ensure high z-index when shown
     }
 
     // Restore input wrapper styling
