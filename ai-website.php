@@ -13,8 +13,21 @@ if (!defined('ABSPATH')) {
     exit; // Prevent direct access
 }
 
+// Register activation hook to flush rewrite rules
+register_activation_hook(__FILE__, 'voicero_activate_plugin');
+
+// Activation function to flush rewrite rules
+function voicero_activate_plugin() {
+    // Ensure the REST API is properly initialized
+    do_action('rest_api_init');
+    // Flush rewrite rules to ensure endpoints work
+    flush_rewrite_rules();
+    // Log activation
+    error_log('Voicero plugin activated - rewrite rules flushed');
+}
+
 // Define the API base URL
-define('AI_WEBSITE_API_URL', 'http://localhost:3000');
+define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
 
 // Define a debug function to log messages to the error log
 function voicero_debug_log($message, $data = null) {
@@ -30,6 +43,24 @@ function voicero_debug_log($message, $data = null) {
 // Add AJAX endpoint to get debug info for troubleshooting
 add_action('wp_ajax_voicero_debug_info', 'voicero_debug_info');
 add_action('wp_ajax_nopriv_voicero_debug_info', 'voicero_debug_info');
+
+// Add action to flush rewrite rules
+add_action('wp_ajax_voicero_flush_rules', 'voicero_flush_rules');
+function voicero_flush_rules() {
+    // Verify user has admin capabilities
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied']);
+        return;
+    }
+    
+    // Flush rewrite rules
+    flush_rewrite_rules();
+    
+    // Reinitialize REST API
+    do_action('rest_api_init');
+    
+    wp_send_json_success(['message' => 'Rewrite rules flushed successfully']);
+}
 
 function voicero_debug_info() {
     $response = array(
@@ -1441,6 +1472,200 @@ add_action('init', function() {
 });
 
 /**
+ * Add secure proxy endpoint for Voicero API
+ * This keeps the access key server-side only
+ */
+add_action('rest_api_init', function() {
+    register_rest_route('voicero/v1', '/connect', [
+        'methods'  => 'GET',
+        'callback' => 'voicero_connect_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+
+    // New session endpoint proxy that handles both GET and POST
+    register_rest_route('voicero/v1', '/session', [
+        'methods'  => ['GET', 'POST'],
+        'callback' => 'voicero_session_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Alternative endpoint without nested path
+    register_rest_route('voicero/v1', '/window_state', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_window_state_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+});
+
+function voicero_connect_proxy() {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Make the API request with the key (server-side)
+    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero proxy connect error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'Connection failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Proxy for the /session endpoint
+ * Handles both GET and POST requests
+ */
+function voicero_session_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Determine if it's a GET or POST request
+    $method = $request->get_method();
+    $endpoint = AI_WEBSITE_API_URL . '/session';
+    
+    // Handle GET request
+    if ($method === 'GET') {
+        $params = $request->get_query_params();
+        $website_id = isset($params['websiteId']) ? $params['websiteId'] : '';
+        
+        if (empty($website_id)) {
+            return new WP_REST_Response(['error' => 'Website ID is required'], 400);
+        }
+        
+        $endpoint .= '?websiteId=' . urlencode($website_id);
+        
+        $response = wp_remote_get($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ],
+            'timeout' => 30,
+            'sslverify' => false // Only for local development
+        ]);
+    } 
+    // Handle POST request
+    else if ($method === 'POST') {
+        // Get the request body and pass it through to the API
+        $body = $request->get_body();
+        
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ],
+            'body' => $body,
+            'timeout' => 30,
+            'sslverify' => false // Only for local development
+        ]);
+    }
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero proxy session error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Proxy for the /session/window endpoint
+ * Handles window state updates
+ */
+function voicero_window_state_proxy($request) {
+    // Debug incoming request
+    error_log('Window state proxy called with request: ' . print_r($request->get_params(), true));
+    
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Get the request body
+    $body = $request->get_body();
+    error_log('Request body: ' . $body);
+    
+    // Decode the body to validate it has the required fields
+    $decoded_body = json_decode($body, true);
+    if (!isset($decoded_body['sessionId']) || !isset($decoded_body['windowState'])) {
+        error_log('Invalid request: Missing sessionId or windowState');
+        return new WP_REST_Response(['error' => 'Session ID and window state are required'], 400);
+    }
+    
+    // Ensure session ID is a properly formatted string
+    $session_id = trim($decoded_body['sessionId']);
+    if (empty($session_id)) {
+        error_log('Invalid request: Empty sessionId');
+        return new WP_REST_Response(['error' => 'Valid Session ID is required'], 400);
+    }
+    
+    error_log('Processing update for session ID: ' . $session_id);
+    
+    // Construct the API endpoint
+    $endpoint = AI_WEBSITE_API_URL . '/session/windows';
+    error_log('Making request to: ' . $endpoint);
+    
+    // Make the PATCH request with the key (server-side)
+    $response = wp_remote_request($endpoint, [
+        'method' => 'PATCH', // Explicitly use PATCH method for updating
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => $body, // Keep the original body format
+        'timeout' => 30,
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero proxy window state error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Debug response
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . $response_body);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
  * 2A) /wp-json/my-plugin/v1/test
  *     Quick test that returns {status: "ok"}
  */
@@ -1791,99 +2016,8 @@ function my_first_plugin_add_toggle_button() {
     }
 
     ?>
-    <script>
-    function updateNavbarPositioning() {
-        // Find the navigation element - checking common WordPress nav classes/IDs
-        const nav = document.querySelector(
-            'header, ' + // Try header first
-            '#masthead, ' + // Common WordPress header ID
-            '.site-header, ' + // Common header class
-            'nav.navbar, ' + // Bootstrap navbar
-            'nav.main-navigation, ' + // Common nav classes
-            '.nav-primary, ' +
-            '#site-navigation, ' +
-            '.site-navigation'
-        );
-        
-        if (nav) {
-            const navRect = nav.getBoundingClientRect();
-            const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
-            
-            // Set the custom property for positioning
-            document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
-        }
-    }
 
-    // Run on load
-    document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
-    
-    // Run on resize
-    window.addEventListener('resize', updateNavbarPositioning);
-    
-    // Run after a short delay to catch any dynamic header changes
-    setTimeout(updateNavbarPositioning, 500);
-    </script>
-
-    <!-- Container will be hidden by default via CSS, JS will show it if active/synced -->
-    <div id="voice-toggle-container" style="display: none;"> 
-        <button id="chat-website-button">
-            <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-            </svg>
-        </button>
-    </div>
-
-    <div id="interaction-chooser" style="display: none;">
-        <div class="interaction-option voice">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/mic-icon.svg" alt="Voice">
-            <span>Talk to Website</span>
-        </div>
-        <div class="interaction-option text">
-            <img src="<?php echo plugin_dir_url(__FILE__); ?>assets/keyboard.svg" alt="Text">
-            <span>Type to Website</span>
-        </div>
-    </div>
-
-    <!-- Voice Interface -->
-    <div id="voice-interface" class="interface-panel" style="display: none;">
-        <div class="voice-header">
-            <div class="header-content">
-                <button class="mic-button-header">
-                    <svg class="mic-icon" viewBox="0 0 24 24" width="24" height="24">
-                        <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
-                    </svg>
-                </button>
-                <span class="title">AI Assistant</span>
-                <button id="close-voice">×</button>
-            </div>
-        </div>
-        <div class="voice-content">
-            <div class="conversation-container">
-                <div class="message-line">
-                    <span class="label">User:</span>
-                    <span class="content"></span>
-                </div>
-                <div class="message-line">
-                    <span class="label">AI:</span>
-                    <span class="content"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Text Interface -->
-    <div id="text-interface" class="interface-panel" style="display: none;">
-        <div class="interface-content">
-            <button id="close-text">×</button>
-            <div class="chat-container">
-                <div id="chat-messages"></div>
-                <div class="chat-input-container">
-                    <input type="text" id="chat-input" placeholder="Type your message...">
-                    <button id="send-message">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
+   
 
     <!-- Main container for Voicero app -->
     <div id="voicero-app-container" data-hook="<?php echo esc_attr($hook); ?>"></div>
@@ -1939,7 +2073,7 @@ function ai_website_enqueue_scripts() {
 
         // Pass data to the frontend script
         wp_localize_script('voicero-core-js', 'aiWebsiteConfig', [
-            'accessKey' => $access_key,
+            // Removed accessKey for security - now using server-side proxy
             'apiUrl' => AI_WEBSITE_API_URL,
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ai_website_frontend_nonce'),
@@ -2093,3 +2227,384 @@ function voicero_add_inline_debug_script() {
     }
 }
 add_action('wp_footer', 'voicero_add_inline_debug_script', 9999);
+
+/**
+ * Proxy for the /session/clear endpoint
+ * Creates a new thread and resets welcome flags
+ */
+function voicero_session_clear_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Get the request body
+    $body = $request->get_body();
+    error_log('Session clear request body: ' . $body);
+    
+    // Decode the body to validate it has the required fields
+    $decoded_body = json_decode($body, true);
+    if (!isset($decoded_body['sessionId'])) {
+        error_log('Invalid request: Missing sessionId');
+        return new WP_REST_Response(['error' => 'Session ID is required'], 400);
+    }
+    
+    // Construct the API endpoint
+    $endpoint = AI_WEBSITE_API_URL . '/session/clear';
+    error_log('Making request to: ' . $endpoint);
+    
+    // Make the POST request with the key (server-side)
+    $response = wp_remote_request($endpoint, [
+        'method' => 'POST',
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => $body, // Keep the original body format
+        'timeout' => 30,
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero proxy session clear error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Debug response
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . $response_body);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Proxy for the /chat endpoint
+ * Handles text chat messages between client and AI
+ */
+function voicero_chat_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Get the request body
+    $body = $request->get_body();
+    error_log('Chat request body: ' . $body);
+    
+    // Decode the body to validate it has the required fields
+    $decoded_body = json_decode($body, true);
+    if (!isset($decoded_body['message'])) {
+        error_log('Invalid chat request: Missing message');
+        return new WP_REST_Response(['error' => 'Message is required'], 400);
+    }
+    
+    // Make sure type is set to "text"
+    $decoded_body['type'] = 'text';
+    
+    // Re-encode the body with any modifications
+    $body = json_encode($decoded_body);
+    
+    // Construct the API endpoint - Updated to use /wordpress/chat instead of /chat
+    $endpoint = AI_WEBSITE_API_URL . '/wordpress/chat';
+    error_log('Making chat request to: ' . $endpoint);
+    
+    // Make the POST request with the key (server-side)
+    $response = wp_remote_post($endpoint, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => $body,
+        'timeout' => 60, // Longer timeout for chat responses
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Voicero chat proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Debug response
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . $response_body);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Proxy for Text-to-Speech API requests
+ */
+function voicero_tts_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        error_log('TTS proxy: No access key configured');
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    error_log('TTS proxy: Received request');
+    
+    // Get JSON body
+    $json_body = $request->get_body();
+    $body_params = json_decode($json_body, true);
+    
+    // Validate request
+    if (empty($body_params['text'])) {
+        error_log('TTS proxy: No text provided');
+        return new WP_REST_Response(['error' => 'No text provided'], 400);
+    }
+    
+    // Forward request to local API
+    $response = wp_remote_post('http://localhost:3000/api/tts', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'audio/mpeg',
+        ],
+        'body' => $json_body,
+        'timeout' => 30,
+        'sslverify' => false
+    ]);
+    
+    // Check for errors
+    if (is_wp_error($response)) {
+        error_log('TTS proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response(
+            ['error' => 'Failed to connect to TTS API: ' . $response->get_error_message()], 
+            500
+        );
+    }
+    
+    // Get response status code
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    // Log status code for debugging
+    error_log('TTS API response status: ' . $status_code);
+    
+    // If not successful, return error
+    if ($status_code < 200 || $status_code >= 300) {
+        $error_body = wp_remote_retrieve_body($response);
+        error_log('TTS API error response: ' . $error_body);
+        
+        // Clean up the error response to ensure it's valid JSON
+        $sanitized_error = $error_body;
+        if (!empty($error_body)) {
+            // Try to decode JSON response
+            $json_decoded = json_decode($error_body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // If JSON is invalid, escape it as a string
+                $sanitized_error = 'Invalid JSON response: ' . esc_html($error_body);
+            } else {
+                // If JSON is valid, re-encode it to ensure proper formatting
+                $sanitized_error = json_encode($json_decoded);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $sanitized_error = 'Error encoding response';
+                }
+            }
+        }
+        
+        return new WP_REST_Response(
+            ['error' => 'TTS API returned error', 'details' => $sanitized_error],
+            $status_code
+        );
+    }
+    
+    // Get audio data
+    $audio_data = wp_remote_retrieve_body($response);
+    
+    // Create response with audio content type
+    $response_obj = new WP_REST_Response($audio_data, 200);
+    $response_obj->header('Content-Type', 'audio/mpeg');
+    $response_obj->header('Content-Length', strlen($audio_data));
+    
+    return $response_obj;
+}
+
+/**
+ * Proxy for Whisper API (speech-to-text) requests
+ */
+function voicero_whisper_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        error_log('Whisper proxy: No access key configured');
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    error_log('Whisper proxy: Received request');
+    
+    // Get the uploaded file
+    $files = $request->get_file_params();
+    if (empty($files['audio']) || !isset($files['audio']['tmp_name'])) {
+        error_log('Whisper proxy: No audio file uploaded');
+        return new WP_REST_Response(['error' => 'No audio file uploaded'], 400);
+    }
+    
+    // Get other form parameters
+    $params = $request->get_params();
+    
+    // Create a new multipart form for the upstream request
+    $boundary = wp_generate_uuid4();
+    
+    // Start building multipart body
+    $body = '';
+    
+    // Add audio file to request body
+    $file_path = $files['audio']['tmp_name'];
+    $file_name = $files['audio']['name'];
+    $file_type = $files['audio']['type'] ?: 'audio/webm';
+    $file_content = file_get_contents($file_path);
+    
+    // Add file as part
+    $body .= "--$boundary\r\n";
+    $body .= "Content-Disposition: form-data; name=\"audio\"; filename=\"$file_name\"\r\n";
+    $body .= "Content-Type: $file_type\r\n\r\n";
+    $body .= $file_content . "\r\n";
+    
+    // Add additional parameters if needed
+    foreach ($params as $key => $value) {
+        if ($key !== 'audio') { // Skip the file parameter
+            $body .= "--$boundary\r\n";
+            $body .= "Content-Disposition: form-data; name=\"$key\"\r\n\r\n";
+            $body .= $value . "\r\n";
+        }
+    }
+    
+    // Close multipart body
+    $body .= "--$boundary--\r\n";
+    
+    // Send request to local API
+    $response = wp_remote_post('http://localhost:3000/api/whisper', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+        ],
+        'body' => $body,
+        'timeout' => 30,
+        'sslverify' => false
+    ]);
+    
+    // Check for errors
+    if (is_wp_error($response)) {
+        error_log('Whisper proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response(
+            ['error' => 'Failed to connect to Whisper API: ' . $response->get_error_message()], 
+            500
+        );
+    }
+    
+    // Get response status code
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    // Log status code for debugging
+    error_log('Whisper API response status: ' . $status_code);
+    
+    // If not successful, return error
+    if ($status_code < 200 || $status_code >= 300) {
+        $error_body = wp_remote_retrieve_body($response);
+        error_log('Whisper API error response: ' . $error_body);
+        
+        // Clean up the error response to ensure it's valid JSON
+        $sanitized_error = $error_body;
+        if (!empty($error_body)) {
+            // Try to decode JSON response
+            $json_decoded = json_decode($error_body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // If JSON is invalid, escape it as a string
+                $sanitized_error = 'Invalid JSON response: ' . esc_html($error_body);
+            } else {
+                // If JSON is valid, re-encode it to ensure proper formatting
+                $sanitized_error = json_encode($json_decoded);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $sanitized_error = 'Error encoding response';
+                }
+            }
+        }
+        
+        return new WP_REST_Response(
+            ['error' => 'Whisper API returned error', 'details' => $sanitized_error],
+            $status_code
+        );
+    }
+    
+    // Return API response
+    $body = wp_remote_retrieve_body($response);
+    return new WP_REST_Response(json_decode($body, true), $status_code);
+}
+
+// Register REST API endpoints
+add_action('rest_api_init', function() {
+    if (!function_exists('register_rest_route')) {
+        error_log('REST API functions not available - WordPress REST API may not be enabled');
+        return;
+    }
+    
+    error_log('Registering Voicero REST API endpoints');
+    
+    // Register the window_state endpoint
+    register_rest_route('voicero/v1', '/window_state', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_window_state_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the connect endpoint
+    register_rest_route('voicero/v1', '/connect', [
+        'methods'  => 'GET',
+        'callback' => 'voicero_connect_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the session endpoint
+    register_rest_route('voicero/v1', '/session', [
+        'methods'  => ['GET', 'POST'],
+        'callback' => 'voicero_session_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the session_clear endpoint
+    register_rest_route('voicero/v1', '/session_clear', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_session_clear_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the chat endpoint
+    register_rest_route('voicero/v1', '/chat', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_chat_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the TTS endpoint
+    register_rest_route('voicero/v1', '/tts', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_tts_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the Whisper endpoint
+    register_rest_route('voicero/v1', '/whisper', [
+        'methods'  => 'POST',
+        'callback' => 'voicero_whisper_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    error_log('Voicero REST API endpoints registered successfully');
+});
