@@ -9,26 +9,26 @@ License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 == Description ==
-Voicero.AI connects your site to a fully autonomous AI Salesman. It answers customer questions, builds trust, handles objections, and guides users to purchase — all automatically. Boost conversions and make your site feel alive.
+Voicero.AI connects your site to a fully autonomous AI Salesman. It answers customer questions, builds trust, handles objections, and guides users to purchase, all automatically. Boost conversions and make your site feel alive.
 
 == Installation ==
 1. Upload the plugin files to the `/wp-content/plugins/voiceroai` directory, or install it directly through the WordPress plugin repository.
+2. Activate the plugin through the 'Plugins' screen in WordPress.
 3. Open the **Voicero.AI** admin menu in the dashboard.
-4. Connect your account using your 64-character access key or by clicking the one click connect button.
-5. Start the syncing process by clicking the Sync Now button a the bottom
-6. Click the activate button once the training  of your AI is finished
-
+4. Connect your account using your 64-character access key or by clicking the one-click connect button.
+5. Start the syncing process by clicking the Sync Now button at the bottom.
+6. Click the activate button once the training of your AI is finished.
 
 == Frequently Asked Questions ==
 
 = Do I need a Voicero.AI account? =
-Yes. You must sign up at voicero.ai to receive your access key and manage your AI assistant. The account starting is free and will auto connect you in oen button click.
+Yes. You must sign up at voicero.ai to receive your access key and manage your AI assistant. The account starts free and will auto connect you with one button click.
 
 = Will this affect my site’s performance? =
-No. Voicero is fully asynchronous and optimized to avoid blocking your frontend or admin experience.
+No. Voicero.AI is fully asynchronous and optimized to avoid blocking your frontend or admin experience.
 
 = Does this work with WooCommerce? =
-Yes. Voicero supports syncing and training on your products, including reviews, categories, and tags.
+Yes. Voicero.AI supports syncing and training on your products, including reviews, categories, and tags.
 
 = Can I customize how the assistant talks? =
 Yes. Customization is handled in your Voicero.AI dashboard after connection.
@@ -48,4 +48,3 @@ Yes. Customization is handled in your Voicero.AI dashboard after connection.
 == Upgrade Notice ==
 = 1.0 =
 This is the first public version of Voicero.AI — connect, sync, and start boosting your conversions today.
-
