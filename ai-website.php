@@ -2347,6 +2347,207 @@ function voicero_chat_proxy($request) {
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
 
+/**
+ * Proxy for Text-to-Speech API requests
+ */
+function voicero_tts_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        error_log('TTS proxy: No access key configured');
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    error_log('TTS proxy: Received request');
+    
+    // Get JSON body
+    $json_body = $request->get_body();
+    $body_params = json_decode($json_body, true);
+    
+    // Validate request
+    if (empty($body_params['text'])) {
+        error_log('TTS proxy: No text provided');
+        return new WP_REST_Response(['error' => 'No text provided'], 400);
+    }
+    
+    // Forward request to local API
+    $response = wp_remote_post('http://localhost:3000/api/tts', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'audio/mpeg',
+        ],
+        'body' => $json_body,
+        'timeout' => 30,
+        'sslverify' => false
+    ]);
+    
+    // Check for errors
+    if (is_wp_error($response)) {
+        error_log('TTS proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response(
+            ['error' => 'Failed to connect to TTS API: ' . $response->get_error_message()], 
+            500
+        );
+    }
+    
+    // Get response status code
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    // Log status code for debugging
+    error_log('TTS API response status: ' . $status_code);
+    
+    // If not successful, return error
+    if ($status_code < 200 || $status_code >= 300) {
+        $error_body = wp_remote_retrieve_body($response);
+        error_log('TTS API error response: ' . $error_body);
+        
+        // Clean up the error response to ensure it's valid JSON
+        $sanitized_error = $error_body;
+        if (!empty($error_body)) {
+            // Try to decode JSON response
+            $json_decoded = json_decode($error_body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // If JSON is invalid, escape it as a string
+                $sanitized_error = 'Invalid JSON response: ' . esc_html($error_body);
+            } else {
+                // If JSON is valid, re-encode it to ensure proper formatting
+                $sanitized_error = json_encode($json_decoded);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $sanitized_error = 'Error encoding response';
+                }
+            }
+        }
+        
+        return new WP_REST_Response(
+            ['error' => 'TTS API returned error', 'details' => $sanitized_error],
+            $status_code
+        );
+    }
+    
+    // Get audio data
+    $audio_data = wp_remote_retrieve_body($response);
+    
+    // Create response with audio content type
+    $response_obj = new WP_REST_Response($audio_data, 200);
+    $response_obj->header('Content-Type', 'audio/mpeg');
+    $response_obj->header('Content-Length', strlen($audio_data));
+    
+    return $response_obj;
+}
+
+/**
+ * Proxy for Whisper API (speech-to-text) requests
+ */
+function voicero_whisper_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = get_option('ai_website_access_key', '');
+    if (empty($access_key)) {
+        error_log('Whisper proxy: No access key configured');
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    error_log('Whisper proxy: Received request');
+    
+    // Get the uploaded file
+    $files = $request->get_file_params();
+    if (empty($files['audio']) || !isset($files['audio']['tmp_name'])) {
+        error_log('Whisper proxy: No audio file uploaded');
+        return new WP_REST_Response(['error' => 'No audio file uploaded'], 400);
+    }
+    
+    // Get other form parameters
+    $params = $request->get_params();
+    
+    // Create a new multipart form for the upstream request
+    $boundary = wp_generate_uuid4();
+    
+    // Start building multipart body
+    $body = '';
+    
+    // Add audio file to request body
+    $file_path = $files['audio']['tmp_name'];
+    $file_name = $files['audio']['name'];
+    $file_type = $files['audio']['type'] ?: 'audio/webm';
+    $file_content = file_get_contents($file_path);
+    
+    // Add file as part
+    $body .= "--$boundary\r\n";
+    $body .= "Content-Disposition: form-data; name=\"audio\"; filename=\"$file_name\"\r\n";
+    $body .= "Content-Type: $file_type\r\n\r\n";
+    $body .= $file_content . "\r\n";
+    
+    // Add additional parameters if needed
+    foreach ($params as $key => $value) {
+        if ($key !== 'audio') { // Skip the file parameter
+            $body .= "--$boundary\r\n";
+            $body .= "Content-Disposition: form-data; name=\"$key\"\r\n\r\n";
+            $body .= $value . "\r\n";
+        }
+    }
+    
+    // Close multipart body
+    $body .= "--$boundary--\r\n";
+    
+    // Send request to local API
+    $response = wp_remote_post('http://localhost:3000/api/whisper', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+        ],
+        'body' => $body,
+        'timeout' => 30,
+        'sslverify' => false
+    ]);
+    
+    // Check for errors
+    if (is_wp_error($response)) {
+        error_log('Whisper proxy error: ' . $response->get_error_message());
+        return new WP_REST_Response(
+            ['error' => 'Failed to connect to Whisper API: ' . $response->get_error_message()], 
+            500
+        );
+    }
+    
+    // Get response status code
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    // Log status code for debugging
+    error_log('Whisper API response status: ' . $status_code);
+    
+    // If not successful, return error
+    if ($status_code < 200 || $status_code >= 300) {
+        $error_body = wp_remote_retrieve_body($response);
+        error_log('Whisper API error response: ' . $error_body);
+        
+        // Clean up the error response to ensure it's valid JSON
+        $sanitized_error = $error_body;
+        if (!empty($error_body)) {
+            // Try to decode JSON response
+            $json_decoded = json_decode($error_body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // If JSON is invalid, escape it as a string
+                $sanitized_error = 'Invalid JSON response: ' . esc_html($error_body);
+            } else {
+                // If JSON is valid, re-encode it to ensure proper formatting
+                $sanitized_error = json_encode($json_decoded);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $sanitized_error = 'Error encoding response';
+                }
+            }
+        }
+        
+        return new WP_REST_Response(
+            ['error' => 'Whisper API returned error', 'details' => $sanitized_error],
+            $status_code
+        );
+    }
+    
+    // Return API response
+    $body = wp_remote_retrieve_body($response);
+    return new WP_REST_Response(json_decode($body, true), $status_code);
+}
+
 // Register REST API endpoints
 add_action('rest_api_init', function() {
     if (!function_exists('register_rest_route')) {
@@ -2388,6 +2589,20 @@ add_action('rest_api_init', function() {
     register_rest_route('voicero/v1', '/chat', [
         'methods'  => ['POST'],
         'callback' => 'voicero_chat_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the TTS endpoint
+    register_rest_route('voicero/v1', '/tts', [
+        'methods'  => ['POST'],
+        'callback' => 'voicero_tts_proxy',
+        'permission_callback' => '__return_true'
+    ]);
+    
+    // Register the Whisper endpoint
+    register_rest_route('voicero/v1', '/whisper', [
+        'methods'  => 'POST',
+        'callback' => 'voicero_whisper_proxy',
         'permission_callback' => '__return_true'
     ]);
     

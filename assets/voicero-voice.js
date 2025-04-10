@@ -1066,6 +1066,25 @@ const VoiceroVoice = {
       this.isSpeaking = false;
       this.hasStartedSpeaking = false;
 
+      // Check if mediaDevices and getUserMedia are supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("MediaDevices API not supported in this browser");
+        this.isRecording = false;
+
+        // Show error message
+        micButton.classList.remove("siri-active");
+        micButton.style.background = "#882be6";
+        micButton.style.borderColor = "transparent";
+        micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
+
+        this.addSystemMessage(`
+          <div class="voice-prompt" style="background: #ffeded; color: #d43b3b;">
+            Microphone access not supported in this browser. Try using Chrome, Firefox or Safari.
+          </div>
+        `);
+        return;
+      }
+
       // Check if AudioContext is supported
       const audioContextSupported = this.isAudioContextSupported();
 
@@ -1175,8 +1194,12 @@ const VoiceroVoice = {
 
             // Only process if we have actual audio data
             if (audioBlob.size > 0) {
+              console.log(
+                "Voicero Voice: Processing audio recording of size",
+                audioBlob.size
+              );
               try {
-                // Send to Whisper API for transcription
+                // Send to Whisper API for transcription via WordPress proxy
                 const formData = new FormData();
                 formData.append("audio", audioBlob, "recording.webm");
                 formData.append("url", window.location.href);
@@ -1185,19 +1208,43 @@ const VoiceroVoice = {
                   VoiceroCore ? VoiceroCore.currentThreadId || "" : ""
                 );
 
+                console.log(
+                  "Voicero Voice: Sending audio to Whisper API via proxy"
+                );
                 const whisperResponse = await fetch(
-                  "http://localhost:3000/api/whisper",
+                  "/wp-json/voicero/v1/whisper",
                   {
                     method: "POST",
-                    headers: {
-                      Authorization: `Bearer ${window.voiceroConfig.accessKey}`,
-                    },
                     body: formData,
                   }
                 );
-                if (!whisperResponse.ok)
-                  throw new Error("Whisper API request failed");
+
+                if (!whisperResponse.ok) {
+                  let errorText;
+                  try {
+                    const errorData = await whisperResponse.json();
+                    errorText = JSON.stringify(errorData);
+                  } catch (e) {
+                    // If JSON parsing fails, get text response instead
+                    errorText = await whisperResponse.text();
+                  }
+
+                  console.error(
+                    "Whisper API error response:",
+                    errorText,
+                    "Status:",
+                    whisperResponse.status
+                  );
+                  throw new Error(
+                    `Whisper API request failed with status ${whisperResponse.status}`
+                  );
+                }
+
                 const whisperData = await whisperResponse.json();
+                console.log(
+                  "Voicero Voice: Received transcription:",
+                  whisperData
+                );
 
                 // Extract the transcription
                 const transcription =
@@ -1295,22 +1342,38 @@ const VoiceroVoice = {
                 const extractedUrls = processedResponse.urls;
 
                 try {
-                  // Request audio generation using TTS endpoint
-                  const ttsResponse = await fetch(
-                    "http://localhost:3000/api/tts",
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${window.voiceroConfig.accessKey}`,
-                      },
-                      body: JSON.stringify({
-                        text: cleanedTextResponse, // Send cleaned text to TTS
-                      }),
+                  // Request audio generation using TTS endpoint via WordPress proxy
+                  console.log("Voicero Voice: Requesting TTS for response");
+                  const ttsResponse = await fetch("/wp-json/voicero/v1/tts", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      text: cleanedTextResponse, // Send cleaned text to TTS
+                    }),
+                  });
+
+                  if (!ttsResponse.ok) {
+                    let errorText;
+                    try {
+                      const errorData = await ttsResponse.json();
+                      errorText = JSON.stringify(errorData);
+                    } catch (e) {
+                      // If JSON parsing fails, get text response instead
+                      errorText = await ttsResponse.text();
                     }
-                  );
-                  if (!ttsResponse.ok)
-                    throw new Error("TTS API request failed");
+
+                    console.error(
+                      "TTS API error response:",
+                      errorText,
+                      "Status:",
+                      ttsResponse.status
+                    );
+                    throw new Error(
+                      `TTS API request failed with status ${ttsResponse.status}`
+                    );
+                  }
 
                   // Convert response to audio blob
                   const audioData = await ttsResponse.arrayBuffer();
@@ -1342,6 +1405,7 @@ const VoiceroVoice = {
                     this.redirectToUrl(extractedUrls[0]);
                   }
                 } catch (audioError) {
+                  console.error("TTS error:", audioError);
                   // Remove typing indicator before adding the error message
                   this.removeTypingIndicator();
                   // Just show the text response if audio fails
@@ -1362,6 +1426,7 @@ const VoiceroVoice = {
                   }
                 }
               } catch (error) {
+                console.error("Voice processing error:", error);
                 // Remove any placeholder messages
                 const messagesContainer =
                   document.getElementById("voice-messages");
@@ -1424,6 +1489,7 @@ const VoiceroVoice = {
           }, 30000); // 30 seconds
         })
         .catch((error) => {
+          console.error("MediaDevices error:", error);
           // Reset UI
           micButton.classList.remove("siri-active");
           micButton.style.background = "#882be6";
@@ -1432,13 +1498,11 @@ const VoiceroVoice = {
           this.isRecording = false;
 
           // Show error message in the voice interface
-          const aiMessageDiv = document.querySelector(
-            "#voice-chat-interface .ai-message"
-          );
-          if (aiMessageDiv) {
-            aiMessageDiv.textContent =
-              "Please allow microphone access to use voice chat.";
-          }
+          this.addSystemMessage(`
+            <div class="voice-prompt" style="background: #ffeded; color: #d43b3b;">
+              Please allow microphone access to use voice chat.
+            </div>
+          `);
         });
     }
   },
@@ -2189,6 +2253,33 @@ const VoiceroVoice = {
   },
 };
 
+// Expose global functions
+window.VoiceroVoice = VoiceroVoice;
+
+// Add autoMic activation function
+VoiceroVoice.activateAutoMic = function () {
+  // Only proceed if the voice interface is open
+  const voiceInterface = document.getElementById("voice-chat-interface");
+  if (!voiceInterface || voiceInterface.style.display !== "block") {
+    return;
+  }
+
+  // If not already recording, start the microphone
+  if (!this.isRecording) {
+    console.log("Voicero Voice: Auto-activating microphone");
+    this.toggleMic("auto");
+
+    // Begin audio processing immediately
+    if (this.mediaRecorder && this.audioContext && this.analyser) {
+      // Force hasStartedSpeaking to true to ensure we're immediately listening
+      this.hasStartedSpeaking = true;
+      this.isSpeaking = true;
+
+      console.log("Voicero Voice: Auto-mic activated and listening");
+    }
+  }
+};
+
 // Initialize when core is ready
 document.addEventListener("DOMContentLoaded", () => {
   const existingInterface = document.getElementById("voice-chat-interface");
@@ -2233,10 +2324,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Also start the microphone automatically if needed
         const shouldActivateMic =
-          localStorage.getItem("voicero_auto_mic") === "true";
+          localStorage.getItem("voicero_auto_mic") === "true" ||
+          (VoiceroCore &&
+            VoiceroCore.session &&
+            VoiceroCore.session.autoMic === true);
+
         if (shouldActivateMic) {
           localStorage.removeItem("voicero_auto_mic");
-          setTimeout(() => VoiceroVoice.toggleMic("auto"), 800);
+          setTimeout(() => {
+            // Use our new function for complete mic activation
+            VoiceroVoice.activateAutoMic();
+          }, 800);
         }
       }, 1000);
     }
@@ -2276,10 +2374,17 @@ document.addEventListener("DOMContentLoaded", () => {
             VoiceroVoice.openVoiceChat();
 
             const shouldActivateMic =
-              localStorage.getItem("voicero_auto_mic") === "true";
+              localStorage.getItem("voicero_auto_mic") === "true" ||
+              (VoiceroCore &&
+                VoiceroCore.session &&
+                VoiceroCore.session.autoMic === true);
+
             if (shouldActivateMic) {
               localStorage.removeItem("voicero_auto_mic");
-              setTimeout(() => VoiceroVoice.toggleMic("auto"), 800);
+              setTimeout(() => {
+                // Use our new function for complete mic activation
+                VoiceroVoice.activateAutoMic();
+              }, 800);
             }
           }, 1000);
         }
@@ -2292,6 +2397,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   }
 });
-
-// Expose global functions
-window.VoiceroVoice = VoiceroVoice;
