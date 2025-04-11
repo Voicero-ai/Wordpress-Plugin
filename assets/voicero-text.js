@@ -333,9 +333,14 @@ const VoiceroText = {
           }
         }
 
-        // Hide the header
+        // Keep header visible but adjust its style for minimized state
         if (headerContainer) {
-          headerContainer.style.display = "none";
+          headerContainer.style.display = "flex";
+          headerContainer.style.visibility = "visible";
+          headerContainer.style.opacity = "1";
+          headerContainer.style.borderBottom = "none";
+          headerContainer.style.paddingBottom = "8px";
+          headerContainer.style.marginBottom = "0";
         }
 
         // Adjust the input wrapper to connect with the button
@@ -1537,11 +1542,93 @@ const VoiceroText = {
           </button>
         </div>
 
+        <div id="chat-controls-header" style="
+          position: sticky !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          height: 40px !important;
+          background: rgb(242, 242, 247) !important;
+          z-index: 9999999 !important;
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          padding: 10px 15px !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+          border-radius: 12px 12px 0 0 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          box-shadow: none !important;
+          box-sizing: border-box !important;
+          transform: translateZ(0);
+        ">
+          <button id="clear-text-chat" style="
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            background-color: rgba(0, 0, 0, 0.07);
+            font-size: 12px;
+            color: #666;
+          ">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="margin-right: 4px;">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Clear</span>
+          </button>
+          
+          <div style="
+            display: flex !important;
+            gap: 5px !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 28px !important;
+          ">
+            <button id="minimize-chat" style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              padding: 5px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: all 0.2s ease;
+            ">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+            
+            <button id="close-text-chat" style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              padding: 5px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: all 0.2s ease;
+            ">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
+                <path d="M18 6L6 18M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <div id="chat-messages" style="
-          background: #f2f2f7;
-          border-radius: 12px 12px 0 0;
-          padding: 15px;
-          padding-top: 0 !important;
+          background: white !important;
+          border-radius: 0 !important;
+          padding: 0 !important;
           margin: 0 !important;
           max-height: 35vh;
           overflow-y: auto;
@@ -1565,91 +1652,6 @@ const VoiceroText = {
             animation: gradientMove 2s linear infinite;
             z-index: 9999999;
           "></div>
-          
-          <div id="chat-controls-header" style="
-            position: sticky !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            height: 40px !important;
-            background: rgb(242, 242, 247) !important;
-            z-index: 9999999 !important;
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
-            padding: 10px 15px !important;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-            border-radius: 0px !important;
-            margin: 0px 0px 15px !important;
-            width: 100% !important;
-            box-shadow: none !important;
-            box-sizing: border-box !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            transform: translateZ(0);
-          ">
-            <button id="clear-text-chat" style="
-              background: none;
-              border: none;
-              cursor: pointer;
-              padding: 5px 8px;
-              border-radius: 15px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              transition: all 0.2s ease;
-              background-color: rgba(0, 0, 0, 0.07);
-              font-size: 12px;
-              color: #666;
-            ">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="margin-right: 4px;">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-              <span>Clear</span>
-            </button>
-            
-            <div style="
-              display: flex !important;
-              gap: 5px !important;
-              align-items: center !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              height: 28px !important;
-            ">
-              <button id="minimize-chat" style="
-                background: none;
-                border: none;
-                cursor: pointer;
-                padding: 5px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s ease;
-              ">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
-              
-              <button id="close-text-chat" style="
-                background: none;
-                border: none;
-                cursor: pointer;
-                padding: 5px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s ease;
-              ">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-                  <path d="M18 6L6 18M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
           
           <div style="padding-top: 15px;">
             <div id="initial-suggestions" style="
@@ -2602,7 +2604,12 @@ const VoiceroText = {
 
     // Hide the header
     if (headerContainer) {
-      headerContainer.style.display = "none";
+      headerContainer.style.display = "flex";
+      headerContainer.style.visibility = "visible";
+      headerContainer.style.opacity = "1";
+      headerContainer.style.borderBottom = "none";
+      headerContainer.style.paddingBottom = "8px";
+      headerContainer.style.marginBottom = "0";
     }
 
     // Adjust the input wrapper to connect with the button

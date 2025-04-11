@@ -896,3 +896,48 @@ div.message-bubble.user-bubble {
   visibility: visible;
   opacity: 1;
 }
+
+/* Base state - completely hidden */
+#voice-chat-interface {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  z-index: -1 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  clip: rect(0 0 0 0) !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Only show when explicitly opened */
+#voice-chat-interface[style*="display: block"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 999999 !important;
+  height: auto !important;
+  width: 85% !important;
+  max-width: 480px !important;
+  min-width: 280px !important;
+  overflow: visible !important;
+  clip: auto !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* Mobile styles - ensure voice interface is hidden when text chat is open */
+@media (max-width: 768px) {
+  #voicero-text-chat-container[style*="display: block"]
+    ~ #voice-chat-interface {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
