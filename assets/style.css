@@ -771,16 +771,17 @@ div.message-bubble.user-bubble {
 
 /* Desktop styles - ensure chat icon is always visible */
 @media (min-width: 769px) {
-  #voice-toggle-container {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+  /* Only show when website is active */
+  .website-active #voice-toggle-container {
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
-  #chat-website-button {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+  .website-active #chat-website-button {
+    display: flex;
+    visibility: visible;
+    opacity: 1;
   }
 }
 
@@ -874,4 +875,24 @@ div.message-bubble.user-bubble {
   color: var(--voicero-theme-color) !important;
   font-weight: 600 !important;
   text-shadow: none !important;
+}
+
+/* Hide voice input wrapper in text interface */
+#voicero-text-chat-container #voice-input-wrapper,
+#text-interface #voice-input-wrapper {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+
+/* Only show voice input wrapper in voice interface when needed */
+#voice-chat-interface #voice-input-wrapper {
+  display: block;
+  visibility: visible;
+  opacity: 1;
 }

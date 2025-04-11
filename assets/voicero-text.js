@@ -1539,7 +1539,7 @@ const VoiceroText = {
 
         <div id="chat-messages" style="
           background: #f2f2f7;
-          border-radius: 0;
+          border-radius: 12px 12px 0 0;
           padding: 15px;
           padding-top: 0 !important;
           margin: 0 !important;
@@ -1563,6 +1563,7 @@ const VoiceroText = {
             border-radius: 3px;
             display: none;
             animation: gradientMove 2s linear infinite;
+            z-index: 9999999;
           "></div>
           
           <div id="chat-controls-header" style="
@@ -1571,35 +1572,36 @@ const VoiceroText = {
             left: 0 !important;
             right: 0 !important;
             height: 40px !important;
-            background: #f2f2f7 !important;
+            background: rgb(242, 242, 247) !important;
             z-index: 9999999 !important;
             display: flex !important;
             justify-content: space-between !important;
             align-items: center !important;
             padding: 10px 15px !important;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-            border-radius: 0 !important;
-            margin: 0 !important;
-            margin-bottom: 15px !important;
+            border-radius: 0px !important;
+            margin: 0px 0px 15px !important;
             width: 100% !important;
+            box-shadow: none !important;
+            box-sizing: border-box !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            transform: translateZ(0);
           ">
-            <button
-              id="clear-text-chat"
-              style="
-                background: none;
-                border: none;
-                cursor: pointer;
-                padding: 5px 8px;
-                border-radius: 15px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s ease;
-                background-color: rgba(0, 0, 0, 0.07);
-                font-size: 12px;
-                color: #666;
-              "
-            >
+            <button id="clear-text-chat" style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              padding: 5px 8px;
+              border-radius: 15px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: all 0.2s ease;
+              background-color: rgba(0, 0, 0, 0.07);
+              font-size: 12px;
+              color: #666;
+            ">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="margin-right: 4px;">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1615,55 +1617,47 @@ const VoiceroText = {
               padding: 0 !important;
               height: 28px !important;
             ">
-              <button
-                id="minimize-chat"
-                style="
-                  background: none;
-                  border: none;
-                  cursor: pointer;
-                  padding: 5px;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  transition: all 0.2s ease;
-                "
-              >
+              <button id="minimize-chat" style="
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 5px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+              ">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
               
-              <button
-                id="close-text-chat"
-                style="
-                  background: none;
-                  border: none;
-                  cursor: pointer;
-                  padding: 5px;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  transition: all 0.2s ease;
-                "
-              >
+              <button id="close-text-chat" style="
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 5px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+              ">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
-                  <path d="M18 6L6 18M6 6l12 12"/>
+                  <path d="M18 6L6 18M6 6l12 12"></path>
                 </svg>
               </button>
             </div>
           </div>
           
-          <div style="padding-top: 15px;"> <!-- Add padding container for messages -->
-            <!-- Initial suggestions -->
+          <div style="padding-top: 15px;">
             <div id="initial-suggestions" style="
               padding: 10px 0;
               opacity: 1;
               transition: all 0.3s ease;
             ">
-              
-              
+              <!-- Initial suggestions will be dynamically added here -->
             </div>
           </div>
         </div>
@@ -1705,7 +1699,7 @@ const VoiceroText = {
             border-radius: 0 0 10px 10px;
             padding: 8px 12px;
             min-height: 45px;
-            width: calc(100% - 24px); /* Ensure proper width */
+            width: calc(100% - 24px);
           ">
             <div style="
               width: 30px;
