@@ -995,7 +995,7 @@ const VoiceroVoice = {
       this.isRecording = false;
 
       if (source === "manual") {
-        this.manuallyStoppedRecording = true;
+        
         console.log(
           "Voicero Voice: Manual stop detected - turning off autoMic"
         );
@@ -1056,9 +1056,9 @@ const VoiceroVoice = {
       if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
         window.VoiceroCore.updateWindowState({
           voiceWelcome: false, // Once user starts recording, don't show welcome again
-          autoMic: true, // Set autoMic to true to remember user's preference
+          autoMic: false, // Set autoMic to true to remember user's preference
         });
-        console.log("Voicero Voice: Set autoMic to true in session");
+        console.log("Voicero Voice: Set autoMic to false in session");
       }
 
       // Update UI - add siri-like animation
@@ -1178,16 +1178,12 @@ const VoiceroVoice = {
                       `Voicero Voice: Silence detected for ${this.silenceTime}ms, average volume: ${average}`
                     );
 
-                    // If silence for more than 1.5 seconds after speaking, stop recording
+                    // Removed auto-stopping of recording after silence
+                    // Only log the silence for debugging purposes
                     if (this.silenceTime > 500 && this.hasStartedSpeaking) {
                       console.log(
-                        "Voicero Voice: Silence threshold reached (500ms) - auto-stopping recording"
+                        "Voicero Voice: Silence threshold reached (500ms) - silence detection active but auto-stop disabled"
                       );
-                      clearInterval(this.silenceDetectionTimer);
-                      this.silenceDetectionTimer = null;
-
-                      // CHANGED: pass "auto" to differentiate from user stop
-                      this.toggleMic("auto"); // Stop recording
                     }
                   }
                 }
