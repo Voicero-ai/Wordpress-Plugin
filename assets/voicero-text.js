@@ -212,14 +212,14 @@ const VoiceroText = {
     }
 
     // Hide the toggle container when opening on mobile
-    if (window.innerWidth <= 768) {
-      const toggleContainer = document.getElementById("voice-toggle-container");
-      if (toggleContainer) {
-        toggleContainer.style.display = "none";
-        toggleContainer.style.visibility = "hidden";
-        toggleContainer.style.opacity = "0";
-      }
-    }
+    // if (window.innerWidth <= 768) {
+    //   const toggleContainer = document.getElementById("voice-toggle-container");
+    //   if (toggleContainer) {
+    //     toggleContainer.style.display = "none";
+    //     toggleContainer.style.visibility = "hidden";
+    //     toggleContainer.style.opacity = "0";
+    //   }
+    // }
 
     // Hide the chooser popup
     const chooser = document.getElementById("interaction-chooser");
