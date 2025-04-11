@@ -973,6 +973,8 @@ const VoiceroVoice = {
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    console.log("Voicero Voice: Closing voice chat interface");
+
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -988,12 +990,36 @@ const VoiceroVoice = {
     const voiceInterface = document.getElementById("voice-chat-interface");
     if (voiceInterface) {
       voiceInterface.style.display = "none";
-      // Show the microphone button when closing
+
+      // Make sure the main core container is visible
+      const coreContainer = document.getElementById("voicero-app-container");
+      if (coreContainer) {
+        coreContainer.style.display = "block";
+        coreContainer.style.visibility = "visible";
+        coreContainer.style.opacity = "1";
+      }
+
+      // Show the main button when closing
       const toggleContainer = document.getElementById("voice-toggle-container");
       if (toggleContainer) {
         toggleContainer.style.display = "block";
         toggleContainer.style.visibility = "visible";
         toggleContainer.style.opacity = "1";
+      }
+
+      // Make sure main button is visible
+      const chatButton = document.getElementById("chat-website-button");
+      if (chatButton) {
+        chatButton.style.display = "flex";
+        chatButton.style.visibility = "visible";
+        chatButton.style.opacity = "1";
+      }
+
+      // Show the chooser for good measure
+      if (window.VoiceroCore && window.VoiceroCore.showChooser) {
+        setTimeout(() => {
+          window.VoiceroCore.showChooser();
+        }, 100);
       }
     }
   },

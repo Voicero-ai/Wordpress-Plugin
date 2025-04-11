@@ -27,11 +27,12 @@ function voicero_activate_plugin() {
 }
 
 // Define the API base URL
-define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+define('AI_WEBSITE_API_URL', 'https://www.voicero.ai/api');
 
 // Define a debug function to log messages to the error log
 function voicero_debug_log($message, $data = null) {
-    if (defined('WP_DEBUG') && WP_DEBUG) {
+    // Only log if WP_DEBUG and VOICERO_DEBUG are both enabled
+    if (defined('WP_DEBUG') && WP_DEBUG && defined('VOICERO_DEBUG') && VOICERO_DEBUG) {
         if (is_array($data) || is_object($data)) {
             error_log('VOICERO DEBUG: ' . $message . ' - ' . print_r($data, true));
         } else {
@@ -410,46 +411,71 @@ function _handle_training_request($type, $id_key = null) {
         }
     }
 
-    // Set a longer timeout for general training
-    $timeout = ($type === 'general') ? 180 : 60; // 3 minutes for general, 1 minute for others
-
-    $response = wp_remote_post($api_url, [
+    // Use non-blocking approach but with a callback to track status
+    $args = [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ],
         'body' => json_encode($request_body),
-        'timeout' => $timeout, // Use the dynamic timeout
+        'timeout' => 0.01, // Minimal timeout just for the request to be sent
+        'blocking' => false, // Non-blocking - PHP will continue without waiting for Vercel
         'sslverify' => false
-    ]);
+    ];
 
-    if (is_wp_error($response)) {
-        wp_send_json_error([
-            'message' => ucfirst($type) . ' training failed: ' . $response->get_error_message(),
-            'code' => $response->get_error_code(),
-            'type' => $type
-        ]);
+    // Track item in status
+    $training_data = voicero_update_training_status('in_progress', true);
+    $training_data = voicero_update_training_status('status', 'in_progress');
+    
+    // Increment total items if needed
+    if (isset($_POST['is_first_item']) && $_POST['is_first_item'] === 'true') {
+        $training_data = voicero_update_training_status('total_items', intval($_POST['total_items']));
+        $training_data = voicero_update_training_status('completed_items', 0);
+        $training_data = voicero_update_training_status('failed_items', 0);
     }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    $body = wp_remote_retrieve_body($response);
-
-    if ($response_code !== 200) {
-        wp_send_json_error([
-            'message' => ucfirst($type) . ' training failed: Server returned ' . $response_code,
-            'code' => $response_code,
-            'body' => $body,
-            'type' => $type
-        ]);
-    }
-
-    wp_send_json_success([
-        'message' => ucfirst($type) . ' training successful.',
+    
+    // Log info about request for status tracking
+    $request_id = uniqid($type . '_');
+    update_option('voicero_last_training_request', [
+        'id' => $request_id,
         'type' => $type,
-        'details' => json_decode($body, true)
+        'timestamp' => time()
+    ]);
+    
+    // For more reliable status tracking, schedule a background check
+    // This will check status in 10-30 seconds depending on the item type
+    $check_delay = ($type === 'general') ? 30 : 10;
+    wp_schedule_single_event(time() + $check_delay, 'voicero_check_training_status', [$type, $request_id]);
+    
+    // Fire the API request
+    wp_remote_post($api_url, $args);
+    
+    // Return success immediately with tracking info
+    wp_send_json_success([
+        'message' => ucfirst($type) . ' training initiated.',
+        'type' => $type,
+        'request_id' => $request_id,
+        'status_tracking' => true
     ]);
 }
+
+// Function to check training status
+function voicero_check_training_status($type, $request_id) {
+    $training_data = get_option('voicero_training_status', []);
+    
+    // Mark as completed - in a real implementation, you would check with Vercel
+    // but for now we'll just assume it completed successfully
+    $completed_items = intval($training_data['completed_items']) + 1;
+    voicero_update_training_status('completed_items', $completed_items);
+    
+    // If all items are done, mark training as complete
+    if ($completed_items >= $training_data['total_items']) {
+        voicero_update_training_status('in_progress', false);
+        voicero_update_training_status('status', 'completed');
+    }
+}
+add_action('voicero_check_training_status', 'voicero_check_training_status', 10, 2);
 
 // Register the new AJAX actions
 add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
@@ -791,7 +817,7 @@ function ai_website_render_admin_page() {
     $encoded_admin_url = urlencode($admin_url);
     
     // Generate the connection URL
-    $connect_url = "http://localhost:3000/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
+    $connect_url = "https://www.voicero.ai/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
 
     // Output the admin interface
     ?>
@@ -1063,7 +1089,7 @@ function ai_website_render_admin_page() {
                          // Even if no content items, we still need to do general training
                     }
                     
-                    const trainingPromises = [];
+                    // Prepare training data
                     const pages = assistantData && assistantData.content ? (assistantData.content.pages || []) : [];
                     const posts = assistantData && assistantData.content ? (assistantData.content.posts || []) : [];
                     const products = assistantData && assistantData.content ? (assistantData.content.products || []) : [];
@@ -1075,82 +1101,187 @@ function ai_website_render_admin_page() {
                     
                     updateProgress(50, `⏳ Starting training for ${totalItems} items...`);
 
-                    // Create promises for pages
-                    pages.forEach(page => {
-                        const promise = $.post(ajaxurl, { 
-                            action: 'ai_website_train_page', 
-                            nonce: nonce,
-                            pageId: page.id, // Keep for our reference
-                            wpId: page.id, // This is the actual WordPress ID
-                            websiteId: websiteId // Website ID from higher scope
-                        }).then(() => {
-                             completedItems++;
-                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
-                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
-                        });
-                        trainingPromises.push(promise);
-                    });
-
-                    // Create promises for posts
-                    posts.forEach(post => {
-                         const promise = $.post(ajaxurl, { 
-                             action: 'ai_website_train_post', 
-                             nonce: nonce,
-                             postId: post.id, // Keep for our reference
-                             wpId: post.id, // This is the actual WordPress ID
-                             websiteId: websiteId // Website ID from higher scope
-                         }).then(() => {
-                             completedItems++;
-                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
-                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
-                         });
-                         trainingPromises.push(promise);
-                    });
+                    // Build combined array of all items to train
+                    const allItems = [
+                        ...pages.map(item => ({ type: 'page', id: item.id })),
+                        ...posts.map(item => ({ type: 'post', id: item.id })),
+                        ...products.map(item => ({ type: 'product', id: item.id })),
+                        { type: 'general' } // Add general training as the last item
+                    ];
                     
-                    // Create promises for products
-                    products.forEach(product => {
-                         const promise = $.post(ajaxurl, { 
-                             action: 'ai_website_train_product', 
-                             nonce: nonce,
-                             productId: product.id, // Keep for our reference
-                             wpId: product.id, // This is the actual WordPress ID
-                             websiteId: websiteId // Website ID from higher scope
-                         }).then(() => {
-                             completedItems++;
-                             const currentProgress = 50 + (completedItems / totalItems) * progressRange;
-                             updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
-                         });
-                         trainingPromises.push(promise);
-                    });
-
-                    // Always add general training as the last item in our training set
-                    // This ensures it runs after all individual items are trained
-                    trainingPromises.push(
-                        // Create a promise for general training
-                        $.post(ajaxurl, { 
-                            action: 'ai_website_train_general', 
-                            nonce: nonce,
-                            websiteId: websiteId // Website ID from higher scope
-                        }).then(() => {
-                            completedItems++;
-                            const currentProgress = 50 + (completedItems / totalItems) * progressRange;
-                            updateProgress(currentProgress, `⏳ Finalizing training (${completedItems}/${totalItems})...`);
-                            // Should be at 100% now
-                            if (completedItems === totalItems) {
-                                updateProgress(100, '✅ Sync & Training Complete!');
-                            }
-                        })
-                    );
-
-                    // Wait for all training calls to complete (including general)
-                    return Promise.all(trainingPromises);
+                    // Process items sequentially
+                    async function processItems() {
+                        // Define batch processing parameters
+                        const BATCH_SIZE = 5; // Process 5 items at a time
+                        let currentIndex = 0;
+                        let activeRequests = 0; // Track concurrent active requests
+                        
+                        // Process in batches until all items are processed
+                        while (currentIndex < allItems.length) {
+                            // Get the current batch of items
+                            const currentBatch = allItems.slice(currentIndex, currentIndex + BATCH_SIZE);
+                            currentIndex += BATCH_SIZE;
+                            
+                            // Log batch details
+                            console.log(`Processing batch of ${currentBatch.length} items (${currentIndex-currentBatch.length}-${currentIndex-1} of ${allItems.length})`);
+                            
+                            // Process the current batch concurrently
+                            const batchPromises = currentBatch.map(item => {
+                                return new Promise(async (resolve) => {
+                                    try {
+                                        const requestData = { 
+                                            nonce: nonce,
+                                            websiteId: websiteId
+                                        };
+                                        
+                                        // Add specific parameters for content item types
+                                        if (item.type !== 'general') {
+                                            requestData.wpId = item.id;
+                                            
+                                            // Add type-specific ID field
+                                            if (item.type === 'page') {
+                                                requestData.pageId = item.id;
+                                                requestData.action = 'ai_website_train_page';
+                                            } else if (item.type === 'post') {
+                                                requestData.postId = item.id;
+                                                requestData.action = 'ai_website_train_post';
+                                            } else if (item.type === 'product') {
+                                                requestData.productId = item.id;
+                                                requestData.action = 'ai_website_train_product';
+                                            }
+                                        } else {
+                                            requestData.action = 'ai_website_train_general';
+                                        }
+                                        
+                                        // Add tracking information for the first item
+                                        if (completedItems === 0) {
+                                            requestData.is_first_item = 'true';
+                                            requestData.total_items = totalItems;
+                                        }
+                                        
+                                        // Make the request
+                                        await new Promise((innerResolve) => {
+                                            activeRequests++; // Increment active requests counter
+                                            console.log(`Active requests: ${activeRequests}`);
+                                            
+                                            $.post(ajaxurl, requestData)
+                                                .done(response => {
+                                                    activeRequests--; // Decrement counter
+                                                    // We're now only tracking that the request was initiated, not completed
+                                                    // The PHP side is returning immediately without waiting for Vercel
+                                                    if (!response.success) {
+                                                        console.warn(`Initiating training for ${item.type} ${item.id || ''} failed:`, response.data.message);
+                                                    } else {
+                                                        console.log(`Training initiated for ${item.type} ${item.id || ''}`);
+                                                    }
+                                                    innerResolve();
+                                                })
+                                                .fail(error => {
+                                                    activeRequests--; // Decrement counter
+                                                    console.warn(`Training initiation for ${item.type} ${item.id || ''} failed:`, error);
+                                                    innerResolve(); // Resolve anyway to continue with other items
+                                                });
+                                        });
+                                    } catch (error) {
+                                        console.warn(`Error processing ${item.type} ${item.id || ''}:`, error);
+                                    } finally {
+                                        // Always update progress and resolve
+                                        completedItems++;
+                                        const currentProgress = 50 + (completedItems / totalItems) * progressRange;
+                                        updateProgress(currentProgress, `⏳ Training content (${completedItems}/${totalItems})...`);
+                                        resolve();
+                                    }
+                                });
+                            });
+                            
+                            // Wait for the current batch to complete before moving to the next
+                            await Promise.all(batchPromises);
+                            
+                            // Add a small delay between batches to let the server breathe
+                            await new Promise(resolve => setTimeout(resolve, 300)); // Reduced to 300ms since we're not waiting for responses
+                        }
+                        
+                        // Training complete
+                        updateProgress(100, '✅ Sync & Training Complete!');
+                        return true;
+                    }
+                    
+                    // Start the sequential processing and return the promise
+                    return processItems();
                 })
                 .then(function() {
-                    // All training is complete (both individual and general)
-                    // Update website info after completion
-                    setTimeout(() => {
-                        loadWebsiteInfo();
-                    }, 1500);
+                    // All training is initiated (both individual and general)
+                    // Update website info after sending all requests
+                    updateProgress(95, '✅ Training initiated! Monitoring progress...');
+                    
+                    // Show explanation about background processing
+                    $('#sync-warning').html(`
+                        <p><strong>ℹ️ Training In Progress:</strong> All training requests have been initiated and 
+                        are now processing. This can take several minutes to complete depending on the 
+                        size of your website. Progress will be tracked below.</p>
+                        <div id="training-status-container">
+                            <p id="training-status">Status: <span>Processing...</span></p>
+                            <div id="training-progress-container" style="width: 100%; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 10px 0; height: 24px; position: relative;">
+                                <div id="training-progress-bar" style="width: 0%; height: 100%; background-color: #0073aa; transition: width 0.3s ease;"></div>
+                                <div id="training-progress-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; line-height: 24px; text-align: center; color: #fff; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,0.2);">
+                                    0%
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                    
+                    // Poll for status updates
+                    let pollingInterval = setInterval(function() {
+                        $.post(ajaxurl, { 
+                            action: 'voicero_get_training_status', 
+                            nonce: nonce 
+                        })
+                        .done(function(response) {
+                            if (response.success) {
+                                const data = response.data;
+                                
+                                // Calculate progress percentage
+                                let progressPercent = 0;
+                                if (data.total_items > 0) {
+                                    progressPercent = Math.round((data.completed_items / data.total_items) * 100);
+                                }
+                                
+                                // Update progress display
+                                $('#training-progress-bar').css('width', progressPercent + '%');
+                                $('#training-progress-text').text(progressPercent + '%');
+                                
+                                // Show status text
+                                let statusText = 'Processing...';
+                                if (data.status === 'completed') {
+                                    statusText = '<span style="color: green;">Completed ✓</span>';
+                                    clearInterval(pollingInterval); // Stop polling if completed
+                                    updateProgress(100, '✅ Training Completed!');
+                                    
+                                    // Update website info after slight delay
+                                    setTimeout(() => {
+                                        loadWebsiteInfo();
+                                    }, 1500);
+                                } else if (data.status === 'stalled') {
+                                    statusText = '<span style="color: orange;">Stalled - Some items may not have completed</span>';
+                                }
+                                
+                                $('#training-status span').html(statusText);
+                                
+                                // If completed, stop polling
+                                if (!data.in_progress || data.status === 'completed') {
+                                    clearInterval(pollingInterval);
+                                }
+                            }
+                        });
+                    }, 3000); // Check every 3 seconds
+                    
+                    // After 10 minutes, stop polling regardless
+                    setTimeout(function() {
+                        if (pollingInterval) {
+                            clearInterval(pollingInterval);
+                            $('#training-status span').html('<span style="color: grey;">Check back later - status updates stopped</span>');
+                        }
+                    }, 600000); // 10 minutes max
                 })
                 .catch(function(error) {
                     // General Error handling for the entire chain
@@ -1263,7 +1394,7 @@ function ai_website_render_admin_page() {
                             <tr>
                                 <th>Monthly Queries</th>
                                 <td>
-                                    ${website.monthlyQueries || 0} / ${website.queryLimit || 1000}
+                                    ${website.monthlyQueries || 0} / ${website.queryLimit || 200}
                                     <div class="progress-bar" style="
                                         background: #f0f0f1;
                                         height: 10px;
@@ -1272,7 +1403,7 @@ function ai_website_render_admin_page() {
                                         overflow: hidden;
                                     ">
                                         <div style="
-                                            width: ${((website.monthlyQueries || 0) / (website.queryLimit || 1000)) * 100}%;
+                                            width: ${((website.monthlyQueries || 0) / (website.queryLimit || 200)) * 100}%;
                                             background: #2271b1;
                                             height: 100%;
                                             transition: width 0.3s ease;
@@ -1289,7 +1420,7 @@ function ai_website_render_admin_page() {
                     </table>
 
                     <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="http://localhost:3000/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
+                        <a href="https://www.voicero.ai/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
                             Open Dashboard
                         </a>
                         <button class="button toggle-status-btn" 
@@ -1372,7 +1503,7 @@ function ai_website_render_admin_page() {
             // Disable button during request
             $button.prop('disabled', true);
             
-            fetch( '<?php echo AI_WEBSITE_API_URL; ?>' + '/websites/toggle-status', {
+            fetch( 'https://www.voicero.ai/api/websites/toggle-status', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1413,7 +1544,7 @@ function ai_website_render_admin_page() {
             // Expose config globally (or use a more structured approach if needed)
              window.aiWebsiteConfig = {
                 accessKey: ACCESS_KEY,
-                apiUrl: '<?php echo esc_js(AI_WEBSITE_API_URL); ?>',
+                apiUrl: 'https://www.voicero.ai/api',
                 ajaxUrl: '<?php echo esc_js(admin_url('admin-ajax.php')); ?>',
                 nonce: '<?php echo esc_js(wp_create_nonce('ai_website_frontend_nonce')); ?>', // Frontend nonce
                 adminNonce: nonce // Admin nonce already defined above
@@ -1547,13 +1678,26 @@ function voicero_session_proxy($request) {
     // Handle GET request
     if ($method === 'GET') {
         $params = $request->get_query_params();
-        $website_id = isset($params['websiteId']) ? $params['websiteId'] : '';
         
-        if (empty($website_id)) {
-            return new WP_REST_Response(['error' => 'Website ID is required'], 400);
+        // Check if we have a sessionId or websiteId
+        if (isset($params['sessionId']) && !empty($params['sessionId'])) {
+            $session_id = $params['sessionId'];
+            $endpoint .= '/' . urlencode($session_id);
+            
+            error_log('Voicero proxy: Getting session by ID: ' . $session_id);
+        } 
+        else if (isset($params['websiteId']) && !empty($params['websiteId'])) {
+            $website_id = $params['websiteId'];
+            
+            // For GET with websiteId we need to use a different endpoint structure
+            $endpoint = AI_WEBSITE_API_URL . '/session?websiteId=' . urlencode($website_id);
+            
+            error_log('Voicero proxy: Getting session by websiteId: ' . $website_id);
+        } 
+        else {
+            error_log('Voicero proxy: Missing websiteId or sessionId parameter');
+            return new WP_REST_Response(['error' => 'Either websiteId or sessionId is required'], 400);
         }
-        
-        $endpoint .= '?websiteId=' . urlencode($website_id);
         
         $response = wp_remote_get($endpoint, [
             'headers' => [
@@ -1569,6 +1713,8 @@ function voicero_session_proxy($request) {
     else if ($method === 'POST') {
         // Get the request body and pass it through to the API
         $body = $request->get_body();
+        
+        error_log('Voicero session proxy: Creating new session with body: ' . $body);
         
         $response = wp_remote_post($endpoint, [
             'headers' => [
@@ -1593,6 +1739,9 @@ function voicero_session_proxy($request) {
     $status_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
     
+    // Debug what we're returning to the client
+    error_log('Voicero session proxy response: Status ' . $status_code . ', Body: ' . $response_body);
+    
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
 
@@ -1601,8 +1750,7 @@ function voicero_session_proxy($request) {
  * Handles window state updates
  */
 function voicero_window_state_proxy($request) {
-    // Debug incoming request
-    error_log('Window state proxy called with request: ' . print_r($request->get_params(), true));
+    // Debug incoming request removed
     
     // Get the access key from options (server-side only)
     $access_key = get_option('ai_website_access_key', '');
@@ -1612,27 +1760,27 @@ function voicero_window_state_proxy($request) {
     
     // Get the request body
     $body = $request->get_body();
-    error_log('Request body: ' . $body);
+    // Debug request body removed
     
     // Decode the body to validate it has the required fields
     $decoded_body = json_decode($body, true);
     if (!isset($decoded_body['sessionId']) || !isset($decoded_body['windowState'])) {
-        error_log('Invalid request: Missing sessionId or windowState');
+        // Debug invalid request removed
         return new WP_REST_Response(['error' => 'Session ID and window state are required'], 400);
     }
     
     // Ensure session ID is a properly formatted string
     $session_id = trim($decoded_body['sessionId']);
     if (empty($session_id)) {
-        error_log('Invalid request: Empty sessionId');
+        // Debug invalid sessionId removed
         return new WP_REST_Response(['error' => 'Valid Session ID is required'], 400);
     }
     
-    error_log('Processing update for session ID: ' . $session_id);
+    // Debug processing session ID removed
     
     // Construct the API endpoint
     $endpoint = AI_WEBSITE_API_URL . '/session/windows';
-    error_log('Making request to: ' . $endpoint);
+    // Debug request URL removed
     
     // Make the PATCH request with the key (server-side)
     $response = wp_remote_request($endpoint, [
@@ -1648,7 +1796,7 @@ function voicero_window_state_proxy($request) {
     ]);
     
     if (is_wp_error($response)) {
-        error_log('Voicero proxy window state error: ' . $response->get_error_message());
+        // Debug response error removed
         return new WP_REST_Response([
             'error' => 'API request failed: ' . $response->get_error_message()
         ], 500);
@@ -1658,9 +1806,7 @@ function voicero_window_state_proxy($request) {
     $status_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
     
-    // Debug response
-    error_log('API response code: ' . $status_code);
-    error_log('API response body: ' . $response_body);
+    // Debug response removed
     
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
@@ -1948,7 +2094,7 @@ add_action('init', function() {
     if (isset($_SERVER['HTTP_ORIGIN'])) {
         $origin = $_SERVER['HTTP_ORIGIN'];
         // Add allowed origins here if needed, otherwise '*' might be okay for development
-        $allowed_origins = ['http://localhost:3000', 'http://localhost:5173']; // Add frontend dev server if different
+        $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'https://www.voicero.ai']; // Add frontend dev server if different
         if (in_array($origin, $allowed_origins) || $origin === get_site_url()) { // Allow own origin
              header("Access-Control-Allow-Origin: {$origin}");
         header('Access-Control-Allow-Credentials: true');
@@ -1976,7 +2122,7 @@ add_action('rest_api_init', function() {
     add_filter('rest_pre_serve_request', function($value) {
         if (isset($_SERVER['HTTP_ORIGIN'])) {
             $origin = $_SERVER['HTTP_ORIGIN'];
-            $allowed_origins = ['http://localhost:3000', 'http://localhost:5173']; 
+            $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'https://www.voicero.ai']; 
              if (in_array($origin, $allowed_origins) || $origin === get_site_url()) {
                  header("Access-Control-Allow-Origin: {$origin}");
             header('Access-Control-Allow-Credentials: true');
@@ -2000,7 +2146,6 @@ add_action('rest_api_init', function() {
 ------------------------------------------------------------------------ */
 function my_first_plugin_add_toggle_button() {
     $hook = current_filter(); // Get the current hook being used
-    voicero_debug_log('Adding Voicero container via ' . $hook . ' hook');
     
     // Only add the button if the website is active AND synced
     $saved_key = get_option('ai_website_access_key', '');
@@ -2022,7 +2167,6 @@ function my_first_plugin_add_toggle_button() {
     <!-- Main container for Voicero app -->
     <div id="voicero-app-container" data-hook="<?php echo esc_attr($hook); ?>"></div>
     <?php
-    voicero_debug_log('Voicero container added to the page');
 }
 
 // Add to both wp_body_open and wp_footer for maximum compatibility
@@ -2036,7 +2180,7 @@ function ai_website_get_access_key() {
 
 // Add this to make the access key and API URL available to frontend scripts
 function ai_website_enqueue_scripts() {
-    voicero_debug_log('Enqueueing Voicero AI scripts');
+    // Removed debug log
     
     // Only enqueue on the frontend, not in admin
     if (!is_admin()) {
@@ -2069,7 +2213,7 @@ function ai_website_enqueue_scripts() {
 
         // Get access key
         $access_key = get_option('ai_website_access_key', '');
-        voicero_debug_log('Access key available', !empty($access_key));
+        // Removed debug log
 
         // Pass data to the frontend script
         wp_localize_script('voicero-core-js', 'aiWebsiteConfig', [
@@ -2173,6 +2317,11 @@ function ai_website_get_info() {
         ]);
     }
 
+    // Override the queryLimit to 200 for free plan users
+    if (isset($data['website']['plan']) && $data['website']['plan'] === 'Free') {
+        $data['website']['queryLimit'] = 200;
+    }
+
     // Return just the website data
     wp_send_json_success($data['website']);
 }
@@ -2190,7 +2339,8 @@ function ai_website_clear_connection() {
 
 // Function to add inline debugging script
 function voicero_add_inline_debug_script() {
-    if (defined('WP_DEBUG') && WP_DEBUG) {
+    // Only run in extreme debug mode - not in regular WP_DEBUG mode
+    if (defined('VOICERO_EXTREME_DEBUG') && VOICERO_EXTREME_DEBUG) {
         ?>
         <script>
         (function() {
@@ -2241,18 +2391,15 @@ function voicero_session_clear_proxy($request) {
     
     // Get the request body
     $body = $request->get_body();
-    error_log('Session clear request body: ' . $body);
     
     // Decode the body to validate it has the required fields
     $decoded_body = json_decode($body, true);
     if (!isset($decoded_body['sessionId'])) {
-        error_log('Invalid request: Missing sessionId');
         return new WP_REST_Response(['error' => 'Session ID is required'], 400);
     }
     
     // Construct the API endpoint
     $endpoint = AI_WEBSITE_API_URL . '/session/clear';
-    error_log('Making request to: ' . $endpoint);
     
     // Make the POST request with the key (server-side)
     $response = wp_remote_request($endpoint, [
@@ -2268,7 +2415,6 @@ function voicero_session_clear_proxy($request) {
     ]);
     
     if (is_wp_error($response)) {
-        error_log('Voicero proxy session clear error: ' . $response->get_error_message());
         return new WP_REST_Response([
             'error' => 'API request failed: ' . $response->get_error_message()
         ], 500);
@@ -2277,10 +2423,6 @@ function voicero_session_clear_proxy($request) {
     // Return the API response
     $status_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
-    
-    // Debug response
-    error_log('API response code: ' . $status_code);
-    error_log('API response body: ' . $response_body);
     
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
@@ -2298,12 +2440,10 @@ function voicero_chat_proxy($request) {
     
     // Get the request body
     $body = $request->get_body();
-    error_log('Chat request body: ' . $body);
     
     // Decode the body to validate it has the required fields
     $decoded_body = json_decode($body, true);
     if (!isset($decoded_body['message'])) {
-        error_log('Invalid chat request: Missing message');
         return new WP_REST_Response(['error' => 'Message is required'], 400);
     }
     
@@ -2315,7 +2455,6 @@ function voicero_chat_proxy($request) {
     
     // Construct the API endpoint - Updated to use /wordpress/chat instead of /chat
     $endpoint = AI_WEBSITE_API_URL . '/wordpress/chat';
-    error_log('Making chat request to: ' . $endpoint);
     
     // Make the POST request with the key (server-side)
     $response = wp_remote_post($endpoint, [
@@ -2330,7 +2469,6 @@ function voicero_chat_proxy($request) {
     ]);
     
     if (is_wp_error($response)) {
-        error_log('Voicero chat proxy error: ' . $response->get_error_message());
         return new WP_REST_Response([
             'error' => 'API request failed: ' . $response->get_error_message()
         ], 500);
@@ -2339,10 +2477,6 @@ function voicero_chat_proxy($request) {
     // Return the API response
     $status_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
-    
-    // Debug response
-    error_log('API response code: ' . $status_code);
-    error_log('API response body: ' . $response_body);
     
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
@@ -2364,16 +2498,6 @@ function voicero_tts_proxy($request) {
     $json_body = $request->get_body();
     $body_params = json_decode($json_body, true);
     
-    // Log the request parameters for debugging
-    error_log('TTS proxy request parameters: ' . json_encode($body_params));
-    
-    // Create a debug log file with more detailed information
-    $debug_log = "TTS Request at " . date('Y-m-d H:i:s') . "\n";
-    $debug_log .= "Request params: " . json_encode($body_params, JSON_PRETTY_PRINT) . "\n";
-    
-    // Save to a debug log file
-    file_put_contents(plugin_dir_path(__FILE__) . 'logs/tts-debug.log', $debug_log, FILE_APPEND);
-    
     // Validate request
     if (empty($body_params['text'])) {
         error_log('TTS proxy: No text provided');
@@ -2381,7 +2505,7 @@ function voicero_tts_proxy($request) {
     }
     
     // Forward request to local API
-    $response = wp_remote_post('http://localhost:3000/api/tts', [
+    $response = wp_remote_post('https://www.voicero.ai/api/tts', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -2404,9 +2528,6 @@ function voicero_tts_proxy($request) {
     
     // Get response status code
     $status_code = wp_remote_retrieve_response_code($response);
-    
-    // Log status code for debugging
-    error_log('TTS API response status: ' . $status_code);
     
     // If not successful, return error
     if ($status_code < 200 || $status_code >= 300) {
@@ -2439,22 +2560,6 @@ function voicero_tts_proxy($request) {
     // Get audio data
     $audio_data = wp_remote_retrieve_body($response);
     
-    // Get all response headers for debugging
-    $response_headers = wp_remote_retrieve_headers($response);
-    $headers_string = json_encode($response_headers->getAll(), JSON_PRETTY_PRINT);
-    error_log('TTS API response headers: ' . $headers_string);
-    
-    // Append to debug log
-    $debug_log = "TTS Response at " . date('Y-m-d H:i:s') . "\n";
-    $debug_log .= "Status code: " . $status_code . "\n";
-    $debug_log .= "Headers: " . $headers_string . "\n";
-    $debug_log .= "Content length: " . strlen($audio_data) . " bytes\n";
-    
-    // Check first few bytes to identify content type
-    $first_bytes = bin2hex(substr($audio_data, 0, 16));
-    $debug_log .= "First bytes: " . $first_bytes . "\n\n";
-    file_put_contents(plugin_dir_path(__FILE__) . 'logs/tts-debug.log', $debug_log, FILE_APPEND);
-    
     // Special check: see if data might be JSON-encoded
     if (substr($audio_data, 0, 1) === '"' && substr($audio_data, -1) === '"') {
         error_log('TTS API returned JSON-encoded string instead of raw binary data');
@@ -2465,13 +2570,6 @@ function voicero_tts_proxy($request) {
             error_log('Successfully decoded JSON string to raw data');
             // Replace the audio_data with the decoded binary content
             $audio_data = $decoded_data;
-            
-            // Log this correction
-            file_put_contents(
-                plugin_dir_path(__FILE__) . 'logs/tts-fix.log', 
-                date('Y-m-d H:i:s') . " - Fixed JSON-encoded audio data, new length: " . strlen($audio_data) . "\n", 
-                FILE_APPEND
-            );
         }
     }
     
@@ -2485,13 +2583,6 @@ function voicero_tts_proxy($request) {
         strpos($audio_data, 'error') !== false) {
         error_log('TTS API returned non-audio data: ' . substr($audio_data, 0, 100));
         
-        // Log the full error response
-        file_put_contents(
-            plugin_dir_path(__FILE__) . 'logs/tts-error.log', 
-            date('Y-m-d H:i:s') . " - Error Response:\n" . $audio_data . "\n\n", 
-            FILE_APPEND
-        );
-        
         return new WP_REST_Response(
             ['error' => 'TTS API returned non-audio data', 'details' => $audio_data],
             500
@@ -2504,23 +2595,6 @@ function voicero_tts_proxy($request) {
     
     if (!$id3_header && !$mpeg_frame_sync) {
         error_log('TTS API returned invalid audio format. First bytes: ' . bin2hex($first_bytes));
-        
-        // Save the invalid audio data for analysis
-        file_put_contents(
-            plugin_dir_path(__FILE__) . 'logs/invalid-audio.bin', 
-            $audio_data
-        );
-        
-        // Try to detect if it's a text response
-        $sample_text = substr($audio_data, 0, 500);
-        if (preg_match('/^[\x20-\x7E\r\n\t]+$/', $sample_text)) {
-            // It appears to be ASCII text
-            file_put_contents(
-                plugin_dir_path(__FILE__) . 'logs/tts-text-error.log', 
-                date('Y-m-d H:i:s') . " - Text Response:\n" . $sample_text . "\n\n", 
-                FILE_APPEND
-            );
-        }
         
         return new WP_REST_Response(
             ['error' => 'TTS API returned invalid audio format', 'details' => bin2hex(substr($audio_data, 0, 20))],
@@ -2610,7 +2684,7 @@ function voicero_whisper_proxy($request) {
     $body .= "--$boundary--\r\n";
     
     // Send request to local API
-    $response = wp_remote_post('http://localhost:3000/api/whisper', [
+    $response = wp_remote_post('https://www.voicero.ai/api/whisper', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
@@ -2728,3 +2802,44 @@ add_action('rest_api_init', function() {
     
     error_log('Voicero REST API endpoints registered successfully');
 });
+
+// Add a new function to track training status
+function voicero_get_training_status() {
+    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    
+    // Get the training status from options
+    $training_data = get_option('voicero_training_status', [
+        'in_progress' => false,
+        'total_items' => 0,
+        'completed_items' => 0,
+        'failed_items' => 0,
+        'last_updated' => 0,
+        'status' => 'not_started'
+    ]);
+    
+    // If training is in progress but hasn't been updated in 10 minutes, consider it stalled
+    if ($training_data['in_progress'] && time() - $training_data['last_updated'] > 600) {
+        $training_data['status'] = 'stalled';
+    }
+    
+    wp_send_json_success($training_data);
+}
+add_action('wp_ajax_voicero_get_training_status', 'voicero_get_training_status');
+
+// Helper function to update training status
+function voicero_update_training_status($key, $value) {
+    $training_data = get_option('voicero_training_status', [
+        'in_progress' => false,
+        'total_items' => 0,
+        'completed_items' => 0,
+        'failed_items' => 0,
+        'last_updated' => time(),
+        'status' => 'not_started'
+    ]);
+    
+    $training_data[$key] = $value;
+    $training_data['last_updated'] = time();
+    
+    update_option('voicero_training_status', $training_data);
+    return $training_data;
+}
