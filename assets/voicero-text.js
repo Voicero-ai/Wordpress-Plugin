@@ -61,17 +61,8 @@ const VoiceroText = {
         this.getColorVariants(this.websiteColor);
       }
 
-      // Store access key for later use
-      if (window.voiceroConfig && window.voiceroConfig.accessKey) {
-        this.accessKey = window.voiceroConfig.accessKey;
-        // Fetch website data including popup questions
-        this.fetchWebsiteData(this.accessKey);
-      }
+      // SECURITY: Direct API access and accessKey handling removed - now using server-side proxy
     } else {
-      // Try to get from environment or use a reasonable default
-      this.apiBaseUrl =
-        this.apiBaseUrl || window.API_URL || "http://localhost:3000";
-
       // Use default color and generate variants
       console.log(
         "Voicero Text: Using default color (VoiceroCore not available):",
@@ -555,57 +546,73 @@ const VoiceroText = {
   },
 
   // Fetch website data from /api/connect endpoint
-  fetchWebsiteData: function (accessKey) {
-    if (!this.apiBaseUrl) {
+  fetchWebsiteData: function () {
+    // SECURITY: Direct API access removed - now using server-side proxy through WordPress AJAX
+    if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
+      console.warn("Voicero: Missing AJAX configuration");
+      this.createFallbackPopupQuestions();
       return;
     }
-    if (!accessKey) {
-      return;
-    }
-    const apiUrl = `${this.apiBaseUrl}/api/connect`;
 
-    fetch(apiUrl, {
-      method: "GET",
+    // Use WordPress AJAX endpoint instead of direct API access
+    const ajaxUrl = window.aiWebsiteConfig.ajaxUrl;
+    const nonce = window.aiWebsiteConfig.nonce || "";
+
+    fetch(ajaxUrl, {
+      method: "POST",
       headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: new URLSearchParams({
+        action: "ai_website_get_info",
+        nonce: nonce,
+      }),
     })
       .then((response) => {
         if (!response.ok) {
-          throw new Error(`API validation failed: ${response.status}`);
+          throw new Error(`Website data fetch failed: ${response.status}`);
         }
         return response.json();
       })
-      .then((data) => {
-        if (!data || typeof data !== "object") {
-          return;
+      .then((response) => {
+        if (!response || !response.success || !response.data) {
+          throw new Error("Invalid response structure");
         }
-        this.websiteData = data;
+
+        // Use the website data from the response
+        this.websiteData = { website: response.data };
+
         // Store custom instructions if available
-        if (data.website && data.website.customInstructions) {
-          this.customInstructions = data.website.customInstructions;
+        if (response.data.customInstructions) {
+          this.customInstructions = response.data.customInstructions;
         }
+
         // Update popup questions in the interface if it exists
         this.updatePopupQuestions();
       })
       .catch((error) => {
-        // Create fallback popup questions if they don't exist
-        if (
-          !this.websiteData ||
-          !this.websiteData.website ||
-          !this.websiteData.website.popUpQuestions
-        ) {
-          this.websiteData = this.websiteData || {};
-          this.websiteData.website = this.websiteData.website || {};
-          this.websiteData.website.popUpQuestions = [
-            { question: "What products do you offer?" },
-            { question: "How can I contact customer support?" },
-            { question: "Do you ship internationally?" },
-          ];
-          this.updatePopupQuestions();
-        }
+        console.warn("Voicero: Error fetching website data:", error);
+        this.createFallbackPopupQuestions();
       });
+  },
+
+  // Helper method for creating fallback popup questions
+  createFallbackPopupQuestions: function () {
+    // Create fallback popup questions if they don't exist
+    if (
+      !this.websiteData ||
+      !this.websiteData.website ||
+      !this.websiteData.website.popUpQuestions
+    ) {
+      this.websiteData = this.websiteData || {};
+      this.websiteData.website = this.websiteData.website || {};
+      this.websiteData.website.popUpQuestions = [
+        { question: "What products do you offer?" },
+        { question: "How can I contact customer support?" },
+        { question: "Do you ship internationally?" },
+      ];
+      this.updatePopupQuestions();
+    }
   },
 
   // Update popup questions in the interface with data from API
@@ -1971,8 +1978,10 @@ const VoiceroText = {
 
   // Send chat message to API
   sendChatToApi: function (messageText, threadId) {
-    if (!this.apiBaseUrl) {
-      return Promise.reject("API URL not available");
+    // SECURITY: Direct API access removed - now using WordPress proxy
+    if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
+      console.warn("Voicero: Missing WordPress configuration");
+      return Promise.reject("WordPress configuration not available");
     }
 
     // Show loading indicator
