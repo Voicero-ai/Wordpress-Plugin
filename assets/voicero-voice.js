@@ -19,9 +19,20 @@ const VoiceroVoice = {
   currentAudioStream: null,
   isShuttingDown: false,
   manuallyStoppedRecording: false, // New flag to track if user manually stopped recording
+  websiteColor: "#882be6", // Default color
 
   // Initialize the voice module
   init: function () {
+    // Get website color from Core if available
+    if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
+      this.websiteColor = window.VoiceroCore.websiteColor;
+      console.log("Voicero Voice: Using color from Core:", this.websiteColor);
+    } else {
+      // Use default color
+      this.websiteColor = "#882be6";
+      console.log("Voicero Voice: Using default color:", this.websiteColor);
+    }
+
     // Wait for DOM to be ready
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
@@ -196,7 +207,9 @@ const VoiceroVoice = {
         font-weight: 700;
         margin-bottom: 5px;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-        background: linear-gradient(90deg, #882be6, #ff6b6b, #4a90e2);
+        background: linear-gradient(90deg, ${
+          this.websiteColor || "#882be6"
+        }, #ff6b6b, #4a90e2);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -212,7 +225,7 @@ const VoiceroVoice = {
       }
       
       .welcome-highlight {
-        color: #882be6;
+        color: ${this.websiteColor || "#882be6"};
         font-weight: 600;
       }
       
@@ -249,7 +262,7 @@ const VoiceroVoice = {
       }
 
       .user-message .message-content {
-        background: #882be6;
+        background: ${this.websiteColor || "#882be6"};
         color: white;
         border-radius: 18px;
         padding: 12px 16px;
@@ -513,10 +526,28 @@ const VoiceroVoice = {
     inputContainer.style.cssText = `
       position: relative;
       padding: 2px;
-      background: linear-gradient(90deg, #882be6, #ff4444, #882be6);
-      background-size: 200% 100%;
+      background: linear-gradient(90deg, 
+        ${this.adjustColor(
+          `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+          -0.4
+        )}, 
+        ${this.adjustColor(
+          `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+          -0.2
+        )}, 
+        var(--voicero-theme-color, ${this.websiteColor || "#882be6"}),
+        ${this.adjustColor(
+          `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+          0.2
+        )}, 
+        ${this.adjustColor(
+          `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+          0.4
+        )}
+      );
+      background-size: 500% 100%;
       border-radius: 0 0 12px 12px;
-      animation: gradientBorder 3s linear infinite;
+      animation: gradientBorder 15s linear infinite;
       transition: all 0.3s ease;
       box-shadow: none;
       width: 100%;
@@ -534,7 +565,7 @@ const VoiceroVoice = {
           bottom: 100%;
           left: 50%;
           transform: translateX(-50%);
-          background: #882be6;
+          background: ${this.websiteColor || "#882be6"};
           border: none;
           color: white;
           padding: 10px 20px;
@@ -579,7 +610,7 @@ const VoiceroVoice = {
             width: 45px;
             height: 45px;
             border-radius: 50%;
-            background: #882be6;
+            background: ${this.websiteColor || "#882be6"};
             border: 2px solid transparent;
             display: flex;
             align-items: center;
@@ -995,7 +1026,6 @@ const VoiceroVoice = {
       this.isRecording = false;
 
       if (source === "manual") {
-        
         console.log(
           "Voicero Voice: Manual stop detected - turning off autoMic"
         );
@@ -1015,7 +1045,7 @@ const VoiceroVoice = {
 
       // Update UI - remove siri animation
       micButton.classList.remove("siri-active");
-      micButton.style.background = "#882be6";
+      micButton.style.background = this.websiteColor || "#882be6";
       micButton.style.borderColor = "transparent";
       micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
       micIcon.style.stroke = "white";
@@ -1068,7 +1098,14 @@ const VoiceroVoice = {
       // Add listening indicator message
       this.addSystemMessage(`
         <div class="welcome-message" style="padding: 10px 15px; margin: 10px auto;">
-          <div class="welcome-title" style="background: linear-gradient(90deg, #ff4444, #ff8866, #ff4444); -webkit-background-clip: text; background-clip: text; margin-bottom: 2px;">
+          <div class="welcome-title" style="background: linear-gradient(90deg, var(--voicero-theme-color, ${
+            this.websiteColor || "#882be6"
+          }), ${this.adjustColor(
+        `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+        0.2
+      )}, var(--voicero-theme-color, ${
+        this.websiteColor || "#882be6"
+      })); -webkit-background-clip: text; background-clip: text; margin-bottom: 2px;">
             🎤 I'm listening...
           </div>
           <div class="welcome-subtitle" style="font-size: 13px;">Speak now</div>
@@ -1087,7 +1124,7 @@ const VoiceroVoice = {
 
         // Show error message
         micButton.classList.remove("siri-active");
-        micButton.style.background = "#882be6";
+        micButton.style.background = this.websiteColor || "#882be6";
         micButton.style.borderColor = "transparent";
         micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
 
@@ -1792,7 +1829,7 @@ const VoiceroVoice = {
           console.error("MediaDevices error:", error);
           // Reset UI
           micButton.classList.remove("siri-active");
-          micButton.style.background = "#882be6";
+          micButton.style.background = this.websiteColor || "#882be6";
           micButton.style.borderColor = "transparent";
           micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
           this.isRecording = false;
@@ -2499,7 +2536,7 @@ const VoiceroVoice = {
 
     if (role === "user") {
       messageContent.style.cssText = `
-        background: #882be6;
+        background: ${this.websiteColor || "#882be6"};
         color: white;
         border-radius: 18px;
         padding: 12px 16px;
@@ -2557,7 +2594,7 @@ const VoiceroVoice = {
           messagesContainer.querySelectorAll(".read-status");
         userStatusDivs.forEach((div) => {
           div.textContent = "Read";
-          div.style.color = "#882be6";
+          div.style.color = this.websiteColor || "#882be6";
         });
       }
     }
@@ -2969,6 +3006,43 @@ const VoiceroVoice = {
         // Still store the thread ID even if no messages
         this.currentThreadId = currentThread.threadId;
       }
+    }
+  },
+
+  // Helper methods for color variations
+  adjustColor: function (color, adjustment) {
+    if (!color) return "#ff4444";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      // Positive adjustment makes it lighter, negative makes it darker
+      let factor = adjustment < 0 ? 1 + adjustment : 1 + adjustment;
+
+      // Adjust RGB values
+      let newR =
+        adjustment < 0
+          ? Math.floor(r * factor)
+          : Math.min(255, Math.floor(r * factor));
+      let newG =
+        adjustment < 0
+          ? Math.floor(g * factor)
+          : Math.min(255, Math.floor(g * factor));
+      let newB =
+        adjustment < 0
+          ? Math.floor(b * factor)
+          : Math.min(255, Math.floor(b * factor));
+
+      // Convert back to hex
+      return `#${newR.toString(16).padStart(2, "0")}${newG
+        .toString(16)
+        .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      console.error("Error adjusting color:", e);
+      return color;
     }
   },
 };

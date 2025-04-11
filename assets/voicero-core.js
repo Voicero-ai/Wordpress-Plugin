@@ -12,6 +12,7 @@
     apiConnected: false, // Track connection status
     session: null, // Store the current session
     thread: null, // Store the current thread
+    websiteColor: "#882be6", // Default color if not provided by API
 
     // Queue for pending window state updates
     pendingWindowStateUpdates: [],
@@ -19,8 +20,12 @@
     // Initialize on page load
     init: function () {
       console.log("Voicero Core Script: init() called");
+
       // Set up global reference
       window.VoiceroCore = this;
+
+      // Make sure apiConnected is false by default until we get a successful API response
+      this.apiConnected = false;
 
       // Check if config is available
       if (typeof aiWebsiteConfig !== "undefined") {
@@ -31,30 +36,32 @@
         );
       }
 
-      // Initialize the API connection
-      this.initializeApiConnection();
+      // Step 1: First set up basic containers (but not the button yet)
+      this.createTextChatInterface();
+      this.createVoiceChatInterface();
 
-      // Set up event listeners
-      this.setupEventListeners();
+      // Step 2: Initialize the API connection - this will create the button
+      // only after we know the website color
+      console.log("Voicero Core Script: Initializing API connection");
+      this.checkApiConnection();
 
-      console.log("Voicero Core Script: Initialization complete");
+      console.log("Voicero Core Script: Initialization sequence started");
     },
 
-    // Initialize API connection
+    // Initialize API connection - empty since we call checkApiConnection directly now
     initializeApiConnection: function () {
-      console.log("Voicero Core Script: Initializing API connection");
-      // Don't create the interface immediately - wait for successful API connection
-      // Check API connection - do this immediately
-      this.checkApiConnection();
+      console.log(
+        "Voicero Core Script: initializeApiConnection called - now deprecated"
+      );
+      // This method is now empty as we call checkApiConnection directly from init
     },
 
     // Set up event listeners
     setupEventListeners: function () {
       console.log("Voicero Core Script: Setting up event listeners");
-      // Create the main interface with the two option buttons
-      this.createButton();
+      // Don't create the button here - wait for API connection first
 
-      // Also create chat interface elements that might be needed
+      // Create chat interface elements that might be needed
       this.createTextChatInterface();
       this.createVoiceChatInterface();
     },
@@ -62,6 +69,17 @@
     // Create the main interface with the two option buttons
     createButton: function () {
       console.log("Voicero Core Script: Creating button interface");
+
+      // Skip button creation if the API connection is not established or failed
+      if (!this.apiConnected) {
+        console.warn(
+          "Voicero Core Script: Not creating button - API not connected"
+        );
+        return;
+      }
+
+      // Make sure theme colors are updated
+      this.updateThemeColor();
 
       // Add CSS Animations
       const styleEl = document.createElement("style");
@@ -79,6 +97,10 @@
     `;
       document.head.appendChild(styleEl);
       console.log("Voicero Core Script: Added CSS animations");
+
+      // Use the website color from API or default
+      const themeColor = this.websiteColor || "#882be6";
+      console.log("Voicero Core Script: Using theme color for UI:", themeColor);
 
       // Check if the container exists, otherwise append to body
       let container = document.getElementById("voicero-app-container");
@@ -123,7 +145,7 @@
 
           // Add the main button first
           buttonContainer.innerHTML = `
-          <button id="chat-website-button" class="visible">
+          <button id="chat-website-button" class="visible" style="background-color: ${themeColor}">
             <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
               <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
             </svg>
@@ -153,7 +175,7 @@
               z-index: 10001 !important;
               background-color: #c8c8c8 !important;
               border-radius: 12px !important;
-              box-shadow: 6px 6px 0 rgb(135, 24, 246) !important;
+              box-shadow: 6px 6px 0 ${themeColor} !important;
               padding: 15px !important;
               width: 280px !important;
               border: 1px solid rgb(0, 0, 0) !important;
@@ -482,7 +504,11 @@
             "Voicero Core Script: API response status:",
             response.status
           );
+          // Check if the response status is not 200
           if (!response.ok) {
+            console.error(`API validation failed: ${response.status}`);
+            // Set connection status to false since we got an error
+            this.apiConnected = false;
             throw new Error(`API validation failed: ${response.status}`);
           }
           return response.json();
@@ -495,43 +521,74 @@
             data.website?.active
           );
 
-          // Store the working API URL and update connection status
+          // Store the working API URL
           this.apiBaseUrl = this.apiBaseUrls[0]; // Just use first URL since proxy handles actual endpoint
-          this.apiConnected = true;
 
-          // Store website ID for session management
-          if (data.website && data.website.id) {
-            this.websiteId = data.website.id;
-
-            // Initialize session after successful connection
-            this.initializeSession();
-          }
-
-          // Only create the button if service is active
-          if (data.website && data.website.active === true) {
-            console.log(
-              "Voicero Core Script: Website is active, creating interface"
-            );
-
-            // Now create the button since we have a successful connection
-            this.createButton();
-
-            // Enable voice and text functions
-            if (window.VoiceroVoice) {
-              window.VoiceroVoice.apiBaseUrl = this.apiBaseUrl;
-            }
-
-            if (window.VoiceroText) {
-              window.VoiceroText.apiBaseUrl = this.apiBaseUrl;
-            }
-          } else {
+          // Check if the website exists and is active
+          if (!data.website || data.website.active !== true) {
             console.warn(
               "Voicero Core Script: Website is not active in API response"
             );
+            this.apiConnected = false;
+            return; // Exit early
+          }
+
+          // Only set apiConnected to true if we have a website and it's active
+          this.apiConnected = true;
+
+          // Store website ID for session management
+          if (data.website.id) {
+            this.websiteId = data.website.id;
+
+            // Store website color from API response, default to #882be6 if not provided
+            this.websiteColor = data.website.color
+              ? data.website.color
+              : "#882be6";
+            console.log(
+              "Voicero Core Script: Using website color:",
+              this.websiteColor
+            );
+
+            // Update CSS variables with the theme color
+            this.updateThemeColor(this.websiteColor);
+
+            // Initialize session after successful connection
+            this.initializeSession();
+          } else {
+            console.warn("Voicero Core Script: No website ID in API response");
+            this.apiConnected = false;
+            return; // Exit early, don't create button
+          }
+
+          // If we got here, we have a valid active website with a color
+          console.log(
+            "Voicero Core Script: Website is active, creating interface with color:",
+            this.websiteColor
+          );
+
+          // Create the button now that we have the color from the API
+          this.createButton();
+
+          // Enable voice and text functions
+          if (window.VoiceroVoice) {
+            window.VoiceroVoice.apiBaseUrl = this.apiBaseUrl;
+            window.VoiceroVoice.websiteColor = this.websiteColor;
+          }
+
+          if (window.VoiceroText) {
+            window.VoiceroText.apiBaseUrl = this.apiBaseUrl;
+            window.VoiceroText.websiteColor = this.websiteColor;
           }
         })
         .catch((error) => {
           console.error(`Voicero Core Script: API error with proxy:`, error);
+          // Set connection status to false since we got an error
+          this.apiConnected = false;
+
+          // Ensure no UI elements are created in error case
+          console.warn(
+            "Voicero Core Script: Not displaying UI due to API error"
+          );
         });
     },
 
@@ -1024,6 +1081,100 @@
             );
           });
       }, 0);
+    },
+
+    // Update theme color in CSS variables
+    updateThemeColor: function (color) {
+      if (!color) color = this.websiteColor;
+
+      // Update CSS variables with the theme color
+      document.documentElement.style.setProperty(
+        "--voicero-theme-color",
+        color
+      );
+
+      // Create lighter and darker variants
+      let lighterVariant = color;
+      let hoverVariant = color;
+
+      // If it's a hex color, we can calculate variants
+      if (color.startsWith("#")) {
+        try {
+          // Convert hex to RGB for the lighter variant
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+
+          // Create a lighter variant by adjusting brightness
+          const lighterR = Math.min(255, Math.floor(r * 1.2));
+          const lighterG = Math.min(255, Math.floor(g * 1.2));
+          const lighterB = Math.min(255, Math.floor(b * 1.2));
+
+          // Create a darker variant for hover
+          const darkerR = Math.floor(r * 0.8);
+          const darkerG = Math.floor(g * 0.8);
+          const darkerB = Math.floor(b * 0.8);
+
+          // Convert back to hex
+          lighterVariant = `#${lighterR.toString(16).padStart(2, "0")}${lighterG
+            .toString(16)
+            .padStart(2, "0")}${lighterB.toString(16).padStart(2, "0")}`;
+          hoverVariant = `#${darkerR.toString(16).padStart(2, "0")}${darkerG
+            .toString(16)
+            .padStart(2, "0")}${darkerB.toString(16).padStart(2, "0")}`;
+
+          // Update the pulse animation with the current color
+          const pulseStyle = document.createElement("style");
+          pulseStyle.innerHTML = `
+            @keyframes pulse {
+              0% {
+                box-shadow: 0 0 0 0 rgba(${r}, ${g}, ${b}, 0.4);
+              }
+              70% {
+                box-shadow: 0 0 0 10px rgba(${r}, ${g}, ${b}, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(${r}, ${g}, ${b}, 0);
+              }
+            }
+          `;
+
+          // Remove any existing pulse style and add the new one
+          const existingPulseStyle = document.getElementById(
+            "voicero-pulse-style"
+          );
+          if (existingPulseStyle) {
+            existingPulseStyle.remove();
+          }
+
+          pulseStyle.id = "voicero-pulse-style";
+          document.head.appendChild(pulseStyle);
+        } catch (e) {
+          console.error(
+            "Voicero Core Script: Error calculating color variants",
+            e
+          );
+          // Fallback to default variants
+          lighterVariant = "#9370db";
+          hoverVariant = "#7a5abf";
+        }
+      }
+
+      // Set the variant colors
+      document.documentElement.style.setProperty(
+        "--voicero-theme-color-light",
+        lighterVariant
+      );
+      document.documentElement.style.setProperty(
+        "--voicero-theme-color-hover",
+        hoverVariant
+      );
+
+      console.log("Voicero Core Script: Updated theme colors", {
+        main: color,
+        light: lighterVariant,
+        hover: hoverVariant,
+      });
     },
   };
 

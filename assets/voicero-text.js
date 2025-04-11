@@ -17,9 +17,22 @@ const VoiceroText = {
   initialized: false, // Initialize initialized flag
   lastProductUrl: null, // Store the last product URL for redirect
   isInterfaceBuilt: false, // Flag to check if interface is already built
+  websiteColor: "#882be6", // Default color if not provided by VoiceroCore
+  colorVariants: {
+    main: "#882be6",
+    light: "#9370db",
+    dark: "#7a5abf",
+    superlight: "#d5c5f3",
+    superdark: "#5e3b96",
+  },
 
   // Initialize the text module
   init: function () {
+    console.log("VoiceroText: Initializing interface");
+
+    // Apply global welcome styles immediately
+    this.forceGlobalWelcomeStyles();
+
     // Check if already initialized to prevent double initialization
     if (this.initialized) {
       return;
@@ -29,9 +42,25 @@ const VoiceroText = {
     // Mark as initialized early to prevent initialization loops
     this.initialized = true;
 
-    // Get API URL from Core if available
-    if (window.VoiceroCore && window.VoiceroCore.getApiBaseUrl) {
-      this.apiBaseUrl = VoiceroCore.getApiBaseUrl();
+    // Get API URL and color from Core if available
+    if (window.VoiceroCore) {
+      if (window.VoiceroCore.getApiBaseUrl) {
+        this.apiBaseUrl = VoiceroCore.getApiBaseUrl();
+      }
+
+      // Get website color from VoiceroCore
+      if (window.VoiceroCore.websiteColor) {
+        this.websiteColor = window.VoiceroCore.websiteColor;
+        console.log("Voicero Text: Using color from Core:", this.websiteColor);
+
+        // Generate color variants
+        this.getColorVariants(this.websiteColor);
+      } else {
+        // Use default color and generate variants
+        console.log("Voicero Text: Using default color:", this.websiteColor);
+        this.getColorVariants(this.websiteColor);
+      }
+
       // Store access key for later use
       if (window.voiceroConfig && window.voiceroConfig.accessKey) {
         this.accessKey = window.voiceroConfig.accessKey;
@@ -42,16 +71,95 @@ const VoiceroText = {
       // Try to get from environment or use a reasonable default
       this.apiBaseUrl =
         this.apiBaseUrl || window.API_URL || "http://localhost:3000";
+
+      // Use default color and generate variants
+      console.log(
+        "Voicero Text: Using default color (VoiceroCore not available):",
+        this.websiteColor
+      );
+      this.getColorVariants(this.websiteColor);
     }
 
     // Create HTML structure for the chat interface but keep it hidden
     this.createChatInterface();
+
+    // Make sure all UI elements have the correct colors
+    setTimeout(() => this.applyDynamicColors(), 100);
 
     // Hide the shadow host if it exists
     const shadowHost = document.getElementById("voicero-shadow-host");
     if (shadowHost) {
       shadowHost.style.display = "none";
     }
+  },
+
+  // Apply dynamic colors to all relevant elements
+  applyDynamicColors: function () {
+    if (!this.shadowRoot) return;
+
+    // Make sure we have color variants
+    if (!this.colorVariants) {
+      this.getColorVariants(this.websiteColor);
+    }
+
+    // Get the main color - USE WEBSITE COLOR DIRECTLY INSTEAD OF VARIANTS
+    const mainColor = this.websiteColor || "#882be6"; // Use website color directly
+    console.log("Applying dynamic colors with main color:", mainColor);
+
+    // Update send button color
+    const sendButton = this.shadowRoot.getElementById("send-message-btn");
+    if (sendButton) {
+      sendButton.style.backgroundColor = mainColor;
+    }
+
+    // Update user message bubbles
+    const userMessages = this.shadowRoot.querySelectorAll(
+      ".user-message .message-content"
+    );
+    userMessages.forEach((msg) => {
+      msg.style.backgroundColor = mainColor;
+    });
+
+    // Update read status color
+    const readStatuses = this.shadowRoot.querySelectorAll(".read-status");
+    readStatuses.forEach((status) => {
+      if (status.textContent === "Read") {
+        status.style.color = mainColor;
+      }
+    });
+
+    // Update suggestions
+    const suggestions = this.shadowRoot.querySelectorAll(".suggestion");
+    suggestions.forEach((suggestion) => {
+      suggestion.style.backgroundColor = mainColor;
+    });
+
+    // Update welcome message highlight
+    const highlights = this.shadowRoot.querySelectorAll(".welcome-highlight");
+    highlights.forEach((highlight) => {
+      highlight.style.cssText = `color: ${mainColor} !important`;
+    });
+
+    // IMPORTANT: Force colors for welcome-title elements
+    const welcomeTitles = this.shadowRoot.querySelectorAll(".welcome-title");
+    welcomeTitles.forEach((title) => {
+      // Apply gradient using direct style property
+      title.style.background = `linear-gradient(90deg, ${mainColor}, ${mainColor}) !important`;
+      title.style.webkitBackgroundClip = "text !important";
+      title.style.backgroundClip = "text !important";
+      title.style.webkitTextFillColor = "transparent !important";
+    });
+
+    // IMPORTANT: Force colors for welcome-pulse elements
+    const welcomePulses = this.shadowRoot.querySelectorAll(".welcome-pulse");
+    welcomePulses.forEach((pulse) => {
+      pulse.style.backgroundColor = mainColor;
+    });
+
+    // Also force global welcome styles for maximum compatibility
+    this.forceGlobalWelcomeStyles();
+
+    console.log("Dynamic colors applied to all elements");
   },
 
   // Open text chat interface
@@ -143,6 +251,12 @@ const VoiceroText = {
     if (!this.shadowRoot) {
       this.createIsolatedChatFrame();
     }
+
+    // Apply dynamic colors to all elements
+    this.applyDynamicColors();
+
+    // Also force welcome message colors directly
+    this.forceWelcomeMessageColors();
 
     // Show the shadow host (which contains the chat interface)
     const shadowHost = document.getElementById("voicero-text-chat-container");
@@ -556,9 +670,16 @@ const VoiceroText = {
       popupQuestions.forEach(function (item, index) {
         const questionText = item.question || "Ask me a question";
 
+        // Get the main color for styling
+        const mainColor = self.colorVariants
+          ? self.colorVariants.main
+          : "#882be6";
+
         suggestionsDiv.innerHTML +=
           '<div class="suggestion" style="' +
-          "background: #882be6;" +
+          "background: " +
+          mainColor +
+          ";" +
           "padding: 10px 15px;" +
           "border-radius: 17px;" +
           "cursor: pointer;" +
@@ -622,6 +743,18 @@ const VoiceroText = {
         }
       }
 
+      // Make sure we have color variants
+      if (!this.colorVariants) {
+        this.getColorVariants(this.websiteColor);
+      }
+
+      // Get colors for styling
+      const mainColor = this.colorVariants.main;
+      const lightColor = this.colorVariants.light;
+      const darkColor = this.colorVariants.dark;
+      const superlightColor = this.colorVariants.superlight;
+      const superdarkColor = this.colorVariants.superdark;
+
       // Add CSS styles
       const styleEl = document.createElement("style");
       styleEl.innerHTML = `
@@ -633,14 +766,31 @@ const VoiceroText = {
 
         @keyframes gradientBorder {
           0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+          25% { background-position: 25% 50%; }
+          50% { background-position: 50% 50%; }
+          75% { background-position: 75% 50%; }
+          100% { background-position: 100% 50%; }
         }
         
         @keyframes colorRotate {
           0% { 
-            box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
-            background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+            box-shadow: 0 0 20px 5px rgba(${parseInt(
+              mainColor.slice(1, 3),
+              16
+            )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.7);
+            background: radial-gradient(circle, rgba(${parseInt(
+              mainColor.slice(1, 3),
+              16
+            )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.8) 0%, rgba(${parseInt(mainColor.slice(1, 3), 16)}, ${parseInt(
+        mainColor.slice(3, 5),
+        16
+      )}, ${parseInt(mainColor.slice(5, 7), 16)}, 0.4) 70%);
           }
           20% { 
             box-shadow: 0 0 20px 5px rgba(68, 124, 242, 0.7);
@@ -663,8 +813,23 @@ const VoiceroText = {
             background: radial-gradient(circle, rgba(92, 92, 237, 0.8) 0%, rgba(92, 92, 237, 0.4) 70%);
           }
           100% { 
-            box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
-            background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+            box-shadow: 0 0 20px 5px rgba(${parseInt(
+              mainColor.slice(1, 3),
+              16
+            )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.7);
+            background: radial-gradient(circle, rgba(${parseInt(
+              mainColor.slice(1, 3),
+              16
+            )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.8) 0%, rgba(${parseInt(mainColor.slice(1, 3), 16)}, ${parseInt(
+        mainColor.slice(3, 5),
+        16
+      )}, ${parseInt(mainColor.slice(5, 7), 16)}, 0.4) 70%);
           }
         }
         
@@ -710,7 +875,13 @@ const VoiceroText = {
           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
           position: relative;
           overflow: hidden;
-          border: 1px solid rgba(136, 43, 230, 0.1);
+          border: 1px solid rgba(${parseInt(
+            mainColor.slice(1, 3),
+            16
+          )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.1);
         }
         
         .welcome-title {
@@ -718,7 +889,9 @@ const VoiceroText = {
           font-weight: 700;
           margin-bottom: 5px;
           font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-          background: linear-gradient(90deg, #882be6, #ff6b6b, #4a90e2);
+          background: linear-gradient(90deg, ${
+            this.websiteColor || "#882be6"
+          }, ${this.websiteColor || "#882be6"});
           -webkit-background-clip: text;
           background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -734,7 +907,7 @@ const VoiceroText = {
         }
         
         .welcome-highlight {
-          color: #882be6;
+          color: ${this.websiteColor || "#882be6"} !important;
           font-weight: 600;
         }
         
@@ -750,7 +923,7 @@ const VoiceroText = {
           display: inline-block;
           width: 8px;
           height: 8px;
-          background-color: #ff4444;
+          background-color: ${this.websiteColor || "#882be6"};
           border-radius: 50%;
           margin-right: 4px;
           animation: welcomePulse 1.5s infinite;
@@ -822,7 +995,7 @@ const VoiceroText = {
         }
 
         .user-message .message-content {
-          background: #882be6;
+          background: ${mainColor};
           color: white;
           border-radius: 18px;
           padding: 10px 15px;
@@ -899,7 +1072,7 @@ const VoiceroText = {
         }
         
         .suggestion {
-          background: #882be6 !important;
+          background: ${this.websiteColor || "#882be6"} !important;
           padding: 10px 15px !important;
           border-radius: 17px !important;
           cursor: pointer !important;
@@ -983,14 +1156,31 @@ const VoiceroText = {
 
           @keyframes gradientBorder {
             0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            25% { background-position: 25% 50%; }
+            50% { background-position: 50% 50%; }
+            75% { background-position: 75% 50%; }
+            100% { background-position: 100% 50%; }
           }
           
           @keyframes colorRotate {
             0% { 
-              box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
-              background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+              box-shadow: 0 0 20px 5px rgba(${parseInt(
+                mainColor.slice(1, 3),
+                16
+              )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.7);
+              background: radial-gradient(circle, rgba(${parseInt(
+                mainColor.slice(1, 3),
+                16
+              )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.8) 0%, rgba(${parseInt(mainColor.slice(1, 3), 16)}, ${parseInt(
+        mainColor.slice(3, 5),
+        16
+      )}, ${parseInt(mainColor.slice(5, 7), 16)}, 0.4) 70%);
             }
             20% { 
               box-shadow: 0 0 20px 5px rgba(68, 124, 242, 0.7);
@@ -1013,8 +1203,23 @@ const VoiceroText = {
               background: radial-gradient(circle, rgba(92, 92, 237, 0.8) 0%, rgba(92, 92, 237, 0.4) 70%);
             }
             100% { 
-              box-shadow: 0 0 20px 5px rgba(136, 43, 230, 0.7);
-              background: radial-gradient(circle, rgba(136, 43, 230, 0.8) 0%, rgba(136, 43, 230, 0.4) 70%);
+              box-shadow: 0 0 20px 5px rgba(${parseInt(
+                mainColor.slice(1, 3),
+                16
+              )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.7);
+              background: radial-gradient(circle, rgba(${parseInt(
+                mainColor.slice(1, 3),
+                16
+              )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.8) 0%, rgba(${parseInt(mainColor.slice(1, 3), 16)}, ${parseInt(
+        mainColor.slice(3, 5),
+        16
+      )}, ${parseInt(mainColor.slice(5, 7), 16)}, 0.4) 70%);
             }
           }
           
@@ -1060,7 +1265,13 @@ const VoiceroText = {
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
             position: relative;
             overflow: hidden;
-            border: 1px solid rgba(136, 43, 230, 0.1);
+            border: 1px solid rgba(${parseInt(
+              mainColor.slice(1, 3),
+              16
+            )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.1);
           }
           
           .welcome-title {
@@ -1068,7 +1279,9 @@ const VoiceroText = {
             font-weight: 700;
             margin-bottom: 5px;
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(90deg, #882be6, #ff6b6b, #4a90e2);
+            background: linear-gradient(90deg, ${
+              this.websiteColor || "#882be6"
+            }, ${this.websiteColor || "#882be6"});
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -1084,7 +1297,7 @@ const VoiceroText = {
           }
           
           .welcome-highlight {
-            color: #882be6;
+            color: ${this.websiteColor || "#882be6"} !important;
             font-weight: 600;
           }
           
@@ -1100,7 +1313,7 @@ const VoiceroText = {
             display: inline-block;
             width: 8px;
             height: 8px;
-            background-color: #ff4444;
+            background-color: ${this.websiteColor || "#882be6"};
             border-radius: 50%;
             margin-right: 4px;
             animation: welcomePulse 1.5s infinite;
@@ -1172,7 +1385,7 @@ const VoiceroText = {
           }
 
           .user-message .message-content {
-            background: #882be6;
+            background: ${mainColor};
             color: white;
             border-radius: 18px;
             padding: 10px 15px;
@@ -1249,7 +1462,7 @@ const VoiceroText = {
           }
           
           .suggestion {
-            background: #882be6 !important;
+            background: ${this.websiteColor || "#882be6"} !important;
             padding: 10px 15px !important;
             border-radius: 17px !important;
             cursor: pointer !important;
@@ -1281,7 +1494,7 @@ const VoiceroText = {
           }
           
           #maximize-chat button {
-            background: #882be6;
+            background: ${this.websiteColor || "#882be6"};
             border: none;
             color: white;
             padding: 10px 20px;
@@ -1336,7 +1549,9 @@ const VoiceroText = {
             left: 0;
             height: 3px;
             width: 0%;
-            background: linear-gradient(90deg, #882be6, #ff4444, #882be6);
+            background: linear-gradient(90deg, ${
+              this.colorVariants.main
+            }, #ff4444, ${this.colorVariants.main});
             background-size: 200% 100%;
             border-radius: 3px;
             display: none;
@@ -1449,10 +1664,28 @@ const VoiceroText = {
         <div id="chat-input-wrapper" style="
           position: relative;
           padding: 2px;
-          background: linear-gradient(90deg, #882be6, #ff4444, #882be6);
-          background-size: 200% 100%;
+          background: linear-gradient(90deg, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              -0.4
+            )}, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              -0.2
+            )}, 
+            var(--voicero-theme-color, ${this.websiteColor || "#882be6"}),
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              0.2
+            )}, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              0.4
+            )}
+          );
+          background-size: 500% 100%;
           border-radius: 0 0 12px 12px;
-          animation: gradientBorder 3s linear infinite;
+          animation: gradientBorder 15s linear infinite;
           transition: all 0.3s ease;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
           margin-top: 0;
@@ -1505,7 +1738,7 @@ const VoiceroText = {
               width: 36px;
               height: 36px;
               border-radius: 50%;
-              background: #882be6;
+              background: ${this.websiteColor || "#882be6"};
               border: none;
               display: flex;
               align-items: center;
@@ -1572,6 +1805,12 @@ const VoiceroText = {
     if (maximizeBtn) {
       maximizeBtn.removeAttribute("onclick");
       maximizeBtn.addEventListener("click", () => this.maximizeChat());
+
+      // IMPORTANT: Force the button background color to match the theme
+      const maximizeButton = maximizeBtn.querySelector("button");
+      if (maximizeButton) {
+        maximizeButton.style.backgroundColor = this.websiteColor || "#882be6";
+      }
     }
 
     if (closeBtn) {
@@ -1583,11 +1822,59 @@ const VoiceroText = {
       clearBtn.removeAttribute("onclick");
       clearBtn.addEventListener("click", () => this.clearChatHistory());
     }
+
+    // Force all welcome message elements to use theme color
+    this.forceWelcomeMessageColors();
+  },
+
+  // Force all welcome message elements to use website color
+  forceWelcomeMessageColors: function () {
+    if (!this.shadowRoot) return;
+
+    const mainColor = this.websiteColor || "#882be6";
+
+    // Force welcome message border color
+    const welcomeMessages =
+      this.shadowRoot.querySelectorAll(".welcome-message");
+    welcomeMessages.forEach((msg) => {
+      msg.style.border = `1px solid rgba(${parseInt(
+        mainColor.slice(1, 3),
+        16
+      )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
+        mainColor.slice(5, 7),
+        16
+      )}, 0.1)`;
+    });
+
+    // Force welcome title colors
+    const welcomeTitles = this.shadowRoot.querySelectorAll(".welcome-title");
+    welcomeTitles.forEach((title) => {
+      title.style.background = `linear-gradient(90deg, ${mainColor}, ${mainColor})`;
+      title.style.webkitBackgroundClip = "text";
+      title.style.backgroundClip = "text";
+      title.style.webkitTextFillColor = "transparent";
+    });
+
+    // Force welcome highlight colors
+    const welcomeHighlights =
+      this.shadowRoot.querySelectorAll(".welcome-highlight");
+    welcomeHighlights.forEach((highlight) => {
+      highlight.style.color = `${mainColor} !important`;
+    });
+
+    // Force welcome pulse colors
+    const welcomePulses = this.shadowRoot.querySelectorAll(".welcome-pulse");
+    welcomePulses.forEach((pulse) => {
+      pulse.style.backgroundColor = mainColor;
+    });
   },
 
   // Clear chat history
   clearChatHistory: function () {
     console.log("Clearing chat history");
+
+    // Get the main color
+    const mainColor = this.websiteColor || "#882be6";
 
     // Call the session/clear API endpoint
     if (window.VoiceroCore && window.VoiceroCore.sessionId) {
@@ -1657,12 +1944,15 @@ const VoiceroText = {
         initialSuggestions.style.overflow = "visible";
       }
 
+      // Force global welcome styles BEFORE adding the welcome message
+      this.forceGlobalWelcomeStyles();
+
       // Add welcome message again
       this.addMessage(
         `
         <div class="welcome-message">
           <div class="welcome-title">Aura, your website concierge</div>
-          <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
+          <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
           <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
         </div>
         `,
@@ -1670,6 +1960,9 @@ const VoiceroText = {
         false,
         true
       );
+
+      // Force colors on the welcome message
+      this.forceWelcomeMessageColors();
     }
 
     // Reset messages array
@@ -2377,11 +2670,15 @@ const VoiceroText = {
     // If welcome should be shown and no messages are visible, add it
     if (shouldShowWelcome && !hasVisibleMessages) {
       console.log("Voicero Text: Adding welcome message during maximize");
+
+      // Force global welcome styles BEFORE adding the welcome message
+      this.forceGlobalWelcomeStyles();
+
       this.addMessage(
         `
         <div class="welcome-message">
           <div class="welcome-title">Aura, your website concierge</div>
-          <div class="welcome-subtitle">Text me like your <span class="welcome-highlight">best friend</span> and I'll solve any problem you may have.</div>
+          <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
           <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
         </div>
       `,
@@ -2464,6 +2761,9 @@ const VoiceroText = {
     setTimeout(() => {
       document.getElementById("voicero-text-chat-container").style.display =
         "block";
+
+      // Force welcome message colors after redrawing
+      this.forceWelcomeMessageColors();
     }, 0);
   },
 
@@ -2511,6 +2811,9 @@ const VoiceroText = {
         }
       }
     } else if (role === "user") {
+      // Apply the main color to user messages - use website color directly
+      contentDiv.style.backgroundColor = this.websiteColor || "#882be6";
+
       // Add delivery status for user messages (iPhone-style)
       const statusDiv = document.createElement("div");
       statusDiv.className = "read-status";
@@ -2538,13 +2841,40 @@ const VoiceroText = {
         // Insert new message before the input wrapper
         messagesContainer.appendChild(messageDiv);
 
+        // If this is a welcome message, directly apply styles to ensure correct colors
+        if (isInitial) {
+          // Find and style the welcome title with correct colors
+          const welcomeTitle = messageDiv.querySelector(".welcome-title");
+          if (welcomeTitle) {
+            welcomeTitle.style.background = `linear-gradient(90deg, ${
+              this.websiteColor || "#882be6"
+            }, ${this.websiteColor || "#882be6"},)`;
+            welcomeTitle.style.webkitBackgroundClip = "text";
+            welcomeTitle.style.backgroundClip = "text";
+            welcomeTitle.style.webkitTextFillColor = "transparent";
+          }
+
+          // Style welcome highlights
+          const welcomeHighlight =
+            messageDiv.querySelector(".welcome-highlight");
+          if (welcomeHighlight) {
+            welcomeHighlight.style.color = this.websiteColor || "#882be6";
+          }
+
+          // Style welcome pulse
+          const welcomePulse = messageDiv.querySelector(".welcome-pulse");
+          if (welcomePulse) {
+            welcomePulse.style.backgroundColor = this.websiteColor || "#882be6";
+          }
+        }
+
         // Update all previous user message statuses to "Read" after AI responds
         if (role === "ai") {
           const userStatusDivs =
             messagesContainer.querySelectorAll(".read-status");
           userStatusDivs.forEach((div) => {
             div.textContent = "Read";
-            div.style.color = "#882be6";
+            div.style.color = this.websiteColor || "#882be6";
           });
         }
 
@@ -2612,6 +2942,229 @@ const VoiceroText = {
         chatInput.focus();
       }, 200);
     }
+  },
+
+  // Get color variants from a hex color
+  getColorVariants: function (color) {
+    if (!color) color = this.websiteColor || "#882be6";
+
+    // Initialize with the main color
+    const variants = {
+      main: color,
+      light: color,
+      dark: color,
+      superlight: color,
+      superdark: color,
+    };
+
+    // If it's a hex color, we can calculate variants
+    if (color.startsWith("#")) {
+      try {
+        // Convert hex to RGB for variants
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+
+        // Create variants by adjusting brightness
+        const lightR = Math.min(255, Math.floor(r * 1.2));
+        const lightG = Math.min(255, Math.floor(g * 1.2));
+        const lightB = Math.min(255, Math.floor(b * 1.2));
+
+        const darkR = Math.floor(r * 0.8);
+        const darkG = Math.floor(g * 0.8);
+        const darkB = Math.floor(b * 0.8);
+
+        const superlightR = Math.min(255, Math.floor(r * 1.5));
+        const superlightG = Math.min(255, Math.floor(g * 1.5));
+        const superlightB = Math.min(255, Math.floor(b * 1.5));
+
+        const superdarkR = Math.floor(r * 0.6);
+        const superdarkG = Math.floor(g * 0.6);
+        const superdarkB = Math.floor(b * 0.6);
+
+        // Convert back to hex
+        variants.light = `#${lightR.toString(16).padStart(2, "0")}${lightG
+          .toString(16)
+          .padStart(2, "0")}${lightB.toString(16).padStart(2, "0")}`;
+        variants.dark = `#${darkR.toString(16).padStart(2, "0")}${darkG
+          .toString(16)
+          .padStart(2, "0")}${darkB.toString(16).padStart(2, "0")}`;
+        variants.superlight = `#${superlightR
+          .toString(16)
+          .padStart(2, "0")}${superlightG
+          .toString(16)
+          .padStart(2, "0")}${superlightB.toString(16).padStart(2, "0")}`;
+        variants.superdark = `#${superdarkR
+          .toString(16)
+          .padStart(2, "0")}${superdarkG
+          .toString(16)
+          .padStart(2, "0")}${superdarkB.toString(16).padStart(2, "0")}`;
+      } catch (e) {
+        console.error("Voicero Text: Error calculating color variants", e);
+        // Fallback to default variants
+        variants.light = "#9370db";
+        variants.dark = "#7a5abf";
+        variants.superlight = "#d5c5f3";
+        variants.superdark = "#5e3b96";
+      }
+    }
+
+    this.colorVariants = variants;
+    console.log("Voicero Text: Updated color variants", variants);
+    return variants;
+  },
+
+  // Helper methods for color variations
+  colorLighter: function (color) {
+    if (!color) return "#d5c5f3";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      const lightR = Math.min(255, Math.floor(r * 1.6));
+      const lightG = Math.min(255, Math.floor(g * 1.6));
+      const lightB = Math.min(255, Math.floor(b * 1.6));
+
+      return `#${lightR.toString(16).padStart(2, "0")}${lightG
+        .toString(16)
+        .padStart(2, "0")}${lightB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      return "#d5c5f3";
+    }
+  },
+
+  colorLight: function (color) {
+    if (!color) return "#9370db";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      const lightR = Math.min(255, Math.floor(r * 1.3));
+      const lightG = Math.min(255, Math.floor(g * 1.3));
+      const lightB = Math.min(255, Math.floor(b * 1.3));
+
+      return `#${lightR.toString(16).padStart(2, "0")}${lightG
+        .toString(16)
+        .padStart(2, "0")}${lightB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      return "#9370db";
+    }
+  },
+
+  colorDark: function (color) {
+    if (!color) return "#7a5abf";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      const darkR = Math.floor(r * 0.7);
+      const darkG = Math.floor(g * 0.7);
+      const darkB = Math.floor(b * 0.7);
+
+      return `#${darkR.toString(16).padStart(2, "0")}${darkG
+        .toString(16)
+        .padStart(2, "0")}${darkB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      return "#7a5abf";
+    }
+  },
+
+  colorDarker: function (color) {
+    if (!color) return "#5e3b96";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      const darkR = Math.floor(r * 0.5);
+      const darkG = Math.floor(g * 0.5);
+      const darkB = Math.floor(b * 0.5);
+
+      return `#${darkR.toString(16).padStart(2, "0")}${darkG
+        .toString(16)
+        .padStart(2, "0")}${darkB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      return "#5e3b96";
+    }
+  },
+
+  adjustColor: function (color, adjustment) {
+    if (!color) return "#ff4444";
+    if (!color.startsWith("#")) return color;
+
+    try {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+
+      // Positive adjustment makes it lighter, negative makes it darker
+      let factor = adjustment < 0 ? 1 + adjustment : 1 + adjustment;
+
+      // Adjust RGB values
+      let newR =
+        adjustment < 0
+          ? Math.floor(r * factor)
+          : Math.min(255, Math.floor(r * factor));
+      let newG =
+        adjustment < 0
+          ? Math.floor(g * factor)
+          : Math.min(255, Math.floor(g * factor));
+      let newB =
+        adjustment < 0
+          ? Math.floor(b * factor)
+          : Math.min(255, Math.floor(b * factor));
+
+      // Convert back to hex
+      return `#${newR.toString(16).padStart(2, "0")}${newG
+        .toString(16)
+        .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
+    } catch (e) {
+      console.error("Error adjusting color:", e);
+      return color;
+    }
+  },
+
+  // Force welcome message colors globally with !important
+  forceGlobalWelcomeStyles: function () {
+    // Get the main color
+    const mainColor = this.websiteColor || "#882be6";
+
+    // Create or update global style tag
+    let styleTag = document.getElementById("voicero-forced-styles");
+    if (!styleTag) {
+      styleTag = document.createElement("style");
+      styleTag.id = "voicero-forced-styles";
+      document.head.appendChild(styleTag);
+    }
+
+    // Set extremely aggressive styling
+    styleTag.textContent = `
+      .welcome-highlight {
+        color: ${mainColor} !important;
+      }
+      .welcome-pulse {
+        background-color: ${mainColor} !important;
+      }
+      .welcome-title {
+        background: linear-gradient(90deg, ${mainColor}, ${mainColor}) !important;
+        -webkit-background-clip: text !important;
+        background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+      }
+    `;
+
+    console.log("Applied global forced welcome styles");
   },
 };
 
