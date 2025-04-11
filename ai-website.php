@@ -2364,6 +2364,16 @@ function voicero_tts_proxy($request) {
     $json_body = $request->get_body();
     $body_params = json_decode($json_body, true);
     
+    // Log the request parameters for debugging
+    error_log('TTS proxy request parameters: ' . json_encode($body_params));
+    
+    // Create a debug log file with more detailed information
+    $debug_log = "TTS Request at " . date('Y-m-d H:i:s') . "\n";
+    $debug_log .= "Request params: " . json_encode($body_params, JSON_PRETTY_PRINT) . "\n";
+    
+    // Save to a debug log file
+    file_put_contents(plugin_dir_path(__FILE__) . 'logs/tts-debug.log', $debug_log, FILE_APPEND);
+    
     // Validate request
     if (empty($body_params['text'])) {
         error_log('TTS proxy: No text provided');
@@ -2376,6 +2386,7 @@ function voicero_tts_proxy($request) {
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
             'Accept' => 'audio/mpeg',
+            'X-Expected-Response-Type' => 'audio/mpeg', // Extra header to make it clear we expect audio
         ],
         'body' => $json_body,
         'timeout' => 30,
@@ -2428,10 +2439,119 @@ function voicero_tts_proxy($request) {
     // Get audio data
     $audio_data = wp_remote_retrieve_body($response);
     
+    // Get all response headers for debugging
+    $response_headers = wp_remote_retrieve_headers($response);
+    $headers_string = json_encode($response_headers->getAll(), JSON_PRETTY_PRINT);
+    error_log('TTS API response headers: ' . $headers_string);
+    
+    // Append to debug log
+    $debug_log = "TTS Response at " . date('Y-m-d H:i:s') . "\n";
+    $debug_log .= "Status code: " . $status_code . "\n";
+    $debug_log .= "Headers: " . $headers_string . "\n";
+    $debug_log .= "Content length: " . strlen($audio_data) . " bytes\n";
+    
+    // Check first few bytes to identify content type
+    $first_bytes = bin2hex(substr($audio_data, 0, 16));
+    $debug_log .= "First bytes: " . $first_bytes . "\n\n";
+    file_put_contents(plugin_dir_path(__FILE__) . 'logs/tts-debug.log', $debug_log, FILE_APPEND);
+    
+    // Special check: see if data might be JSON-encoded
+    if (substr($audio_data, 0, 1) === '"' && substr($audio_data, -1) === '"') {
+        error_log('TTS API returned JSON-encoded string instead of raw binary data');
+        
+        // Try to decode the JSON string to get raw binary data
+        $decoded_data = json_decode($audio_data);
+        if (json_last_error() === JSON_ERROR_NONE && is_string($decoded_data)) {
+            error_log('Successfully decoded JSON string to raw data');
+            // Replace the audio_data with the decoded binary content
+            $audio_data = $decoded_data;
+            
+            // Log this correction
+            file_put_contents(
+                plugin_dir_path(__FILE__) . 'logs/tts-fix.log', 
+                date('Y-m-d H:i:s') . " - Fixed JSON-encoded audio data, new length: " . strlen($audio_data) . "\n", 
+                FILE_APPEND
+            );
+        }
+    }
+    
+    // Validate that this is actually audio data and not an error message
+    $is_valid_audio = true;
+    $first_bytes = substr($audio_data, 0, 4);
+    
+    // Check for JSON or HTML error responses disguised as audio
+    if (strpos($audio_data, '{') === 0 || 
+        strpos($audio_data, '<') === 0 || 
+        strpos($audio_data, 'error') !== false) {
+        error_log('TTS API returned non-audio data: ' . substr($audio_data, 0, 100));
+        
+        // Log the full error response
+        file_put_contents(
+            plugin_dir_path(__FILE__) . 'logs/tts-error.log', 
+            date('Y-m-d H:i:s') . " - Error Response:\n" . $audio_data . "\n\n", 
+            FILE_APPEND
+        );
+        
+        return new WP_REST_Response(
+            ['error' => 'TTS API returned non-audio data', 'details' => $audio_data],
+            500
+        );
+    }
+    
+    // Check for MP3 header signatures - either ID3 or MPEG frame sync
+    $id3_header = ($first_bytes[0] === 'I' && $first_bytes[1] === 'D' && $first_bytes[2] === '3');
+    $mpeg_frame_sync = (ord($first_bytes[0]) === 0xFF && (ord($first_bytes[1]) & 0xE0) === 0xE0);
+    
+    if (!$id3_header && !$mpeg_frame_sync) {
+        error_log('TTS API returned invalid audio format. First bytes: ' . bin2hex($first_bytes));
+        
+        // Save the invalid audio data for analysis
+        file_put_contents(
+            plugin_dir_path(__FILE__) . 'logs/invalid-audio.bin', 
+            $audio_data
+        );
+        
+        // Try to detect if it's a text response
+        $sample_text = substr($audio_data, 0, 500);
+        if (preg_match('/^[\x20-\x7E\r\n\t]+$/', $sample_text)) {
+            // It appears to be ASCII text
+            file_put_contents(
+                plugin_dir_path(__FILE__) . 'logs/tts-text-error.log', 
+                date('Y-m-d H:i:s') . " - Text Response:\n" . $sample_text . "\n\n", 
+                FILE_APPEND
+            );
+        }
+        
+        return new WP_REST_Response(
+            ['error' => 'TTS API returned invalid audio format', 'details' => bin2hex(substr($audio_data, 0, 20))],
+            500
+        );
+    }
+    
+    error_log('TTS API valid audio format detected. Size: ' . strlen($audio_data) . ' bytes');
+    
     // Create response with audio content type
     $response_obj = new WP_REST_Response($audio_data, 200);
     $response_obj->header('Content-Type', 'audio/mpeg');
     $response_obj->header('Content-Length', strlen($audio_data));
+    
+    // IMPORTANT: Force raw data output to prevent WordPress from JSON encoding binary data
+    // This is the critical fix to prevent audio corruption
+    remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+    add_filter('rest_pre_serve_request', function($served, $result, $request, $server) use ($audio_data) {
+        $server->send_header('Content-Type', 'audio/mpeg');
+        $server->send_header('Content-Length', strlen($audio_data));
+        
+        // Add CORS headers manually since we're bypassing the normal REST API response
+        $server->send_header('Access-Control-Allow-Origin', '*');
+        $server->send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        $server->send_header('Access-Control-Allow-Credentials', 'true');
+        $server->send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        
+        // Send the raw binary data directly
+        echo $audio_data;
+        return true;
+    }, 10, 4);
     
     return $response_obj;
 }

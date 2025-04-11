@@ -976,6 +976,10 @@ const VoiceroVoice = {
     const micButton = document.getElementById("voice-mic-button");
     const micIcon = document.getElementById("mic-icon");
 
+    console.log(
+      `Voicero Voice: toggleMic called with source=${source}, isRecording=${this.isRecording}`
+    );
+
     // If the voice chat is minimized and we're about to start recording, reopen it
     if (
       !this.isRecording &&
@@ -992,6 +996,9 @@ const VoiceroVoice = {
 
       if (source === "manual") {
         this.manuallyStoppedRecording = true;
+        console.log(
+          "Voicero Voice: Manual stop detected - turning off autoMic"
+        );
 
         // Turn off autoMic in session when user manually stops recording
         if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
@@ -1000,6 +1007,10 @@ const VoiceroVoice = {
           });
           console.log("Voicero Voice: Turned off autoMic in session");
         }
+      } else {
+        console.log(
+          "Voicero Voice: Auto stop detected - keeping autoMic setting"
+        );
       }
 
       // Update UI - remove siri animation
@@ -1039,12 +1050,15 @@ const VoiceroVoice = {
       this.isRecording = true;
       this.manuallyStoppedRecording = false;
 
+      console.log(`Voicero Voice: Starting recording (source=${source})`);
+
       // Update window state to indicate welcome has been shown
       if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
         window.VoiceroCore.updateWindowState({
           voiceWelcome: false, // Once user starts recording, don't show welcome again
           autoMic: true, // Set autoMic to true to remember user's preference
         });
+        console.log("Voicero Voice: Set autoMic to true in session");
       }
 
       // Update UI - add siri-like animation
@@ -1104,6 +1118,7 @@ const VoiceroVoice = {
           const audioTracks = stream.getAudioTracks();
           if (audioTracks.length > 0) {
             const settings = audioTracks[0].getSettings();
+            console.log("Voicero Voice: Audio track settings:", settings);
           }
 
           this.currentAudioStream = stream;
@@ -1118,12 +1133,19 @@ const VoiceroVoice = {
           // Set up audio analysis for silence detection if supported
           if (audioContextSupported) {
             try {
-              this.audioContext = new (window.AudioContext ||
-                window.webkitAudioContext)();
+              // Cross-browser compatible AudioContext initialization
+              const AudioContextClass =
+                window.AudioContext || window.webkitAudioContext;
+              this.audioContext = new AudioContextClass();
               const source = this.audioContext.createMediaStreamSource(stream);
               this.analyser = this.audioContext.createAnalyser();
               this.analyser.fftSize = 256;
               source.connect(this.analyser);
+
+              console.log(
+                "Voicero Voice: Setting up silence detection with threshold:",
+                this.silenceThreshold
+              );
 
               // Start silence detection
               const bufferLength = this.analyser.frequencyBinCount;
@@ -1144,12 +1166,23 @@ const VoiceroVoice = {
                   if (!this.isSpeaking) {
                     this.isSpeaking = true;
                     this.hasStartedSpeaking = true;
+                    console.log(
+                      "Voicero Voice: Speech detected! Average volume:",
+                      average
+                    );
                   }
                 } else {
                   if (this.isSpeaking) {
                     this.silenceTime += 100; // Interval is 100ms
+                    console.log(
+                      `Voicero Voice: Silence detected for ${this.silenceTime}ms, average volume: ${average}`
+                    );
+
                     // If silence for more than 1.5 seconds after speaking, stop recording
-                    if (this.silenceTime > 2500 && this.hasStartedSpeaking) {
+                    if (this.silenceTime > 500 && this.hasStartedSpeaking) {
+                      console.log(
+                        "Voicero Voice: Silence threshold reached (500ms) - auto-stopping recording"
+                      );
                       clearInterval(this.silenceDetectionTimer);
                       this.silenceDetectionTimer = null;
 
@@ -1159,7 +1192,12 @@ const VoiceroVoice = {
                   }
                 }
               }, 100);
-            } catch (error) {}
+            } catch (error) {
+              console.error(
+                "Voicero Voice: Error setting up audio analysis:",
+                error
+              );
+            }
           }
 
           // Handle data available event
@@ -1246,11 +1284,19 @@ const VoiceroVoice = {
                   whisperData
                 );
 
-                // Extract the transcription
+                // Extract the transcription - ensure we get a string
                 const transcription =
                   whisperData.transcription ||
-                  whisperData.text ||
-                  "Could not transcribe audio";
+                  (whisperData.text && typeof whisperData.text === "string"
+                    ? whisperData.text
+                    : typeof whisperData === "object" && whisperData.text
+                    ? whisperData.text
+                    : "Could not transcribe audio");
+
+                console.log(
+                  "Voicero Voice: Extracted transcription:",
+                  transcription
+                );
 
                 // Update the user message with transcription
                 this.addMessage(transcription, "user");
@@ -1292,6 +1338,7 @@ const VoiceroVoice = {
                   throw new Error("Chat API request failed");
 
                 const chatData = await chatResponse.json();
+                console.log("Voicero Voice: Chat API response:", chatData);
 
                 // Store thread ID from response
                 if (chatData.threadId) {
@@ -1331,9 +1378,71 @@ const VoiceroVoice = {
                   }
                 }
 
-                // Get the text response
-                const aiTextResponse =
-                  chatData.response || "Sorry, I don't have a response.";
+                // Get the text response - now properly handling JSON response formats
+                let aiTextResponse = "";
+                let actionType = null;
+                let actionUrl = null;
+
+                try {
+                  // First check if the response is already an object
+                  if (
+                    typeof chatData.response === "object" &&
+                    chatData.response !== null
+                  ) {
+                    aiTextResponse =
+                      chatData.response.answer ||
+                      "Sorry, I don't have a response.";
+                    actionType = chatData.response.action || null;
+                    actionUrl = chatData.response.url || null;
+                    console.log(
+                      "Voicero Voice: Extracted from response object:",
+                      {
+                        text: aiTextResponse,
+                        action: actionType,
+                        url: actionUrl,
+                      }
+                    );
+                  }
+                  // Then try to parse the response as JSON if it's a string
+                  else if (typeof chatData.response === "string") {
+                    try {
+                      const parsedResponse = JSON.parse(chatData.response);
+                      aiTextResponse =
+                        parsedResponse.answer ||
+                        "Sorry, I don't have a response.";
+                      actionType = parsedResponse.action || null;
+                      actionUrl = parsedResponse.url || null;
+                      console.log("Voicero Voice: Parsed JSON response:", {
+                        text: aiTextResponse,
+                        action: actionType,
+                        url: actionUrl,
+                      });
+                    } catch (e) {
+                      // If parsing fails, use the response as is
+                      console.log(
+                        "Voicero Voice: Using response as plain text"
+                      );
+                      aiTextResponse =
+                        chatData.response || "Sorry, I don't have a response.";
+                    }
+                  } else {
+                    // Fallback
+                    aiTextResponse =
+                      chatData.response || "Sorry, I don't have a response.";
+                  }
+                } catch (error) {
+                  console.error("Error processing chat response:", error);
+                  aiTextResponse = "Sorry, I don't have a response.";
+                }
+
+                // Process text to extract and clean URLs - making sure we have a string
+                if (typeof aiTextResponse !== "string") {
+                  console.log(
+                    "Voicero Voice: aiTextResponse is not a string, converting:",
+                    aiTextResponse
+                  );
+                  aiTextResponse = String(aiTextResponse);
+                }
 
                 // Process text to extract and clean URLs
                 const processedResponse =
@@ -1377,9 +1486,124 @@ const VoiceroVoice = {
 
                   // Convert response to audio blob
                   const audioData = await ttsResponse.arrayBuffer();
+                  console.log(
+                    "Voicero Voice: Received TTS audio data, size:",
+                    audioData.byteLength
+                  );
+
+                  // Check if we actually received audio data
+                  if (!audioData || audioData.byteLength === 0) {
+                    console.error(
+                      "Voicero Voice: Empty audio data received from TTS API"
+                    );
+                    throw new Error("Empty audio data received from TTS API");
+                  }
+
+                  // Simple check to see if the response might be JSON/text instead of audio
+                  // This is a common issue with ElevenLabs returning errors but keeping the audio/mpeg content type
+                  const firstBytes = new Uint8Array(
+                    audioData.slice(0, Math.min(20, audioData.byteLength))
+                  );
+                  const possibleText = String.fromCharCode.apply(
+                    null,
+                    firstBytes
+                  );
+
+                  if (
+                    possibleText.includes("{") ||
+                    possibleText.includes("<html") ||
+                    possibleText.includes("error") ||
+                    possibleText.includes("Error")
+                  ) {
+                    // This is likely a JSON error or HTML, not audio data
+                    console.error(
+                      "Voicero Voice: Received error response instead of audio"
+                    );
+
+                    // Try to read the full response as text to log the error
+                    try {
+                      const textDecoder = new TextDecoder();
+                      const responseText = textDecoder.decode(audioData);
+                      console.error(
+                        "Voicero Voice: Error response content:",
+                        responseText
+                      );
+                    } catch (textError) {
+                      console.error(
+                        "Voicero Voice: Could not decode error response as text"
+                      );
+                    }
+
+                    throw new Error(
+                      "Received error response from TTS API instead of audio"
+                    );
+                  }
+
+                  // Get the content type from the response headers if available
+                  const contentType =
+                    ttsResponse.headers.get("content-type") || "audio/mpeg";
+
+                  // Check for common audio format signatures
+                  const dataView = new DataView(audioData);
+                  let detectedType = contentType;
+
+                  // Check for MP3 header (ID3 or MPEG frame sync)
+                  if (audioData.byteLength > 2) {
+                    // Check for ID3 header
+                    if (
+                      dataView.getUint8(0) === 0x49 &&
+                      dataView.getUint8(1) === 0x44 &&
+                      dataView.getUint8(2) === 0x33
+                    ) {
+                      console.log("Voicero Voice: Detected ID3 header (MP3)");
+                      detectedType = "audio/mpeg";
+                    }
+                    // Check for MP3 frame sync (0xFF 0xE0)
+                    else if (
+                      dataView.getUint8(0) === 0xff &&
+                      (dataView.getUint8(1) & 0xe0) === 0xe0
+                    ) {
+                      console.log("Voicero Voice: Detected MP3 frame sync");
+                      detectedType = "audio/mpeg";
+                    }
+                    // Check for WAV header "RIFF"
+                    else if (
+                      dataView.getUint8(0) === 0x52 &&
+                      dataView.getUint8(1) === 0x49 &&
+                      dataView.getUint8(2) === 0x46 &&
+                      dataView.getUint8(3) === 0x46
+                    ) {
+                      console.log("Voicero Voice: Detected WAV header");
+                      detectedType = "audio/wav";
+                    }
+                    // Check for OGG header "OggS"
+                    else if (
+                      dataView.getUint8(0) === 0x4f &&
+                      dataView.getUint8(1) === 0x67 &&
+                      dataView.getUint8(2) === 0x67 &&
+                      dataView.getUint8(3) === 0x53
+                    ) {
+                      console.log("Voicero Voice: Detected OGG header");
+                      detectedType = "audio/ogg";
+                    }
+                  }
+
+                  console.log(
+                    "Voicero Voice: Using detected content type:",
+                    detectedType
+                  );
+
+                  // Create a blob with the detected or provided MIME type
                   const audioBlob = new Blob([audioData], {
-                    type: "audio/mpeg",
+                    type: detectedType,
                   });
+
+                  console.log(
+                    "Voicero Voice: Created audio blob, size:",
+                    audioBlob.size,
+                    "type:",
+                    audioBlob.type
+                  );
 
                   // Remove typing indicator before adding the real response
                   this.removeTypingIndicator();
@@ -1397,12 +1621,60 @@ const VoiceroVoice = {
                     VoiceroCore.saveState();
                   }
 
-                  // Play the audio response AFTER displaying the text
-                  await this.playAudioResponse(audioBlob);
+                  // Try to play the audio response, but don't block the flow if it fails
+                  try {
+                    // Play the audio response AFTER displaying the text
+                    await this.playAudioResponse(audioBlob);
 
-                  // After audio playback completes, redirect to the first URL if one exists
-                  if (extractedUrls.length > 0) {
-                    this.redirectToUrl(extractedUrls[0]);
+                    console.log(
+                      "Voicero Voice: Audio playback completed, now handling redirect if needed"
+                    );
+
+                    // After audio playback completes, handle redirect action or URL
+                    if (actionType === "redirect" && actionUrl) {
+                      console.log(
+                        "Voicero Voice: Redirecting to action URL:",
+                        actionUrl
+                      );
+                      // No extra delay - redirect immediately after audio completes
+                      this.redirectToUrl(actionUrl);
+                    }
+                    // If no action but we have extracted URLs, use the first one
+                    else if (extractedUrls.length > 0) {
+                      console.log(
+                        "Voicero Voice: Redirecting to extracted URL:",
+                        extractedUrls[0]
+                      );
+                      // No extra delay - redirect immediately after audio completes
+                      this.redirectToUrl(extractedUrls[0]);
+                    }
+                  } catch (audioError) {
+                    console.error(
+                      "Voicero Voice: TTS playback error caught:",
+                      audioError
+                    );
+                    // Continue with the conversation flow even if audio fails
+
+                    // Still do the redirect even if audio failed
+                    if (actionType === "redirect" && actionUrl) {
+                      console.log(
+                        "Voicero Voice: Redirecting to action URL (after audio error):",
+                        actionUrl
+                      );
+                      setTimeout(() => {
+                        this.redirectToUrl(actionUrl);
+                      }, 1000);
+                    }
+                    // If no action but we have extracted URLs, use the first one
+                    else if (extractedUrls.length > 0) {
+                      console.log(
+                        "Voicero Voice: Redirecting to extracted URL (after audio error):",
+                        extractedUrls[0]
+                      );
+                      setTimeout(() => {
+                        this.redirectToUrl(extractedUrls[0]);
+                      }, 1000);
+                    }
                   }
                 } catch (audioError) {
                   console.error("TTS error:", audioError);
@@ -1420,9 +1692,41 @@ const VoiceroVoice = {
                     VoiceroCore.saveState();
                   }
 
-                  // Redirect to the first URL if one exists, even if audio failed
-                  if (extractedUrls.length > 0) {
-                    this.redirectToUrl(extractedUrls[0]);
+                  // Handle redirect even if audio failed
+                  if (actionType === "redirect" && actionUrl) {
+                    console.log(
+                      "Voicero Voice: Redirecting to action URL (after audio error):",
+                      actionUrl
+                    );
+                    // Use a standard delay for error cases
+                    const redirectDelay = 2000; // 2 second default for errors
+
+                    console.log(
+                      `Voicero Voice: Will redirect after ${redirectDelay}ms delay (after error)`
+                    );
+
+                    // Add a delay before redirecting
+                    setTimeout(() => {
+                      this.redirectToUrl(actionUrl);
+                    }, redirectDelay);
+                  }
+                  // If no action but we have extracted URLs, use the first one
+                  else if (extractedUrls.length > 0) {
+                    console.log(
+                      "Voicero Voice: Redirecting to extracted URL (after audio error):",
+                      extractedUrls[0]
+                    );
+                    // Use a standard delay for error cases
+                    const redirectDelay = 2000; // 2 second default for errors
+
+                    console.log(
+                      `Voicero Voice: Will redirect after ${redirectDelay}ms delay (after error)`
+                    );
+
+                    // Add a delay before redirecting
+                    setTimeout(() => {
+                      this.redirectToUrl(extractedUrls[0]);
+                    }, redirectDelay);
                   }
                 }
               } catch (error) {
@@ -1507,32 +1811,327 @@ const VoiceroVoice = {
     }
   },
 
-  // Play audio response
+  // Improved audio playback function with fallback methods
   playAudioResponse: async function (audioBlob) {
     return new Promise((resolve, reject) => {
       try {
-        // Create audio element
-        const audio = new Audio();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        audio.src = audioUrl;
+        console.log(
+          "Voicero Voice: Playing audio response, blob size:",
+          audioBlob.size,
+          "type:",
+          audioBlob.type
+        );
 
-        // Set up event listeners
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-
-        audio.onerror = (error) => {
-          URL.revokeObjectURL(audioUrl);
-          reject(error);
-        };
-
-        // Start playback
-        audio.play().catch((error) => {
-          reject(error);
+        // Create a properly typed blob to ensure browser compatibility
+        // Some browsers are stricter about MIME types, so let's ensure we use the exact correct one
+        const properBlob = new Blob([audioBlob], {
+          type: audioBlob.type || "audio/mpeg",
         });
+
+        // Track if playback has been successful with any method
+        let playbackSucceeded = false;
+
+        // Try using the Web Audio API for better browser support first
+        this.playWithWebAudio(properBlob, resolve)
+          .then(() => {
+            console.log(
+              "Voicero Voice: Web Audio API playback completed successfully"
+            );
+            playbackSucceeded = true;
+            resolve();
+          })
+          .catch((error) => {
+            console.error("Voicero Voice: Web Audio API failed:", error);
+            tryFallbackMethod();
+          });
+
+        // Check if AudioContext is supported and try it first
+        function tryAudioContext() {
+          const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+
+          if (AudioContextClass) {
+            console.log("Voicero Voice: Using AudioContext API for playback");
+
+            const audioContext = new AudioContextClass();
+            const fileReader = new FileReader();
+
+            fileReader.onload = function () {
+              const arrayBuffer = this.result;
+
+              // Decode the audio data
+              audioContext.decodeAudioData(
+                arrayBuffer,
+                function (buffer) {
+                  console.log(
+                    "Voicero Voice: Audio successfully decoded, duration:",
+                    buffer.duration
+                  );
+
+                  // Create a source node
+                  const source = audioContext.createBufferSource();
+                  source.buffer = buffer;
+
+                  // Connect to destination (speakers)
+                  source.connect(audioContext.destination);
+
+                  // Play the audio
+                  source.onended = function () {
+                    console.log(
+                      "Voicero Voice: AudioContext playback completed"
+                    );
+                    playbackSucceeded = true;
+                    resolve();
+                  };
+
+                  source.start(0);
+                  console.log("Voicero Voice: AudioContext playback started");
+                },
+                function (error) {
+                  console.error(
+                    "Voicero Voice: Error decoding audio data:",
+                    error
+                  );
+                  // Always fall back to the Audio element method when decoding fails
+                  tryFallbackMethod();
+                }
+              );
+            };
+
+            fileReader.onerror = function () {
+              console.error(
+                "Voicero Voice: Error reading audio file:",
+                this.error
+              );
+              tryFallbackMethod();
+            };
+
+            // Read the blob as an array buffer
+            fileReader.readAsArrayBuffer(properBlob);
+            return true;
+          }
+
+          return false;
+        }
+
+        // Fallback method using Audio element (less reliable but simpler)
+        function tryFallbackMethod() {
+          console.log(
+            "Voicero Voice: Using fallback Audio element for playback"
+          );
+          const audio = new Audio();
+
+          // Add event listeners
+          audio.onloadedmetadata = () => {
+            console.log(
+              "Voicero Voice: Audio metadata loaded, duration:",
+              audio.duration
+            );
+          };
+
+          audio.onended = () => {
+            console.log("Voicero Voice: Audio playback completed");
+            if (audio.src && audio.src.startsWith("blob:")) {
+              URL.revokeObjectURL(audio.src);
+            }
+            resolve();
+          };
+
+          audio.onerror = (error) => {
+            console.error(
+              "Voicero Voice: Audio fallback playback error:",
+              error
+            );
+            console.error(
+              "Voicero Voice: Audio error code:",
+              audio.error ? audio.error.code : "unknown"
+            );
+            console.error(
+              "Voicero Voice: Audio error message:",
+              audio.error ? audio.error.message : "unknown"
+            );
+
+            // Try alternative audio format as last resort
+            tryMP3Fallback();
+
+            // Clean up and resolve anyway to continue with the conversation
+            if (audio.src && audio.src.startsWith("blob:")) {
+              URL.revokeObjectURL(audio.src);
+            }
+            resolve(); // Resolve instead of reject to continue with the conversation
+          };
+
+          // Create a blob URL
+          const audioUrl = URL.createObjectURL(properBlob);
+          console.log(
+            "Voicero Voice: Created audio URL for fallback:",
+            audioUrl
+          );
+          audio.src = audioUrl;
+
+          // Start playback
+          audio
+            .play()
+            .then(() => {
+              console.log(
+                "Voicero Voice: Fallback audio playback started successfully"
+              );
+            })
+            .catch((err) => {
+              console.error(
+                "Voicero Voice: Error starting fallback audio playback:",
+                err
+              );
+
+              // Try MP3 fallback as last resort
+              tryMP3Fallback();
+
+              if (audio.src && audio.src.startsWith("blob:")) {
+                URL.revokeObjectURL(audio.src);
+              }
+              resolve(); // Resolve instead of reject to continue with the conversation
+            });
+        }
+
+        // Last resort fallback for browsers with limited codec support
+        function tryMP3Fallback() {
+          console.log("Voicero Voice: Attempting MP3 fallback as last resort");
+
+          // Try multiple formats to see if any works
+          tryFormat("audio/mpeg");
+
+          function tryFormat(mimeType) {
+            console.log(`Voicero Voice: Trying format ${mimeType}`);
+            // Force specific MIME type
+            const formatBlob = new Blob([audioBlob], { type: mimeType });
+            const formatAudio = new Audio();
+            const formatUrl = URL.createObjectURL(formatBlob);
+
+            formatAudio.src = formatUrl;
+            formatAudio.onended = () => {
+              URL.revokeObjectURL(formatUrl);
+              console.log(`Voicero Voice: ${mimeType} playback completed`);
+            };
+
+            formatAudio.onerror = () => {
+              URL.revokeObjectURL(formatUrl);
+              console.error(`Voicero Voice: ${mimeType} format failed`);
+
+              // Try wav format if mp3 fails
+              if (mimeType === "audio/mpeg") {
+                tryFormat("audio/wav");
+              } else if (mimeType === "audio/wav") {
+                // Try ogg as last resort
+                tryFormat("audio/ogg");
+              } else {
+                console.error("Voicero Voice: All format attempts failed");
+              }
+            };
+
+            formatAudio.play().catch((err) => {
+              console.error(`Voicero Voice: Failed to play ${mimeType}`, err);
+              URL.revokeObjectURL(formatUrl);
+
+              // Try next format when current fails to play
+              if (mimeType === "audio/mpeg") {
+                tryFormat("audio/wav");
+              } else if (mimeType === "audio/wav") {
+                tryFormat("audio/ogg");
+              }
+            });
+          }
+        }
       } catch (error) {
-        reject(error);
+        console.error(
+          "Voicero Voice: Unhandled error in playAudioResponse:",
+          error
+        );
+        resolve(); // Resolve instead of reject to continue with the conversation
+      }
+    });
+  },
+
+  // Helper method to play audio using WebAudio API with better format support
+  playWithWebAudio: async function (audioBlob, resolve) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log("Voicero Voice: Attempting to play with Web Audio API");
+
+        // Debug: Check the first few bytes to verify it's a valid audio file
+        // MP3 files typically start with ID3 (49 44 33) or MPEG frame sync (FF Ex)
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const byteView = new Uint8Array(arrayBuffer);
+        const firstBytes = byteView.slice(0, 16);
+
+        let byteString = Array.from(firstBytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(" ");
+        console.log("Voicero Voice: First 16 bytes of audio:", byteString);
+
+        // Check for valid MP3 signatures
+        const isID3 =
+          firstBytes[0] === 0x49 &&
+          firstBytes[1] === 0x44 &&
+          firstBytes[2] === 0x33;
+        const isMPEGFrameSync =
+          firstBytes[0] === 0xff && (firstBytes[1] & 0xe0) === 0xe0;
+
+        if (!isID3 && !isMPEGFrameSync) {
+          console.warn(
+            "Voicero Voice: Audio data doesn't appear to be a valid MP3"
+          );
+        } else {
+          console.log(
+            "Voicero Voice: Valid audio signature detected:",
+            isID3 ? "ID3" : "MPEG frame sync"
+          );
+        }
+
+        const AudioContextClass =
+          window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          return reject(new Error("AudioContext not supported"));
+        }
+
+        const context = new AudioContextClass();
+
+        // Use the arrayBuffer we already loaded
+        // Try to decode
+        context.decodeAudioData(
+          arrayBuffer,
+          (buffer) => {
+            // Get the actual duration of the audio
+            const audioDuration = buffer.duration * 1000; // Convert to milliseconds
+            console.log(`Voicero Voice: Audio duration is ${audioDuration}ms`);
+
+            const source = context.createBufferSource();
+            source.buffer = buffer;
+            source.connect(context.destination);
+
+            source.onended = () => {
+              console.log(
+                `Voicero Voice: Web Audio API playback completed after ${audioDuration}ms`
+              );
+              context.close().catch(() => {});
+              // Store the audio duration in a global variable for the redirect logic
+              if (window.VoiceroVoice) {
+                window.VoiceroVoice.lastAudioDuration = audioDuration;
+              }
+              resolve();
+            };
+
+            source.start(0);
+            console.log("Voicero Voice: Web Audio API playback started");
+          },
+          (err) => {
+            console.error("Voicero Voice: Web Audio API decode error:", err);
+            context.close().catch(() => {});
+            reject(err);
+          }
+        );
+      } catch (err) {
+        console.error("Voicero Voice: Web Audio API playback error:", err);
+        reject(err);
       }
     });
   },
@@ -1624,14 +2223,116 @@ const VoiceroVoice = {
     };
   },
 
+  // Get past conversation context for AI
+  getPastContext: function () {
+    console.log("Voicero Voice: Getting past context for AI");
+
+    // Initialize context object
+    const context = {
+      messages: [],
+    };
+
+    // Check if we have a thread with messages
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.thread &&
+      window.VoiceroCore.thread.messages &&
+      window.VoiceroCore.thread.messages.length > 0
+    ) {
+      const messages = window.VoiceroCore.thread.messages;
+      let lastUserMsg = null;
+      let lastAiMsg = null;
+
+      // Find the last user and AI messages
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+
+        if (!lastUserMsg && msg.role === "user") {
+          lastUserMsg = msg;
+        }
+
+        if (!lastAiMsg && msg.role === "assistant") {
+          lastAiMsg = msg;
+        }
+
+        // Break once we've found both
+        if (lastUserMsg && lastAiMsg) {
+          break;
+        }
+      }
+
+      // Add messages to context in chronological order
+      if (lastAiMsg) {
+        try {
+          // For AI messages, try to extract the answer from JSON if needed
+          let content = lastAiMsg.content;
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed.answer) {
+              content = parsed.answer;
+            }
+          } catch (e) {
+            // Not JSON or couldn't parse, use as is
+          }
+
+          context.messages.push({
+            role: "assistant",
+            content: content,
+          });
+          console.log("Voicero Voice: Added last AI message to context");
+        } catch (e) {
+          console.error("Voicero Voice: Error processing AI message:", e);
+        }
+      }
+
+      if (lastUserMsg) {
+        context.messages.push({
+          role: "user",
+          content: lastUserMsg.content,
+        });
+        console.log("Voicero Voice: Added last user message to context");
+      }
+
+      console.log(
+        `Voicero Voice: Found ${context.messages.length} messages for context`
+      );
+    } else {
+      console.log(
+        "Voicero Voice: No existing thread or messages found for context"
+      );
+    }
+
+    return context;
+  },
+
   // Handle redirection to extracted URLs
   redirectToUrl: function (url) {
     if (!url) return;
+
     try {
-      new URL(url);
+      // Ensure the URL is using https instead of http
+      let secureUrl = url;
+
+      // If it's a relative URL like "/", don't modify it
+      if (url.indexOf("://") > 0) {
+        // For absolute URLs, ensure we use https://
+        secureUrl = url.replace(/^http:\/\//i, "https://");
+      } else if (url.startsWith("www.")) {
+        // If it starts with www but doesn't have a protocol, add https://
+        secureUrl = "https://" + url;
+      }
+
+      console.log(
+        `Voicero Voice: Redirecting to secure URL: ${secureUrl} (original: ${url})`
+      );
+
+      // Validate the URL
+      new URL(secureUrl);
+
       // Navigate in the same tab instead of opening a new one
-      window.location.href = url;
+      window.location.href = secureUrl;
     } catch (error) {
+      console.error("Voicero Voice: Invalid URL for redirect:", url, error);
       const aiMessageDiv = document.querySelector(
         "#voice-chat-interface .ai-message"
       );
@@ -1873,6 +2574,16 @@ const VoiceroVoice = {
 
   // Format currency values for better speech pronunciation
   formatCurrencyForSpeech: function (text) {
+    // Check if text is a string first
+    if (typeof text !== "string") {
+      console.log(
+        "Voicero Voice: formatCurrencyForSpeech received non-string:",
+        text
+      );
+      // Convert to string safely
+      return String(text || "");
+    }
+
     return text.replace(/\$(\d+)\.(\d{2})/g, function (match, dollars, cents) {
       if (cents === "00") {
         return `${dollars} dollars`;
@@ -2113,9 +2824,19 @@ const VoiceroVoice = {
 
   // Stop any ongoing recording
   stopRecording: function (processAudioData = true) {
+    console.log(
+      "Voicero Voice: stopRecording called, processAudioData=",
+      processAudioData
+    );
+
     // Set flag to indicate recording is stopped
     this.isRecording = false;
     this.manuallyStoppedRecording = !processAudioData;
+
+    console.log(
+      "Voicero Voice: manuallyStoppedRecording set to",
+      this.manuallyStoppedRecording
+    );
 
     // Stop any audio streams that might be active
     if (this.currentAudioStream) {
@@ -2126,17 +2847,20 @@ const VoiceroVoice = {
     // Stop the media recorder if it exists
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.stop();
+      console.log("Voicero Voice: mediaRecorder stopped");
     }
 
     // Clear any timers
     if (this.silenceDetectionTimer) {
       clearInterval(this.silenceDetectionTimer);
       this.silenceDetectionTimer = null;
+      console.log("Voicero Voice: silenceDetectionTimer cleared");
     }
 
     if (this.recordingTimeout) {
       clearTimeout(this.recordingTimeout);
       this.recordingTimeout = null;
+      console.log("Voicero Voice: recordingTimeout cleared");
     }
 
     // Reset audio related variables
@@ -2261,6 +2985,9 @@ VoiceroVoice.activateAutoMic = function () {
   // Only proceed if the voice interface is open
   const voiceInterface = document.getElementById("voice-chat-interface");
   if (!voiceInterface || voiceInterface.style.display !== "block") {
+    console.log(
+      "Voicero Voice: Cannot activate autoMic - voice interface is not open"
+    );
     return;
   }
 
@@ -2275,8 +3002,23 @@ VoiceroVoice.activateAutoMic = function () {
       this.hasStartedSpeaking = true;
       this.isSpeaking = true;
 
-      console.log("Voicero Voice: Auto-mic activated and listening");
+      console.log(
+        "Voicero Voice: Auto-mic activated and listening - hasStartedSpeaking and isSpeaking set to true"
+      );
+    } else {
+      console.log(
+        "Voicero Voice: Auto-mic activation problem - missing required components:",
+        {
+          hasMediaRecorder: !!this.mediaRecorder,
+          hasAudioContext: !!this.audioContext,
+          hasAnalyser: !!this.analyser,
+        }
+      );
     }
+  } else {
+    console.log(
+      "Voicero Voice: Already recording, not activating autoMic again"
+    );
   }
 };
 
