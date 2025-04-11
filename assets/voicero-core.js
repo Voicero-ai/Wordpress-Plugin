@@ -905,8 +905,21 @@
 
         // Make sure VoiceroText is initialized
         if (window.VoiceroText) {
-          // The openTextChat function now handles the minimized/maximized state directly
+          // Open the text chat (will always open maximized now)
           window.VoiceroText.openTextChat();
+
+          // AFTER opening, check if it should be minimized based on session
+          if (this.session.textOpenWindowUp === false) {
+            console.log(
+              "Voicero Core Script: Minimizing text chat based on session state"
+            );
+            // Use setTimeout to allow the interface to render first
+            setTimeout(() => {
+              if (window.VoiceroText && window.VoiceroText.minimizeChat) {
+                window.VoiceroText.minimizeChat();
+              }
+            }, 100); // Small delay
+          }
         }
       }
 

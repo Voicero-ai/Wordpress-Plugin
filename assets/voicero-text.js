@@ -275,82 +275,6 @@ const VoiceroText = {
       }
     }
 
-    // Important: If shouldBeMaximized is false, immediately apply minimized state
-    // without waiting for the minimization to occur after showing maximized first
-    if (!shouldBeMaximized) {
-      console.log("Voicero Text: Immediately applying minimized state");
-
-      // Get the necessary elements from shadow root
-      const shadowRoot = document.getElementById(
-        "voicero-text-chat-container"
-      )?.shadowRoot;
-      if (shadowRoot) {
-        const messagesContainer = shadowRoot.getElementById("chat-messages");
-        const headerContainer = shadowRoot.getElementById(
-          "chat-controls-header"
-        );
-        const inputWrapper = shadowRoot.getElementById("chat-input-wrapper");
-        const maximizeBtn = shadowRoot.getElementById("maximize-chat");
-
-        // Make the maximize button visible first
-        if (maximizeBtn) {
-          maximizeBtn.style.display = "block";
-          maximizeBtn.style.marginTop = "10px";
-        }
-
-        if (messagesContainer) {
-          // Hide all message content
-          const allMessages = messagesContainer.querySelectorAll(
-            ".user-message, .ai-message, #initial-suggestions"
-          );
-          allMessages.forEach((msg) => {
-            msg.style.display = "none";
-          });
-
-          // Completely hide the messages container
-          messagesContainer.style.maxHeight = "0";
-          messagesContainer.style.minHeight = "0";
-          messagesContainer.style.height = "0";
-          messagesContainer.style.padding = "0";
-          messagesContainer.style.margin = "0";
-          messagesContainer.style.overflow = "hidden";
-          messagesContainer.style.border = "none";
-          messagesContainer.style.display = "none";
-          messagesContainer.style.visibility = "hidden";
-          messagesContainer.style.opacity = "0";
-          messagesContainer.style.position = "absolute";
-          messagesContainer.style.pointerEvents = "none";
-
-          // Also hide padding container inside
-          const paddingContainer = messagesContainer.querySelector(
-            "div[style*='padding-top']"
-          );
-          if (paddingContainer) {
-            paddingContainer.style.display = "none";
-            paddingContainer.style.height = "0";
-            paddingContainer.style.padding = "0";
-            paddingContainer.style.margin = "0";
-          }
-        }
-
-        // Keep header visible but adjust its style for minimized state
-        if (headerContainer) {
-          headerContainer.style.display = "flex";
-          headerContainer.style.visibility = "visible";
-          headerContainer.style.opacity = "1";
-          headerContainer.style.borderBottom = "none";
-          headerContainer.style.paddingBottom = "8px";
-          headerContainer.style.marginBottom = "0";
-        }
-
-        // Adjust the input wrapper to connect with the button
-        if (inputWrapper) {
-          inputWrapper.style.borderRadius = "12px";
-          inputWrapper.style.marginTop = "0";
-        }
-      }
-    }
-
     // Set up input and button listeners
     this.setupEventListeners();
 
@@ -2602,14 +2526,9 @@ const VoiceroText = {
       }
     }
 
-    // Hide the header
+    // Hide the header when minimized
     if (headerContainer) {
-      headerContainer.style.display = "flex";
-      headerContainer.style.visibility = "visible";
-      headerContainer.style.opacity = "1";
-      headerContainer.style.borderBottom = "none";
-      headerContainer.style.paddingBottom = "8px";
-      headerContainer.style.marginBottom = "0";
+      headerContainer.style.display = "none";
     }
 
     // Adjust the input wrapper to connect with the button
@@ -2618,13 +2537,13 @@ const VoiceroText = {
       inputWrapper.style.marginTop = "0";
     }
 
-    // Force a redraw to ensure button is visible
-    document.getElementById("voicero-text-chat-container").style.display =
-      "none";
-    setTimeout(() => {
-      document.getElementById("voicero-text-chat-container").style.display =
-        "block";
-    }, 0);
+    // REMOVE the forced redraw - this might be causing the visibility issue
+    // document.getElementById("voicero-text-chat-container").style.display =
+    //  "none";
+    // setTimeout(() => {
+    //   document.getElementById("voicero-text-chat-container").style.display =
+    //     "block";
+    // }, 0);
   },
 
   // Maximize the chat interface
@@ -2765,16 +2684,16 @@ const VoiceroText = {
       inputWrapper.style.marginTop = "0";
     }
 
-    // Force a redraw to ensure elements are properly positioned
-    document.getElementById("voicero-text-chat-container").style.display =
-      "none";
-    setTimeout(() => {
-      document.getElementById("voicero-text-chat-container").style.display =
-        "block";
+    // REMOVE the forced redraw logic
+    // document.getElementById("voicero-text-chat-container").style.display =
+    //   "none";
+    // setTimeout(() => {
+    //   document.getElementById("voicero-text-chat-container").style.display =
+    //     "block";
 
-      // Force welcome message colors after redrawing
-      this.forceWelcomeMessageColors();
-    }, 0);
+    // Ensure welcome message colors are applied without redraw
+    this.forceWelcomeMessageColors();
+    // }, 0);
   },
 
   // Add message to the chat interface (used for both user and AI messages)
