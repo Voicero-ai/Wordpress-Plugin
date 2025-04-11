@@ -385,6 +385,15 @@
               // Open the voice interface
               if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
                 window.VoiceroVoice.openVoiceChat();
+                // Force maximize after opening
+                setTimeout(() => {
+                  if (
+                    window.VoiceroVoice &&
+                    window.VoiceroVoice.maximizeVoiceChat
+                  ) {
+                    window.VoiceroVoice.maximizeVoiceChat();
+                  }
+                }, 100);
               }
             });
           }
@@ -416,6 +425,12 @@
               // Open the text interface
               if (window.VoiceroText && window.VoiceroText.openTextChat) {
                 window.VoiceroText.openTextChat();
+                // Force maximize after opening
+                setTimeout(() => {
+                  if (window.VoiceroText && window.VoiceroText.maximizeChat) {
+                    window.VoiceroText.maximizeChat();
+                  }
+                }, 100);
               }
             });
           }
@@ -1835,33 +1850,15 @@
                 // Try to open voice interface
                 if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
                   window.VoiceroVoice.openVoiceChat();
-                } else {
-                  // Direct fallback if module not available
-                  const voiceInterface = document.getElementById(
-                    "voice-chat-interface"
-                  );
-                  if (voiceInterface) {
-                    voiceInterface.innerHTML = `<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:400px;height:500px;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:999999;padding:20px;display:flex;flex-direction:column;border:1px solid #ccc;">
-                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:10px;margin-bottom:15px;">
-                        <h3 style="margin:0;font-size:18px;font-weight:600;">Voice Assistant</h3>
-                        <button id="emergency-voice-close" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
-                      </div>
-                      <div style="flex:1;overflow-y:auto;padding:10px;">
-                        <p>The voice module is loading. Please try again in a moment.</p>
-                      </div>
-                    </div>`;
-                    voiceInterface.style.display = "block";
-
-                    // Add close button handler
-                    const closeBtn = document.getElementById(
-                      "emergency-voice-close"
-                    );
-                    if (closeBtn) {
-                      closeBtn.addEventListener("click", () => {
-                        voiceInterface.style.display = "none";
-                      });
+                  // Force maximize after opening
+                  setTimeout(() => {
+                    if (
+                      window.VoiceroVoice &&
+                      window.VoiceroVoice.maximizeVoiceChat
+                    ) {
+                      window.VoiceroVoice.maximizeVoiceChat();
                     }
-                  }
+                  }, 100);
                 }
               });
             }
@@ -1888,33 +1885,12 @@
                 // Try to open text interface
                 if (window.VoiceroText && window.VoiceroText.openTextChat) {
                   window.VoiceroText.openTextChat();
-                } else {
-                  // Direct fallback if module not available
-                  const textInterface = document.getElementById(
-                    "voicero-text-chat-container"
-                  );
-                  if (textInterface) {
-                    textInterface.innerHTML = `<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:400px;height:500px;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:999999;padding:20px;display:flex;flex-direction:column;border:1px solid #ccc;">
-                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:10px;margin-bottom:15px;">
-                        <h3 style="margin:0;font-size:18px;font-weight:600;">Text Chat</h3>
-                        <button id="emergency-text-close" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
-                      </div>
-                      <div style="flex:1;overflow-y:auto;padding:10px;">
-                        <p>The text chat module is loading. Please try again in a moment.</p>
-                      </div>
-                    </div>`;
-                    textInterface.style.display = "block";
-
-                    // Add close button handler
-                    const closeBtn = document.getElementById(
-                      "emergency-text-close"
-                    );
-                    if (closeBtn) {
-                      closeBtn.addEventListener("click", () => {
-                        textInterface.style.display = "none";
-                      });
+                  // Force maximize after opening
+                  setTimeout(() => {
+                    if (window.VoiceroText && window.VoiceroText.maximizeChat) {
+                      window.VoiceroText.maximizeChat();
                     }
-                  }
+                  }, 100);
                 }
               });
             }
@@ -1951,11 +1927,11 @@
           if (voiceInterface) {
             voiceInterface.innerHTML = `<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:400px;height:500px;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:999999;padding:20px;display:flex;flex-direction:column;border:1px solid #ccc;">
               <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:10px;margin-bottom:15px;">
-                <h3 style="margin:0;font-size:18px;font-weight:600;">Voicero AI</h3>
+                <h3 style="margin:0;font-size:18px;font-weight:600;">Voice Assistant</h3>
                 <button id="emergency-voice-close" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
               </div>
               <div style="flex:1;overflow-y:auto;padding:10px;">
-                <p>Emergency fallback interface loaded. Please reload the page if you're having issues.</p>
+                <p>The voice module is loading. Please try again in a moment.</p>
               </div>
             </div>`;
             voiceInterface.style.display = "block";
