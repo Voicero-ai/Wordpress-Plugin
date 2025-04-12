@@ -314,6 +314,22 @@ const VoiceroVoice = {
         margin-top: 2px;
         margin-right: 8px;
       }
+
+      /* Placeholder styling for user message during transcription */
+      .user-message .message-content.placeholder-loading {
+        font-style: italic;
+        color: rgba(255, 255, 255, 0.7);
+        background: var(--voicero-theme-color, #882be6);
+        opacity: 0.8;
+        /* Optional: Add a subtle animation */
+        animation: pulsePlaceholder 1.5s infinite ease-in-out;
+      }
+
+      @keyframes pulsePlaceholder {
+        0% { opacity: 0.6; }
+        50% { opacity: 0.9; }
+        100% { opacity: 0.6; }
+      }
     `;
     document.head.appendChild(resetStyle);
 
@@ -1076,12 +1092,29 @@ const VoiceroVoice = {
       micButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.1)";
       micIcon.style.stroke = "white";
 
-      // Add thinking animation
-      this.addSystemMessage(`
-        <div class="voice-prompt thinking-animation">
-          Processing
-        </div>
-      `);
+      // Remove the "I'm listening..." indicator if it exists
+      const listeningIndicator = document.getElementById(
+        "listening-indicator-message"
+      );
+      if (listeningIndicator) {
+        listeningIndicator.remove();
+      }
+
+      // Also remove any leftover placeholders or typing indicators
+      document
+        .querySelectorAll(
+          ".placeholder, .typing-indicator, .welcome-message, .voice-prompt"
+        )
+        .forEach((el) => el.remove());
+
+      // Remove any empty AI message bubbles
+      document.querySelectorAll(".ai-message").forEach((msg) => {
+        const textEl = msg.querySelector(".message-content");
+        // If there's no text at all, remove the entire AI message bubble
+        if (textEl && !textEl.textContent.trim()) {
+          msg.remove();
+        }
+      });
 
       // Rest of the existing stop listening logic
       if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
@@ -1112,7 +1145,7 @@ const VoiceroVoice = {
       if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
         window.VoiceroCore.updateWindowState({
           voiceWelcome: false, // Once user starts recording, don't show welcome again
-          autoMic: false, // Set autoMic to true to remember user's preference
+          autoMic: false, // Set autoMic to false to remember user's preference
         });
         console.log("Voicero Voice: Set autoMic to false in session");
       }
@@ -1123,7 +1156,7 @@ const VoiceroVoice = {
 
       // Add listening indicator message
       this.addSystemMessage(`
-        <div class="welcome-message" style="padding: 10px 15px; margin: 10px auto;">
+        <div id="listening-indicator-message" class="welcome-message" style="padding: 4px 10px; margin: 4px auto; width: 95%;">
           <div class="welcome-title" style="background: linear-gradient(90deg, var(--voicero-theme-color, ${
             this.websiteColor || "#882be6"
           }), ${this.adjustColor(
@@ -1131,10 +1164,9 @@ const VoiceroVoice = {
         0.2
       )}, var(--voicero-theme-color, ${
         this.websiteColor || "#882be6"
-      })); -webkit-background-clip: text; background-clip: text; margin-bottom: 2px;">
-            🎤 I'm listening...
+      })); -webkit-background-clip: text; background-clip: text; margin-bottom: 0;">
+            I'm listening...
           </div>
-          <div class="welcome-subtitle" style="font-size: 13px;">Speak now</div>
         </div>
       `);
 
@@ -1357,7 +1389,7 @@ const VoiceroVoice = {
                   transcription
                 );
 
-                // Update the user message with transcription
+                // Add the user message with transcription (restored from placeholder update)
                 this.addMessage(transcription, "user");
 
                 // Mark that first conversation has occurred
@@ -2385,11 +2417,17 @@ const VoiceroVoice = {
         `Voicero Voice: Redirecting to secure URL: ${secureUrl} (original: ${url})`
       );
 
-      // Validate the URL
-      new URL(secureUrl);
-
-      // Navigate in the same tab instead of opening a new one
-      window.location.href = secureUrl;
+      // Validate the URL - for relative URLs, use the current location as the base
+      if (secureUrl.startsWith("/") || !secureUrl.includes("://")) {
+        // For relative URLs, use current origin as base
+        new URL(secureUrl, window.location.origin);
+        // Navigate to the relative URL directly
+        window.location.href = secureUrl;
+      } else {
+        // For absolute URLs, validate and navigate
+        new URL(secureUrl);
+        window.location.href = secureUrl;
+      }
     } catch (error) {
       console.error("Voicero Voice: Invalid URL for redirect:", url, error);
       const aiMessageDiv = document.querySelector(

@@ -375,12 +375,13 @@
               }
 
               // Update window state first (set voice open flags)
-              this.updateWindowState({
-                voiceOpen: true,
-                voiceOpenWindowUp: true,
-                textOpen: false,
-                textOpenWindowUp: false,
-              });
+              // REMOVED: Let openVoiceChat handle its own state update
+              // this.updateWindowState({
+              //   voiceOpen: true,
+              //   voiceOpenWindowUp: true,
+              //   textOpen: false,
+              //   textOpenWindowUp: false,
+              // });
 
               // Open the voice interface
               if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
@@ -415,12 +416,13 @@
               }
 
               // Update window state first (set text open flags)
-              this.updateWindowState({
-                textOpen: true,
-                textOpenWindowUp: true,
-                voiceOpen: false,
-                voiceOpenWindowUp: false,
-              });
+              // REMOVED: Let openTextChat handle its own state update
+              // this.updateWindowState({
+              //   textOpen: true,
+              //   textOpenWindowUp: true,
+              //   voiceOpen: false,
+              //   voiceOpenWindowUp: false,
+              // });
 
               // Open the text interface
               if (window.VoiceroText && window.VoiceroText.openTextChat) {
