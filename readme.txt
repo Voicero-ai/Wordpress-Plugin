@@ -2,7 +2,7 @@
 Contributors: voiceroai
 Tags: ai, chatbot, assistant, ecommerce, sales, conversion, automation
 Requires at least: 6.0
-Tested up to: 6.5
+Tested up to: 6.7
 Requires PHP: 7.4
 Stable tag: 1.0
 License: GPLv2 or later
@@ -24,7 +24,7 @@ Voicero.AI connects your site to a fully autonomous AI Salesman. It answers cust
 = Do I need a Voicero.AI account? =
 Yes. You must sign up at voicero.ai to receive your access key and manage your AI assistant. The account starts free and will auto connect you with one button click.
 
-= Will this affect my site’s performance? =
+= Will this affect my site's performance? =
 No. Voicero.AI is fully asynchronous and optimized to avoid blocking your frontend or admin experience.
 
 = Does this work with WooCommerce? =
