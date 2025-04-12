@@ -1150,11 +1150,7 @@ const VoiceroVoice = {
         console.log("Voicero Voice: Set autoMic to false in session");
       }
 
-      // Update UI - add siri-like animation
-      micButton.classList.add("siri-active");
-      micIcon.style.stroke = "white";
-
-      // Add listening indicator message
+      // Add a temporary "initializing..." message instead of immediately showing "I'm listening..."
       this.addSystemMessage(`
         <div id="listening-indicator-message" class="welcome-message" style="padding: 4px 10px; margin: 4px auto; width: 95%;">
           <div class="welcome-title" style="background: linear-gradient(90deg, var(--voicero-theme-color, ${
@@ -1165,7 +1161,7 @@ const VoiceroVoice = {
       )}, var(--voicero-theme-color, ${
         this.websiteColor || "#882be6"
       })); -webkit-background-clip: text; background-clip: text; margin-bottom: 0;">
-            I'm listening...
+            Initializing microphone...
           </div>
         </div>
       `);
@@ -1224,6 +1220,22 @@ const VoiceroVoice = {
             audioBitsPerSecond: 128000,
           });
           this.audioChunks = [];
+
+          // NOW update UI - add siri-like animation after microphone is activated
+          micButton.classList.add("siri-active");
+          micIcon.style.stroke = "white";
+
+          // Update the message to "I'm listening..." now that the mic is ready
+          const listeningIndicator = document.getElementById(
+            "listening-indicator-message"
+          );
+          if (listeningIndicator) {
+            const titleElement =
+              listeningIndicator.querySelector(".welcome-title");
+            if (titleElement) {
+              titleElement.textContent = "I'm listening...";
+            }
+          }
 
           // Set up audio analysis for silence detection if supported
           if (audioContextSupported) {
