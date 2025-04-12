@@ -1071,7 +1071,6 @@ function ai_website_render_admin_page() {
                     if (assistantData && assistantData.websiteId) {
                         websiteId = assistantData.websiteId;
                     } else {
-                        console.warn("No websiteId found in assistant response");
                         // Try to use the first content item's websiteId as fallback
                         if (assistantData && assistantData.content && 
                             assistantData.content.pages && assistantData.content.pages.length > 0) {
@@ -1085,7 +1084,6 @@ function ai_website_render_admin_page() {
                     
                     // --- Step 4: All Training (50% to 100%) ---
                     if (!assistantData || !assistantData.content) {
-                         console.warn("No content data received from assistant setup, skipping content training.");
                          // Even if no content items, we still need to do general training
                     }
                     
@@ -1123,7 +1121,6 @@ function ai_website_render_admin_page() {
                             currentIndex += BATCH_SIZE;
                             
                             // Log batch details
-                            console.log(`Processing batch of ${currentBatch.length} items (${currentIndex-currentBatch.length}-${currentIndex-1} of ${allItems.length})`);
                             
                             // Process the current batch concurrently
                             const batchPromises = currentBatch.map(item => {
@@ -1162,7 +1159,6 @@ function ai_website_render_admin_page() {
                                         // Make the request
                                         await new Promise((innerResolve) => {
                                             activeRequests++; // Increment active requests counter
-                                            console.log(`Active requests: ${activeRequests}`);
                                             
                                             $.post(ajaxurl, requestData)
                                                 .done(response => {
@@ -1170,20 +1166,16 @@ function ai_website_render_admin_page() {
                                                     // We're now only tracking that the request was initiated, not completed
                                                     // The PHP side is returning immediately without waiting for Vercel
                                                     if (!response.success) {
-                                                        console.warn(`Initiating training for ${item.type} ${item.id || ''} failed:`, response.data.message);
                                                     } else {
-                                                        console.log(`Training initiated for ${item.type} ${item.id || ''}`);
                                                     }
                                                     innerResolve();
                                                 })
                                                 .fail(error => {
                                                     activeRequests--; // Decrement counter
-                                                    console.warn(`Training initiation for ${item.type} ${item.id || ''} failed:`, error);
                                                     innerResolve(); // Resolve anyway to continue with other items
                                                 });
                                         });
                                     } catch (error) {
-                                        console.warn(`Error processing ${item.type} ${item.id || ''}:`, error);
                                     } finally {
                                         // Always update progress and resolve
                                         completedItems++;
@@ -1285,7 +1277,6 @@ function ai_website_render_admin_page() {
                 })
                 .catch(function(error) {
                     // General Error handling for the entire chain
-                    console.error("Sync/Training process failed:", error);
                     const currentProgress = parseFloat(progressBar.css('width')) / progressBar.parent().width() * 100;
                     updateProgress(currentProgress, `❌ Error: ${error.message}`, true); 
                 })
@@ -1495,7 +1486,6 @@ function ai_website_render_admin_page() {
             const $button = $(this);
             
             if (!websiteId && !accessKey) {
-                console.error('No website ID or access key available');
                 alert('Could not identify website. Please try refreshing the page.');
                 return;
             }
@@ -1522,7 +1512,6 @@ function ai_website_render_admin_page() {
                 window.location.reload();
             })
             .catch(error => {
-                console.error('Error toggling status:', error);
                 alert('Failed to toggle website status: ' + error.message + '. Please try again.');
             })
             .finally(() => {
@@ -1539,7 +1528,6 @@ function ai_website_render_admin_page() {
                 // Debug log the key to PHP error log
                 // error_log("Access key being used: " + substr($key, 0, 10) + "..."); // Be careful logging keys
             ?>';
-            // console.log("Access key loaded:", ACCESS_KEY.substring(0, 10) + "..."); // Debug log
             
             // Expose config globally (or use a more structured approach if needed)
              window.aiWebsiteConfig = {
@@ -2344,30 +2332,21 @@ function voicero_add_inline_debug_script() {
         ?>
         <script>
         (function() {
-            console.log('Voicero Debug Script: Checking for elements and scripts');
             
             // Wait for DOM to be fully loaded
             window.addEventListener('DOMContentLoaded', function() {
                 // Check if container exists
                 const container = document.getElementById('voicero-app-container');
-                console.log('Voicero container found:', !!container);
                 if (container) {
-                    console.log('Voicero container hook:', container.getAttribute('data-hook'));
                 }
                 
                 // Check if scripts are loaded
-                console.log('Core script loaded:', typeof window.VoiceroCore !== 'undefined');
-                console.log('Text script loaded:', typeof window.VoiceroText !== 'undefined');
-                console.log('Voice script loaded:', typeof window.VoiceroVoice !== 'undefined');
                 
                 // Check for config
-                console.log('Config found:', typeof window.aiWebsiteConfig !== 'undefined');
                 
                 // Run a test after a short delay
                 setTimeout(function() {
                     if (window.VoiceroCore) {
-                        console.log('VoiceroCore API connected:', window.VoiceroCore.apiConnected);
-                        console.log('VoiceroCore API URL:', window.VoiceroCore.apiBaseUrl);
                     }
                 }, 2000);
             });

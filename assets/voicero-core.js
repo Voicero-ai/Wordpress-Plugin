@@ -4,7 +4,7 @@
 
 // Ensure compatibility with WordPress jQuery
 (function ($, window, document) {
-  console.log("Voicero Core Script: Starting initialization");
+  
 
   const VoiceroCore = {
     apiBaseUrls: ["https://www.voicero.ai"],
@@ -24,7 +24,7 @@
 
     // Initialize on page load
     init: function () {
-      console.log("Voicero Core Script: init() called");
+      
 
       // Set up global reference
       window.VoiceroCore = this;
@@ -41,11 +41,9 @@
 
       // Check if config is available
       if (typeof aiWebsiteConfig !== "undefined") {
-        console.log("Voicero Core Script: Config found", aiWebsiteConfig);
+        
       } else {
-        console.warn(
-          "Voicero Core Script: No config found (aiWebsiteConfig is undefined)"
-        );
+        
       }
 
       // Step 1: First set up basic containers (but not the button yet)
@@ -54,7 +52,7 @@
 
       // Step 2: Initialize the API connection - this will create the button
       // only after we know the website color
-      console.log("Voicero Core Script: Initializing API connection");
+      
       this.checkApiConnection();
 
       // Don't force the button to show here anymore - wait for API
@@ -62,20 +60,18 @@
       //   this.ensureMainButtonVisible();
       // }, 500);
 
-      console.log("Voicero Core Script: Initialization sequence started");
+      
     },
 
     // Initialize API connection - empty since we call checkApiConnection directly now
     initializeApiConnection: function () {
-      console.log(
-        "Voicero Core Script: initializeApiConnection called - now deprecated"
-      );
+      
       // This method is now empty as we call checkApiConnection directly from init
     },
 
     // Set up event listeners
     setupEventListeners: function () {
-      console.log("Voicero Core Script: Setting up event listeners");
+      
       // Don't create the button here - wait for API connection first
 
       // Create chat interface elements that might be needed
@@ -85,14 +81,12 @@
 
     // Create the main interface with the two option buttons
     createButton: function () {
-      console.log("Voicero Core Script: Creating button interface");
+      
 
       // DON'T SKIP BUTTON CREATION - Even if API isn't connected, we need the main button
       // Just log a warning instead of completely skipping
       if (!this.apiConnected) {
-        console.warn(
-          "Voicero Core Script: Creating button despite API connection issues"
-        );
+        
       }
 
       // Make sure theme colors are updated
@@ -113,18 +107,18 @@
       }
     `;
       document.head.appendChild(styleEl);
-      console.log("Voicero Core Script: Added CSS animations");
+      
 
       // Use the website color from API or default
       const themeColor = this.websiteColor || "#882be6";
-      console.log("Voicero Core Script: Using theme color for UI:", themeColor);
+      
 
       // Check if the container exists, otherwise append to body
       let container = document.getElementById("voicero-app-container");
 
       if (!container) {
         // If the WordPress-added container doesn't exist, create one on the body
-        console.log("Voicero Core Script: No container found, creating one");
+        
         document.body.insertAdjacentHTML(
           "beforeend",
           `<div id="voicero-app-container"></div>`
@@ -140,9 +134,7 @@
       }
 
       if (container) {
-        console.log(
-          "Voicero Core Script: Container found, adding button interface"
-        );
+        
 
         // Create the button container inside the main container
         container.innerHTML = `<div id="voice-toggle-container"></div>`;
@@ -299,7 +291,7 @@
               e.preventDefault();
               e.stopPropagation();
 
-              console.log("Voicero Core Script: Chat button clicked");
+              
 
               // Check if any interfaces are open and close them (acting as home button)
               const voiceInterface = document.getElementById(
@@ -437,18 +429,12 @@
             });
           }
 
-          console.log(
-            "Voicero Core Script: Button interface created successfully"
-          );
+          
         } else {
-          console.error(
-            "Voicero Core Script: Failed to create button container"
-          );
+          
         }
       } else {
-        console.error(
-          "Voicero Core Script: Could not find or create container"
-        );
+        
       }
     },
 
@@ -475,11 +461,9 @@
           "beforeend",
           `<div id="voicero-text-chat-container" style="display: none;"></div>`
         );
-        console.log("Voicero Core Script: Text chat interface container added");
+        
       } else {
-        console.error(
-          "Voicero Core Script: Could not create text chat interface"
-        );
+        
       }
     },
 
@@ -506,13 +490,9 @@
           "beforeend",
           `<div id="voice-chat-interface" style="display: none;"></div>`
         );
-        console.log(
-          "Voicero Core Script: Voice chat interface container added"
-        );
+        
       } else {
-        console.error(
-          "Voicero Core Script: Could not create voice chat interface"
-        );
+        
       }
     },
 
@@ -540,9 +520,7 @@
 
     // Check API connection
     checkApiConnection: function () {
-      console.log(
-        "Voicero Core Script: Starting API connection check with proxy"
-      );
+      
 
       // Use WordPress REST API proxy endpoint instead of direct API call
       const proxyUrl = "/wp-json/voicero/v1/connect";
@@ -556,13 +534,10 @@
         },
       })
         .then((response) => {
-          console.log(
-            "Voicero Core Script: API response status:",
-            response.status
-          );
+          
           // Check if the response status is not 200
           if (!response.ok) {
-            console.error(`API validation failed: ${response.status}`);
+            
             // Set connection status to false since we got an error
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
@@ -572,21 +547,16 @@
           return response.json();
         })
         .then((data) => {
-          console.log("Voicero Core Script: Full API response:", data);
-          console.log("Voicero Core Script: Website data:", data.website);
-          console.log(
-            "Voicero Core Script: Is website active?",
-            data.website?.active
-          );
+          
+          
+          
 
           // Store the working API URL
           this.apiBaseUrl = this.apiBaseUrls[0]; // Just use first URL since proxy handles actual endpoint
 
           // Check if the website exists and is active
           if (!data.website || data.website.active !== true) {
-            console.warn(
-              "Voicero Core Script: Website is not active in API response"
-            );
+            
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
 
@@ -611,26 +581,19 @@
             this.websiteColor = data.website.color
               ? data.website.color
               : "#882be6";
-            console.log(
-              "Voicero Core Script: Using website color:",
-              this.websiteColor
-            );
+            
 
             // Update CSS variables with the theme color
             this.updateThemeColor(this.websiteColor);
 
             // ALWAYS ensure main button is visible when website is active
             this.ensureMainButtonVisible();
-            console.log(
-              "Voicero Core Script: Website active, ensuring button is visible"
-            );
+            
 
             // NOW set up the failsafe (only for active sites)
             this.setupButtonFailsafe();
 
-            console.log(
-              "Voicero Core Script: Initializing session before creating UI"
-            );
+            
 
             // Don't create the button yet - wait for session initialization
             // We'll make sure initializeSession will call createButton when done
@@ -638,7 +601,7 @@
             // Initialize session after successful connection
             this.initializeSession();
           } else {
-            console.warn("Voicero Core Script: No website ID in API response");
+            
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
             this.hideMainButton(); // Hide button if no website ID
@@ -658,7 +621,7 @@
           }
         })
         .catch((error) => {
-          console.error(`Voicero Core Script: API error with proxy:`, error);
+          
           // Set connection status to false since we got an error
           this.apiConnected = false;
           this.isWebsiteActive = false; // Mark site as inactive
@@ -666,17 +629,13 @@
           this.removeAllButtons(); // Force remove all buttons
 
           // Ensure no UI elements are created in error case
-          console.warn(
-            "Voicero Core Script: Not displaying UI due to API error"
-          );
+          
         });
     },
 
     // Hide main button when website not active
     hideMainButton: function () {
-      console.log(
-        "Voicero Core Script: Hiding main button - website not active"
-      );
+      
 
       // Find the button
       const mainButton = document.getElementById("chat-website-button");
@@ -707,9 +666,7 @@
     initializeSession: function () {
       // Prevent multiple initialization attempts at the same time
       if (this.isInitializingSession) {
-        console.log(
-          "Voicero Core Script: Session initialization already in progress, skipping"
-        );
+        
         return;
       }
 
@@ -719,25 +676,20 @@
       // Check if we have a saved sessionId in localStorage
       const savedSessionId = localStorage.getItem("voicero_session_id");
 
-      console.log(
-        "Voicero Core Script: Checking localStorage for session ID:",
-        savedSessionId
-      );
+      
 
       try {
         // Verify localStorage is actually working
         localStorage.setItem("voicero_test", "test");
         if (localStorage.getItem("voicero_test") !== "test") {
-          console.error(
-            "Voicero Core Script: localStorage is not working properly"
-          );
+          
           // If localStorage isn't working, just create a new session
           this.createSession();
           return;
         }
         localStorage.removeItem("voicero_test");
       } catch (e) {
-        console.error("Voicero Core Script: localStorage error", e);
+        
         // If localStorage isn't available, just create a new session
         this.createSession();
         return;
@@ -748,16 +700,11 @@
         typeof savedSessionId === "string" &&
         savedSessionId.trim() !== ""
       ) {
-        console.log(
-          "Voicero Core Script: Found valid saved session ID",
-          savedSessionId
-        );
+        
         // Try to get the existing session
         this.getSession(savedSessionId);
       } else {
-        console.log(
-          "Voicero Core Script: No valid saved session, creating new one"
-        );
+        
         // Create a new session
         this.createSession();
       }
@@ -769,9 +716,7 @@
         return;
       }
 
-      console.log(
-        `Voicero Core Script: Processing ${this.pendingWindowStateUpdates.length} pending window state updates`
-      );
+      
 
       // Process each pending update
       for (const update of this.pendingWindowStateUpdates) {
@@ -785,7 +730,7 @@
     // Get an existing session by ID
     getSession: function (sessionId) {
       if (!this.websiteId || !sessionId) {
-        console.error("Voicero Core Script: Missing websiteId or sessionId");
+        
         this.isInitializingSession = false; // Reset flag even in error case
         return;
       }
@@ -803,9 +748,7 @@
           if (!response.ok) {
             // If we can't get the session, try creating a new one
             if (response.status === 404) {
-              console.log(
-                "Voicero Core Script: Session not found, creating new one"
-              );
+              
               // Set a flag to indicate we're calling from getSession to prevent checks
               this.createSessionFromGetSession();
               return null;
@@ -817,7 +760,7 @@
         .then((data) => {
           if (!data) return; // Handle the case where we're creating a new session
 
-          console.log("Voicero Core Script: Got existing session", data);
+          
           this.session = data.session;
 
           // Get the most recent thread
@@ -827,30 +770,12 @@
             data.session.threads.length > 0
           ) {
             this.thread = data.session.threads[0];
-            console.log("Voicero Core Script: Active thread info:", {
-              threadId: this.thread.threadId,
-              title: this.thread.title,
-              messageCount: this.thread.messages
-                ? this.thread.messages.length
-                : 0,
-              lastMessageAt: this.thread.lastMessageAt,
-            });
+            
           }
 
           // Log detailed session info
           if (data.session) {
-            console.log("Voicero Core Script: Session details:", {
-              id: data.session.id,
-              createdAt: data.session.createdAt,
-              threadCount: data.session.threads
-                ? data.session.threads.length
-                : 0,
-              coreOpen: data.session.coreOpen,
-              textOpen: data.session.textOpen,
-              textOpenWindowUp: data.session.textOpenWindowUp,
-              voiceOpen: data.session.voiceOpen,
-              voiceOpenWindowUp: data.session.voiceOpenWindowUp,
-            });
+            
           }
 
           // Store session ID in global variable and localStorage
@@ -884,7 +809,7 @@
           this.isInitializingSession = false;
         })
         .catch((error) => {
-          console.error("Voicero Core Script: Error getting session", error);
+          
           // Reset initialization flag in error case
           this.isInitializingSession = false;
 
@@ -897,28 +822,18 @@
     restoreInterfaceState: function () {
       if (!this.session) return;
 
-      console.log(
-        "Voicero Core Script: Restoring interface state from session"
-      );
+      
 
       // Always ensure the main button is visible regardless of session state
       this.ensureMainButtonVisible();
 
       // Log the welcome message state
-      console.log(
-        "Voicero Core Script: Welcome message state:",
-        this.session.textWelcome
-          ? "should show welcome"
-          : "should not show welcome"
-      );
+      
 
       // Check if text interface should be open
       if (this.session.textOpen === true) {
-        console.log("Voicero Core Script: Restoring text interface");
-        console.log(
-          "Voicero Core Script: Text chat window state:",
-          this.session.textOpenWindowUp ? "maximized" : "minimized"
-        );
+        
+        
 
         // Make sure VoiceroText is initialized
         if (window.VoiceroText) {
@@ -927,9 +842,7 @@
 
           // AFTER opening, check if it should be minimized based on session
           if (this.session.textOpenWindowUp === false) {
-            console.log(
-              "Voicero Core Script: Minimizing text chat based on session state"
-            );
+            
             // Use setTimeout to allow the interface to render first
             setTimeout(() => {
               if (window.VoiceroText && window.VoiceroText.minimizeChat) {
@@ -942,11 +855,8 @@
 
       // Check if voice interface should be open
       else if (this.session.voiceOpen === true) {
-        console.log("Voicero Core Script: Restoring voice interface");
-        console.log(
-          "Voicero Core Script: Voice chat window state:",
-          this.session.voiceOpenWindowUp ? "maximized" : "minimized"
-        );
+        
+        
 
         // Make sure VoiceroVoice is initialized
         if (window.VoiceroVoice) {
@@ -955,16 +865,12 @@
 
           // Check if it should be minimized
           if (this.session.voiceOpenWindowUp === false) {
-            console.log(
-              "Voicero Core Script: Voice chat should be minimized based on session state"
-            );
+            
             setTimeout(() => {
               window.VoiceroVoice.minimizeVoiceChat();
             }, 500); // Short delay to ensure interface is fully open first
           } else {
-            console.log(
-              "Voicero Core Script: Voice chat should be maximized based on session state"
-            );
+            
           }
 
           // Check if auto mic should be activated
@@ -980,9 +886,7 @@
     // Create a new session specifically called from getSession
     createSessionFromGetSession: function () {
       // This is a wrapper to avoid infinite loops
-      console.log(
-        "Voicero Core Script: Creating session as fallback from getSession"
-      );
+      
       // Always allow this call to proceed even if isInitializingSession is true
       this.isInitializingSession = false;
       this.createSession();
@@ -991,16 +895,14 @@
     // Create a new session
     createSession: function () {
       if (!this.websiteId) {
-        console.error("Voicero Core Script: Missing websiteId");
+        
         this.isInitializingSession = false; // Reset flag even in error case
         return;
       }
 
       // NEVER SKIP - Force proceed even if already initializing
       if (this.isInitializingSession) {
-        console.log(
-          "Voicero Core Script: Forcing session creation even though already in progress"
-        );
+        
         // Force reset the flag to allow a new attempt
         this.isInitializingSession = false;
       }
@@ -1013,10 +915,7 @@
         websiteId: this.websiteId,
       });
 
-      console.log(
-        `Voicero Core Script: FORCING session creation request to ${proxyUrl} with data:`,
-        { websiteId: this.websiteId }
-      );
+      
 
       try {
         // Use a longer timeout and add more detailed error handling
@@ -1040,44 +939,28 @@
         // Race between fetch and timeout
         Promise.race([fetchPromise, timeoutPromise])
           .then((response) => {
-            console.log(
-              `Voicero Core Script: Session creation response status: ${response.status}`
-            );
+            
             if (!response.ok) {
               throw new Error(`Create session failed: ${response.status}`);
             }
             return response.json();
           })
           .then((data) => {
-            console.log("Voicero Core Script: Created new session", data);
+            
 
             // Store session and thread data
             if (data.session) {
               this.session = data.session;
 
               // Log detailed session info
-              console.log("Voicero Core Script: New session details:", {
-                id: data.session.id,
-                createdAt: data.session.createdAt,
-                threadCount: data.session.threads
-                  ? data.session.threads.length
-                  : 0,
-                websiteId: data.session.websiteId,
-              });
+              
             }
 
             if (data.thread) {
               this.thread = data.thread;
 
               // Log detailed thread info
-              console.log("Voicero Core Script: New thread info:", {
-                threadId: this.thread.threadId,
-                title: this.thread.title,
-                messageCount: this.thread.messages
-                  ? this.thread.messages.length
-                  : 0,
-                createdAt: this.thread.createdAt,
-              });
+              
             } else if (
               data.session &&
               data.session.threads &&
@@ -1086,14 +969,7 @@
               this.thread = data.session.threads[0];
 
               // Log detailed thread info
-              console.log("Voicero Core Script: New thread from session:", {
-                threadId: this.thread.threadId,
-                title: this.thread.title,
-                messageCount: this.thread.messages
-                  ? this.thread.messages.length
-                  : 0,
-                createdAt: this.thread.createdAt,
-              });
+              
             }
 
             // Store session ID in localStorage for persistence
@@ -1101,15 +977,9 @@
               // Validate the session ID format
               const sessionId = data.session.id;
               if (typeof sessionId !== "string" || sessionId.trim() === "") {
-                console.error(
-                  "Voicero Core Script: Received invalid session ID from API",
-                  sessionId
-                );
+                
               } else {
-                console.log(
-                  "Voicero Core Script: Setting session ID in localStorage:",
-                  sessionId
-                );
+                
                 this.sessionId = sessionId;
 
                 try {
@@ -1119,32 +989,19 @@
                   // Verify it was saved correctly
                   const verifiedId = localStorage.getItem("voicero_session_id");
                   if (verifiedId !== sessionId) {
-                    console.error(
-                      "Voicero Core Script: localStorage verification failed. Expected:",
-                      sessionId,
-                      "Got:",
-                      verifiedId
-                    );
+                    
                   } else {
-                    console.log(
-                      "Voicero Core Script: Session ID saved to localStorage successfully"
-                    );
+                    
                   }
                 } catch (e) {
-                  console.error(
-                    "Voicero Core Script: Error saving session ID to localStorage:",
-                    e
-                  );
+                  
                 }
 
                 // Process any pending window state updates now that we have a sessionId
                 this.processPendingWindowStateUpdates();
               }
             } else {
-              console.error(
-                "Voicero Core Script: No session ID in API response",
-                data
-              );
+              
             }
 
             // Make session available to other modules
@@ -1167,43 +1024,34 @@
             this.isInitializingSession = false;
 
             // Now create the button since we have a session
-            console.log(
-              "Voicero Core Script: Session initialized, creating button interface"
-            );
+            
             this.createButton();
           })
           .catch((error) => {
-            console.error(
-              "Voicero Core Script: Error creating session:",
-              error
-            );
+            
 
             // Make a direct AJAX call as a fallback to see if that works better
             this._createSessionFallback();
           });
       } catch (error) {
-        console.error("Voicero Core Script: Exception in fetch setup:", error);
+        
         // Reset initialization flags in error case
         this.isInitializingSession = false;
         this.sessionInitialized = false;
 
         // Create the button anyway, since we at least have website info
-        console.log(
-          "Voicero Core Script: Creating button despite session fetch setup error"
-        );
+        
         this.createButton();
       }
     },
 
     // Fallback method to try creating a session using jQuery AJAX
     _createSessionFallback: function () {
-      console.log(
-        "Voicero Core Script: Trying session creation fallback with jQuery AJAX"
-      );
+      
 
       // Only run if jQuery is available
       if (typeof $ === "undefined") {
-        console.error("Voicero Core Script: jQuery not available for fallback");
+        
         this.isInitializingSession = false;
         this.sessionInitialized = false;
         this.createButton();
@@ -1217,10 +1065,7 @@
         contentType: "application/json",
         dataType: "json",
         success: (data) => {
-          console.log(
-            "Voicero Core Script: Session created via jQuery fallback",
-            data
-          );
+          
 
           if (data.session && data.session.id) {
             this.session = data.session;
@@ -1228,12 +1073,9 @@
 
             try {
               localStorage.setItem("voicero_session_id", data.session.id);
-              console.log("Voicero Core Script: Session ID saved via fallback");
+              
             } catch (e) {
-              console.error(
-                "Voicero Core Script: Error saving session ID via fallback:",
-                e
-              );
+              
             }
           }
 
@@ -1242,11 +1084,7 @@
           this.createButton();
         },
         error: (xhr, status, error) => {
-          console.error(
-            "Voicero Core Script: jQuery fallback failed:",
-            status,
-            error
-          );
+          
           this.isInitializingSession = false;
           this.sessionInitialized = false;
           this.createButton();
@@ -1271,7 +1109,7 @@
 
     // Ensure the main button is always visible
     ensureMainButtonVisible: function () {
-      console.log("Voicero Core Script: Ensuring main button visibility");
+      
 
       // Make sure the container is visible
       const container = document.getElementById("voicero-app-container");
@@ -1340,29 +1178,25 @@
 
     // Update window state via API
     updateWindowState: function (windowState) {
-      console.log("Voicero Core Script: Updating window state:", windowState);
+      
 
       // Check if session initialization is in progress
       if (this.isInitializingSession) {
-        console.log(
-          "Voicero Core Script: Session initialization in progress, queuing window state update"
-        );
+        
         this.pendingWindowStateUpdates.push(windowState);
         return;
       }
 
       // Check if we have a session ID
       if (!this.sessionId) {
-        console.log(
-          "Voicero Core Script: No session ID available, queuing window state update"
-        );
+        
 
         // Add to pending updates queue
         this.pendingWindowStateUpdates.push(windowState);
 
         // If session is not initialized yet, trigger initialization
         if (!this.sessionInitialized && !this.isInitializingSession) {
-          console.log("Voicero Core Script: Triggering session initialization");
+          
           this.initializeSession();
         }
 
@@ -1380,10 +1214,7 @@
             window.VoiceroVoice.session = this.session;
           }
 
-          console.log(
-            "Voicero Core Script: Local session state updated immediately (pending server update)",
-            this.session
-          );
+          
         }
 
         return;
@@ -1403,10 +1234,7 @@
           window.VoiceroVoice.session = this.session;
         }
 
-        console.log(
-          "Voicero Core Script: Local session state updated immediately",
-          this.session
-        );
+        
       }
 
       // Store the values we need for the API call to avoid timing issues
@@ -1421,20 +1249,14 @@
           typeof sessionIdForApi !== "string" ||
           sessionIdForApi.trim() === ""
         ) {
-          console.error(
-            "Voicero Core Script: Invalid sessionId for API call",
-            sessionIdForApi
-          );
+          
           return;
         }
 
         // Make API call to persist the changes
         const proxyUrl = "/wp-json/voicero/v1/window_state";
 
-        console.log(
-          "Voicero Core Script: Making API call to update window state for session",
-          sessionIdForApi
-        );
+        
 
         // Format the request body to match what the Next.js API expects
         const requestBody = {
@@ -1442,10 +1264,7 @@
           windowState: windowStateForApi,
         };
 
-        console.log(
-          "Voicero Core Script: Sending request with body:",
-          requestBody
-        );
+        
 
         fetch(proxyUrl, {
           method: "POST",
@@ -1462,10 +1281,7 @@
             return response.json();
           })
           .then((data) => {
-            console.log(
-              "Voicero Core Script: Window state updated on server",
-              data
-            );
+            
 
             // Update our local session data with the full server response
             if (data.session) {
@@ -1485,10 +1301,7 @@
             }
           })
           .catch((error) => {
-            console.error(
-              "Voicero Core Script: Error updating window state",
-              error
-            );
+            
           });
       }, 0);
     },
@@ -1560,10 +1373,7 @@
           pulseStyle.id = "voicero-pulse-style";
           document.head.appendChild(pulseStyle);
         } catch (e) {
-          console.error(
-            "Voicero Core Script: Error calculating color variants",
-            e
-          );
+          
           // Fallback to default variants
           lighterVariant = "#9370db";
           hoverVariant = "#7a5abf";
@@ -1580,26 +1390,18 @@
         hoverVariant
       );
 
-      console.log("Voicero Core Script: Updated theme colors", {
-        main: color,
-        light: lighterVariant,
-        hover: hoverVariant,
-      });
+      
     },
 
     // BULLETPROOF FAILSAFE to ensure button always exists and is visible
     setupButtonFailsafe: function () {
       // Only set up failsafe if website is active
       if (!this.isWebsiteActive) {
-        console.log(
-          "Voicero Core Script: Not setting up button failsafe - website not active"
-        );
+        
         return;
       }
 
-      console.log(
-        "Voicero Core Script: Setting up button failsafe for active website"
-      );
+      
 
       // Set multiple timers at different intervals to guarantee button creation
       setTimeout(() => this.createFailsafeButton(), 1000);
@@ -1610,9 +1412,7 @@
       window.addEventListener("load", () => {
         // Check if site is active before creating button
         if (this.isWebsiteActive) {
-          console.log(
-            "Voicero Core Script: Window load event - creating failsafe button"
-          );
+          
           setTimeout(() => this.createFailsafeButton(), 500);
         }
       });
@@ -1620,9 +1420,7 @@
       // Add visibility change listener to ensure button when tab becomes visible
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && this.isWebsiteActive) {
-          console.log(
-            "Voicero Core Script: Page became visible - ensuring button"
-          );
+          
           setTimeout(() => this.createFailsafeButton(), 300);
         }
       });
@@ -1632,9 +1430,7 @@
     createFailsafeButton: function () {
       // CRITICAL: Only create button if website is active
       if (!this.isWebsiteActive) {
-        console.log(
-          "Voicero Core Script: Not creating failsafe button - website not active"
-        );
+        
         // Actually hide the button if it exists and site is inactive
         this.hideMainButton();
         return;
@@ -1642,21 +1438,17 @@
 
       // Check if button already exists
       if (document.getElementById("chat-website-button")) {
-        console.log(
-          "Voicero Core Script: Button already exists, ensuring visibility"
-        );
+        
         this.ensureMainButtonVisible();
         return;
       }
 
-      console.log("Voicero Core Script: CREATING FAILSAFE BUTTON");
+      
 
       // Create app container if it doesn't exist
       let container = document.getElementById("voicero-app-container");
       if (!container) {
-        console.log(
-          "Voicero Core Script: No container found, creating failsafe container"
-        );
+        
         document.body.insertAdjacentHTML(
           "beforeend",
           `<div id="voicero-app-container" style="display:block!important;visibility:visible!important;opacity:1!important;"></div>`
@@ -1671,7 +1463,7 @@
       // Check if button container exists, create if not
       let buttonContainer = document.getElementById("voice-toggle-container");
       if (!buttonContainer) {
-        console.log("Voicero Core Script: Creating failsafe button container");
+        
         container.insertAdjacentHTML(
           "beforeend",
           `<div id="voice-toggle-container" style="position:fixed!important;bottom:20px!important;right:20px!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important;"></div>`
@@ -1687,7 +1479,7 @@
       const chatButton = document.getElementById("chat-website-button");
       if (!chatButton && buttonContainer) {
         const themeColor = this.websiteColor || "#882be6";
-        console.log("Voicero Core Script: Creating the actual failsafe button");
+        
         buttonContainer.insertAdjacentHTML(
           "beforeend",
           `<button id="chat-website-button" class="visible" style="background-color:${themeColor};display:flex!important;visibility:visible!important;opacity:1!important;width:50px!important;height:50px!important;border-radius:50%!important;justify-content:center!important;align-items:center!important;color:white!important;box-shadow:0 4px 15px rgba(0,0,0,0.2)!important;border:none!important;cursor:pointer!important;transition:all 0.2s ease!important;padding:0!important;margin:0!important;position:relative!important;z-index:2147483647!important;">
@@ -1715,7 +1507,7 @@
 
     // Attach bulletproof click handler to button
     attachButtonClickHandler: function () {
-      console.log("Voicero Core Script: Attaching bulletproof click handler");
+      
 
       const mainButton = document.getElementById("chat-website-button");
       if (!mainButton) return;
@@ -1731,14 +1523,12 @@
         e.preventDefault();
         e.stopPropagation();
 
-        console.log("Voicero Core Script: Failsafe button clicked");
+        
 
         // Create chooser if it doesn't exist
         let chooser = document.getElementById("interaction-chooser");
         if (!chooser) {
-          console.log(
-            "Voicero Core Script: Creating missing chooser interface"
-          );
+          
           const themeColor = this.websiteColor || "#882be6";
           const buttonContainer = document.getElementById(
             "voice-toggle-container"
@@ -1833,7 +1623,7 @@
             const voiceButton = document.getElementById("voice-chooser-button");
             if (voiceButton) {
               voiceButton.addEventListener("click", () => {
-                console.log("Voice button clicked in emergency chooser");
+                
                 if (chooser) {
                   chooser.style.display = "none";
                 }
@@ -1868,7 +1658,7 @@
             const textButton = document.getElementById("text-chooser-button");
             if (textButton) {
               textButton.addEventListener("click", () => {
-                console.log("Text button clicked in emergency chooser");
+                
                 if (chooser) {
                   chooser.style.display = "none";
                 }
@@ -1920,7 +1710,7 @@
             chooser.style.opacity = "1";
           }
         } else {
-          console.error("Voicero Core Script: Still couldn't create chooser!");
+          
 
           // Last resort - create direct interface
           const voiceInterface = document.getElementById(
@@ -1952,7 +1742,7 @@
 
     // Force remove all buttons from the DOM
     removeAllButtons: function () {
-      console.log("Voicero Core Script: Forcibly removing all buttons");
+      
 
       // Try to remove the toggle container completely
       const toggleContainer = document.getElementById("voice-toggle-container");

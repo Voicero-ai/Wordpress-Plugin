@@ -28,7 +28,7 @@ const VoiceroText = {
 
   // Initialize the text module
   init: function () {
-    console.log("VoiceroText: Initializing interface");
+    
 
     // Apply global welcome styles immediately
     this.forceGlobalWelcomeStyles();
@@ -51,23 +51,20 @@ const VoiceroText = {
       // Get website color from VoiceroCore
       if (window.VoiceroCore.websiteColor) {
         this.websiteColor = window.VoiceroCore.websiteColor;
-        console.log("Voicero Text: Using color from Core:", this.websiteColor);
+        
 
         // Generate color variants
         this.getColorVariants(this.websiteColor);
       } else {
         // Use default color and generate variants
-        console.log("Voicero Text: Using default color:", this.websiteColor);
+        
         this.getColorVariants(this.websiteColor);
       }
 
       // SECURITY: Direct API access and accessKey handling removed - now using server-side proxy
     } else {
       // Use default color and generate variants
-      console.log(
-        "Voicero Text: Using default color (VoiceroCore not available):",
-        this.websiteColor
-      );
+      
       this.getColorVariants(this.websiteColor);
     }
 
@@ -95,7 +92,7 @@ const VoiceroText = {
 
     // Get the main color - USE WEBSITE COLOR DIRECTLY INSTEAD OF VARIANTS
     const mainColor = this.websiteColor || "#882be6"; // Use website color directly
-    console.log("Applying dynamic colors with main color:", mainColor);
+    
 
     // Update send button color
     const sendButton = this.shadowRoot.getElementById("send-message-btn");
@@ -150,12 +147,12 @@ const VoiceroText = {
     // Also force global welcome styles for maximum compatibility
     this.forceGlobalWelcomeStyles();
 
-    console.log("Dynamic colors applied to all elements");
+    
   },
 
   // Open text chat interface
   openTextChat: function () {
-    console.log("Voicero Text Script: Opening text chat interface");
+    
 
     // Check if thread has messages
     const hasMessages = this.messages && this.messages.length > 0;
@@ -166,10 +163,7 @@ const VoiceroText = {
     // If we have a session with textWelcome defined, use that value instead
     if (this.session && typeof this.session.textWelcome !== "undefined") {
       shouldShowWelcome = this.session.textWelcome;
-      console.log(
-        "Voicero Text: Using welcome message state from session:",
-        shouldShowWelcome ? "show welcome" : "hide welcome"
-      );
+      
     }
 
     // Get current state of textOpenWindowUp if available
@@ -178,15 +172,12 @@ const VoiceroText = {
     // Check if there's already a session with textOpenWindowUp defined
     if (this.session && typeof this.session.textOpenWindowUp !== "undefined") {
       shouldBeMaximized = this.session.textOpenWindowUp;
-      console.log(
-        "Voicero Text: Using existing window state from session:",
-        shouldBeMaximized ? "maximized" : "minimized"
-      );
+      
     }
 
     // Update window state if it hasn't been done already
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      console.log("Voicero Text: Updating window state to open");
+      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: shouldBeMaximized, // Respect existing window state if available
@@ -196,9 +187,7 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      console.warn(
-        "Voicero Text: VoiceroCore not available for window state update"
-      );
+      
     }
 
     // Close voice interface if it's open
@@ -287,7 +276,7 @@ const VoiceroText = {
 
   // Load existing messages from session and display them
   loadMessagesFromSession: function () {
-    console.log("Voicero Text: Loading messages from session");
+    
 
     // Check if we have a session with threads
     if (
@@ -310,16 +299,14 @@ const VoiceroText = {
       // Use the most recent thread (first after sorting)
       const currentThread = sortedThreads[0];
 
-      console.log("Voicero Text: Selected thread ID:", currentThread.threadId);
+      
 
       if (
         currentThread &&
         currentThread.messages &&
         currentThread.messages.length > 0
       ) {
-        console.log(
-          `Voicero Text: Found ${currentThread.messages.length} messages in thread`
-        );
+        
 
         // Sort messages by createdAt (oldest first)
         const sortedMessages = [...currentThread.messages].sort((a, b) => {
@@ -360,14 +347,14 @@ const VoiceroText = {
                 }
               } catch (e) {
                 // If parsing fails, use the raw content
-                console.warn("Failed to parse assistant message as JSON", e);
+                
                 aiMessage = content;
               }
 
               // Add AI message
               this.addMessage(aiMessage, "ai", true); // true = skip adding to messages array
             } catch (e) {
-              console.error("Error displaying assistant message:", e);
+              
             }
           }
         });
@@ -390,7 +377,7 @@ const VoiceroText = {
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
       } else {
-        console.log("Voicero Text: Selected thread has no messages");
+        
         // Still store the thread ID even if no messages
         this.currentThreadId = currentThread.threadId;
       }
@@ -478,7 +465,7 @@ const VoiceroText = {
   fetchWebsiteData: function () {
     // SECURITY: Direct API access removed - now using server-side proxy through WordPress AJAX
     if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
-      console.warn("Voicero: Missing AJAX configuration");
+      
       this.createFallbackPopupQuestions();
       return;
     }
@@ -520,7 +507,7 @@ const VoiceroText = {
         this.updatePopupQuestions();
       })
       .catch((error) => {
-        console.warn("Voicero: Error fetching website data:", error);
+        
         this.createFallbackPopupQuestions();
       });
   },
@@ -1798,7 +1785,7 @@ const VoiceroText = {
 
   // Clear chat history
   clearChatHistory: function () {
-    console.log("Clearing chat history");
+    
 
     // Get the main color
     const mainColor = this.websiteColor || "#882be6";
@@ -1824,7 +1811,7 @@ const VoiceroText = {
           return response.json();
         })
         .then((data) => {
-          console.log("Chat history cleared on server:", data);
+          
 
           // Update the session and thread in VoiceroCore
           if (data.session) {
@@ -1841,7 +1828,7 @@ const VoiceroText = {
           }
         })
         .catch((error) => {
-          console.error("Error clearing chat history:", error);
+          
         });
     }
 
@@ -1900,7 +1887,7 @@ const VoiceroText = {
   sendChatToApi: function (messageText, threadId) {
     // SECURITY: Direct API access removed - now using WordPress proxy
     if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
-      console.warn("Voicero: Missing WordPress configuration");
+      
       return Promise.reject("WordPress configuration not available");
     }
 
@@ -1937,10 +1924,7 @@ const VoiceroText = {
 
       // Use the most recent thread ID
       requestBody.threadId = sortedThreads[0].threadId;
-      console.log(
-        "Voicero Text: Using most recent thread ID from session:",
-        requestBody.threadId
-      );
+      
     } else if (
       window.VoiceroCore &&
       window.VoiceroCore.thread &&
@@ -2015,12 +1999,10 @@ const VoiceroText = {
             threadId: userMsg.threadId,
           });
 
-          console.log("Adding session thread message to context with metadata");
+          
         }
       } else {
-        console.log(
-          "Voicero Text: Most recent thread has fewer than 2 messages, no context to add"
-        );
+        
       }
     }
     // Fallback to local messages array if session data isn't available
@@ -2046,13 +2028,11 @@ const VoiceroText = {
           answer: this.messages[lastUserIndex + 1].content,
         });
 
-        console.log(
-          "Adding only the most recent Q&A pair from local messages to context"
-        );
+        
       }
     }
 
-    console.log("Sending chat message to WordPress proxy:", requestBody);
+    
 
     // Use WordPress proxy endpoint instead of direct API call
     return fetch("/wp-json/voicero/v1/chat", {
@@ -2217,7 +2197,7 @@ const VoiceroText = {
           removeTypingIndicator();
 
           // Log the complete response data
-          console.log("Received chat response:", data);
+          
 
           // Extract message from new response format
           let message = "";
@@ -2226,41 +2206,41 @@ const VoiceroText = {
 
           // Check for the nested response object structure
           if (data && data.response && data.response.answer) {
-            console.log("Using nested response.answer field");
+            
             message = data.response.answer;
 
             // Get action and URL from the nested response
             if (data.response.action) {
               action = data.response.action;
-              console.log("Action from response:", action);
+              
             }
             if (data.response.url) {
               url = data.response.url;
-              console.log("URL from response:", url);
+              
             }
           }
           // Fall back to previous format with direct 'answer' field
           else if (data && data.answer) {
-            console.log("Using top-level answer field");
+            
             message = data.answer;
 
             if (data.action) {
               action = data.action;
-              console.log("Action from response:", action);
+              
             }
             if (data.url) {
               url = data.url;
-              console.log("URL from response:", url);
+              
             }
           }
           // Fall back to direct 'response' string
           else if (data && data.response && typeof data.response === "string") {
-            console.log("Using response as direct string");
+            
             message = data.response;
           }
           // Default fallback
           else {
-            console.warn("Response format not recognized");
+            
             message = "I'm sorry, I couldn't process that request.";
           }
 
@@ -2273,7 +2253,7 @@ const VoiceroText = {
 
             // Update window state after receiving response
             if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-              console.log("Updating session after chat completion");
+              
               window.VoiceroCore.updateWindowState({
                 textWelcome: false, // Don't show welcome again
                 threadId: data.threadId, // Update with the latest thread ID
@@ -2294,19 +2274,14 @@ const VoiceroText = {
               if (matchingThread) {
                 // Update VoiceroCore.thread reference
                 window.VoiceroCore.thread = matchingThread;
-                console.log(
-                  "Voicero Text: Updated core thread reference to:",
-                  data.threadId
-                );
+                
 
                 // Update local messages array with the complete message objects
                 if (
                   matchingThread.messages &&
                   matchingThread.messages.length > 0
                 ) {
-                  console.log(
-                    `Voicero Text: Updating local messages array with ${matchingThread.messages.length} messages from thread`
-                  );
+                  
 
                   this.messages = matchingThread.messages.map((msg) => ({
                     ...msg,
@@ -2322,7 +2297,7 @@ const VoiceroText = {
 
           // Handle redirect if needed
           if (action === "redirect" && url) {
-            console.log("Performing redirect to:", url);
+            
             setTimeout(() => {
               window.location.href = url;
             }, 1000); // Small delay to let the user see the message
@@ -2418,11 +2393,11 @@ const VoiceroText = {
 
   // Close the text chat interface
   closeTextChat: function () {
-    console.log("Closing text chat interface");
+    
 
     // Update window state first (set text closed, core open)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      console.log("Voicero Text: Updating window state to closed");
+      
       window.VoiceroCore.updateWindowState({
         textOpen: false,
         textOpenWindowUp: false,
@@ -2431,9 +2406,7 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      console.warn(
-        "Voicero Text: VoiceroCore not available for window state update"
-      );
+      
     }
 
     // Hide the shadow host (which contains the chat interface)
@@ -2453,13 +2426,11 @@ const VoiceroText = {
 
   // Minimize the chat interface
   minimizeChat: function () {
-    console.log("Minimizing text chat interface");
+    
 
     // Update window state first (text open but window minimized)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      console.log(
-        "Voicero Text: Updating window state to minimized (textOpenWindowUp=false)"
-      );
+      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: false, // Set to false when minimized
@@ -2468,9 +2439,7 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      console.warn(
-        "Voicero Text: VoiceroCore not available for window state update"
-      );
+      
     }
 
     // Get the necessary elements from shadow root
@@ -2548,13 +2517,11 @@ const VoiceroText = {
 
   // Maximize the chat interface
   maximizeChat: function () {
-    console.log("Maximizing text chat interface");
+    
 
     // Update window state first (text open with window up)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      console.log(
-        "Voicero Text: Updating window state to maximized (textOpenWindowUp=true)"
-      );
+      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: true, // Set to true when maximized
@@ -2563,9 +2530,7 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      console.warn(
-        "Voicero Text: VoiceroCore not available for window state update"
-      );
+      
     }
 
     // Get the necessary elements from shadow root
@@ -2583,10 +2548,7 @@ const VoiceroText = {
     let shouldShowWelcome = false;
     if (this.session && typeof this.session.textWelcome !== "undefined") {
       shouldShowWelcome = this.session.textWelcome;
-      console.log(
-        "Voicero Text: Checking welcome state during maximize:",
-        shouldShowWelcome
-      );
+      
     }
 
     // Check if we have any messages already visible in the container
@@ -2594,11 +2556,11 @@ const VoiceroText = {
       ".ai-message:not(.typing-wrapper), .user-message"
     );
     const hasVisibleMessages = existingMessages.length > 0;
-    console.log("Voicero Text: Has visible messages:", hasVisibleMessages);
+    
 
     // If welcome should be shown and no messages are visible, add it
     if (shouldShowWelcome && !hasVisibleMessages) {
-      console.log("Voicero Text: Adding welcome message during maximize");
+      
 
       // Force global welcome styles BEFORE adding the welcome message
       this.forceGlobalWelcomeStyles();
@@ -2929,7 +2891,7 @@ const VoiceroText = {
           .toString(16)
           .padStart(2, "0")}${superdarkB.toString(16).padStart(2, "0")}`;
       } catch (e) {
-        console.error("Voicero Text: Error calculating color variants", e);
+        
         // Fallback to default variants
         variants.light = "#9370db";
         variants.dark = "#7a5abf";
@@ -2939,7 +2901,7 @@ const VoiceroText = {
     }
 
     this.colorVariants = variants;
-    console.log("Voicero Text: Updated color variants", variants);
+    
     return variants;
   },
 
@@ -3059,7 +3021,7 @@ const VoiceroText = {
         .toString(16)
         .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
     } catch (e) {
-      console.error("Error adjusting color:", e);
+      
       return color;
     }
   },
@@ -3093,7 +3055,7 @@ const VoiceroText = {
       }
     `;
 
-    console.log("Applied global forced welcome styles");
+    
   },
 };
 
@@ -3120,9 +3082,7 @@ document.addEventListener("DOMContentLoaded", () => {
         VoiceroText.init();
       } else if (attempts >= 50) {
         clearInterval(checkCoreInterval);
-        console.error(
-          "VoiceroCore not available after 50 attempts (5 seconds)"
-        );
+        
         // Initialize anyway to at least have the interface elements ready
         VoiceroText.init();
       }
