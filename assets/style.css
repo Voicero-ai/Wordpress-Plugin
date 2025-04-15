@@ -1,0 +1,943 @@
+/* Define theme colors with defaults that will be overridden by JS */
+:root {
+  --voicero-theme-color: #882be6; /* Default purple that will be overridden */
+  --voicero-theme-color-light: #9370db; /* Lighter variant */
+  --voicero-theme-color-hover: #7a5abf; /* Hover variant */
+}
+
+/* MAIN TOGGLE (AI Assistant) */
+#voice-toggle-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: block; /* Make visible by default */
+}
+
+#chat-website-button {
+  background-color: var(--voicero-theme-color-light);
+  color: white;
+  border: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  padding: 0;
+  display: flex !important; /* Make visible by default */
+  align-items: center;
+  justify-content: center;
+  opacity: 1 !important;
+  transform: none !important;
+  position: relative;
+  overflow: hidden;
+}
+
+#chat-website-button:hover {
+  background-color: var(--voicero-theme-color-hover);
+  transform: scale(1.1);
+  box-shadow: 0 4px 15px rgba(147, 112, 219, 0.4);
+}
+
+/* Add gradient animation on hover */
+#chat-website-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--voicero-theme-color-light),
+    var(--voicero-theme-color),
+    var(--voicero-theme-color-light)
+  );
+  transition: 0.5s;
+  opacity: 0;
+}
+
+#chat-website-button:hover::before {
+  left: 0;
+  opacity: 1;
+  animation: gradientSlide 2s linear infinite;
+}
+
+/* Add the gradient animation */
+@keyframes gradientSlide {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+/* Bot icon animation */
+.bot-icon {
+  transition: transform 0.3s ease;
+  width: 28px;
+  height: 28px;
+  position: relative;
+  z-index: 1;
+}
+
+#chat-website-button:hover .bot-icon {
+  transform: rotate(-5deg) scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* Add a pulse effect */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(136, 43, 230, 0.4); /* Base purple color with opacity */
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(136, 43, 230, 0); /* Transparent */
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(136, 43, 230, 0); /* Transparent */
+  }
+}
+
+/* Only show when explicitly made visible */
+#chat-website-button.visible {
+  display: flex !important; /* Override the default hidden state */
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: pulse 2s infinite;
+}
+
+/* Make sure the container is visible when button is visible */
+#voice-toggle-container:has(#chat-website-button.visible) {
+  display: block;
+}
+
+/* Update notification dot positioning */
+#chat-website-button::after {
+  content: "";
+  position: absolute;
+  top: -4px; /* Move up slightly */
+  right: -4px; /* Move right slightly */
+  width: 12px;
+  height: 12px;
+  background-color: #4caf50;
+  border-radius: 50%;
+  border: 2px solid white;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.3s ease;
+  z-index: 2; /* Add z-index to ensure it's above the button and gradient */
+}
+
+/* Update the notification visible state */
+#chat-website-button.has-notification::after {
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Add subtle shadow */
+}
+
+/* INTERACTION CHOOSER */
+#interaction-chooser {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  z-index: 10001;
+  background-color: #e6e6fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+  width: 200px;
+  border: 1px solid #e0e0e0;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.3s ease;
+  pointer-events: auto; /* Ensure it's clickable */
+  display: none;
+  visibility: hidden;
+}
+
+#interaction-chooser.visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  display: block;
+}
+
+/* Remove this rule as we're handling display/visibility in JS */
+#interaction-chooser[style*="display: block"] {
+  display: none;
+}
+
+/* Ensure interaction options are clickable */
+.interaction-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+  pointer-events: auto;
+}
+.interaction-option:hover {
+  background-color: #cbc3e3;
+}
+.interaction-option img {
+  width: 24px;
+  height: 24px;
+}
+
+/* VOICE INTERFACE */
+#voice-interface {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9997;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 320px;
+  display: none;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  transition: all 0.3s ease; /* Add transition for smooth hover effect */
+}
+
+/* Add hover effect to entire container */
+#voice-interface:hover {
+  box-shadow: 0 4px 20px rgba(147, 112, 219, 0.2); /* Larger, colored shadow */
+  border-color: #9370db; /* Highlight border */
+}
+
+/* Make the hover effect more pronounced when recording */
+#voice-interface.recording:hover {
+  box-shadow: 0 4px 20px rgba(255, 0, 0, 0.2);
+  border-color: #ff0000;
+}
+
+/* Header styling */
+.voice-header {
+  background-color: #e6e6fa;
+  padding: 10px 20px;
+  color: #9370db;
+}
+
+.voice-header .header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.voice-header .mic-icon {
+  width: 20px;
+  height: 20px;
+  color: #333 !important; /* Override any inherited colors */
+}
+
+.voice-header .title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+#close-voice {
+  background: none;
+  border: none;
+  color: #9370db;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+#close-voice:hover {
+  opacity: 1;
+}
+
+/* Content area */
+.voice-content {
+  padding: 20px;
+}
+
+/* Conversation container */
+.conversation-container {
+  padding: 15px;
+  background: none;
+}
+
+.message-line {
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.message-line:last-child {
+  margin-bottom: 0;
+}
+
+.message-line .label {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.message-line:first-child .label {
+  color: #333;
+}
+
+.message-line:last-child .label {
+  color: #9370db;
+}
+
+/* Remove old styles that conflict */
+.recording-waves,
+.voice-status-container,
+.ai-speaking-indicator,
+#transcript-container {
+  display: none;
+}
+
+/* TEXT INTERFACE - bottom-right, lavender style */
+#text-interface {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9997;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 320px;
+  display: none;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+}
+
+#close-text {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  font-size: 18px;
+  background: #e6e6fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  color: #666;
+  padding: 4px 8px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  z-index: 9996;
+}
+
+/* Chat container - maximize space */
+#text-interface .chat-container {
+  height: 400px; /* Increased from 360px to accommodate input area */
+  width: 100%;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Chat messages area */
+#chat-messages {
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #f8f9fa !important;
+  height: 300px; /* Keep this at 300px */
+  transition: none;
+}
+
+/* Message wrapper for better alignment */
+.message-wrapper {
+  display: flex;
+  margin: 8px 0;
+  animation: fadeIn 0.3s ease;
+  width: 100%;
+}
+
+.user-wrapper {
+  justify-content: flex-end;
+}
+
+.ai-wrapper {
+  justify-content: flex-start;
+}
+
+/* Message bubbles */
+.message-bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+/* User message styling */
+div.message-bubble.user-bubble {
+  background-color: var(--voicero-theme-color) !important;
+  color: white !important;
+  border-top-right-radius: 4px;
+  margin-left: auto;
+}
+
+/* Remove any other styles that might be overriding this */
+/* Add "assistant-bubble" to your existing AI style block */
+.message-bubble.ai-bubble,
+.ai-bubble,
+.assistant-bubble, /* <=== Add this */
+.message-bubble[class*="ai"] {
+  background-color: #e1e1e1 !important; /* Dark gray */
+  color: #000000 !important; /* White text */
+}
+
+/* Message content */
+.message-content {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.4;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  border-radius: 18px;
+  padding: 12px 16px;
+  max-width: 70%;
+  word-wrap: break-word;
+}
+
+/* User message styling */
+.user-message .message-content {
+  background: var(--voicero-theme-color);
+  color: white;
+}
+
+/* AI message styling */
+.ai-message .message-content {
+  background: #e5e5ea;
+  color: #333;
+}
+
+/* Message wrapper styling */
+.user-message,
+.ai-message {
+  display: flex;
+  margin-bottom: 16px;
+  position: relative;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.user-message {
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.ai-message {
+  justify-content: flex-start;
+  padding-left: 8px;
+}
+
+/* Message delivery status */
+.read-status {
+  font-size: 11px;
+  color: #8e8e93;
+  text-align: right;
+  margin-top: 2px;
+  margin-right: 8px;
+}
+
+/* Welcome message styling */
+.welcome-message {
+  text-align: center !important;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important;
+  border-radius: 18px !important;
+  padding: 12px 15px !important;
+  margin: 12px auto !important;
+  width: 85% !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  border: 1px solid var(--voicero-theme-color-light) !important;
+}
+
+/* Welcome Title Gradient */
+.welcome-message .welcome-title {
+  background: linear-gradient(
+    90deg,
+    var(--voicero-theme-color),
+    var(--voicero-theme-color),
+    #4a90e2
+  ) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: var(--voicero-theme-color) !important; /* Fallback */
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  margin-bottom: 5px !important;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  letter-spacing: 0.5px !important;
+}
+
+.welcome-subtitle {
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  color: #666 !important;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  margin-bottom: 3px !important;
+}
+
+.welcome-highlight,
+#voicero-text-chat-container .welcome-highlight,
+#voicero-shadow-host .welcome-highlight,
+.welcome-message .welcome-highlight {
+  color: var(--voicero-theme-color) !important;
+  font-weight: 600 !important;
+}
+
+.welcome-note {
+  font-size: 12px !important;
+  opacity: 0.75 !important;
+  font-style: italic !important;
+  margin-top: 5px !important;
+  color: #888 !important;
+}
+
+.welcome-pulse {
+  display: inline-block !important;
+  width: 8px !important;
+  height: 8px !important;
+  background-color: var(--voicero-theme-color) !important;
+  border-radius: 50% !important;
+  margin-right: 4px !important;
+  animation: welcomePulse 1.5s infinite !important;
+}
+
+/* Style markdown links in messages */
+.message-content a {
+  color: inherit; /* Use same color as the message text */
+  text-decoration: none; /* Remove underline */
+  pointer-events: none; /* Prevent clicking */
+}
+
+/* Remove square brackets and parentheses from markdown links */
+.message-content a::before,
+.message-content a::after {
+  display: none;
+}
+
+/* Hide URL in markdown links */
+.message-content a[href] {
+  position: relative;
+}
+
+.message-content a[href]::after {
+  content: none;
+}
+
+/* Smooth animation for new messages */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Input area styling */
+.chat-input-container {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #e6e6fa;
+  border-top: 1px solid #e0e0e0;
+  min-height: 60px;
+  align-items: center;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid #e9e9eb;
+  border-radius: 20px;
+  font-size: 14px;
+  outline: none;
+}
+
+#send-message {
+  background-color: var(--voicero-theme-color-light);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#send-message:hover {
+  background-color: var(--voicero-theme-color-hover);
+}
+
+/* Hide waves & AI indicator in smaller version */
+.recording-waves,
+.ai-speaking-indicator {
+  display: none !important;
+}
+
+/* Compact voice UI (optional) */
+#voice-interface.compact-interface {
+  width: 220px;
+  bottom: 80px;
+  padding: 8px;
+}
+#voice-interface.compact-interface #transcript-container {
+  max-height: 60px;
+  min-height: 30px;
+  font-size: 12px;
+  padding: 6px;
+}
+#voice-interface.compact-interface #mic-button {
+  width: 50px;
+  height: 50px;
+  margin: 5px auto;
+}
+#voice-interface.compact-interface #mic-button img {
+  width: 25px;
+  height: 25px;
+}
+#voice-interface.compact-interface .transcript-line {
+  padding: 4px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+#voice-interface.compact-interface .interface-content {
+  padding: 6px;
+}
+
+/* Sync Steps Styling */
+.sync-steps {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.sync-steps > div {
+  margin: 10px 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sync-steps > div:first-child {
+  margin-top: 0;
+}
+
+.sync-steps > div:last-child {
+  margin-bottom: 0;
+}
+
+/* Message content formatting */
+.message-content strong {
+  font-weight: 600;
+}
+
+.message-content .bullet-point {
+  padding-left: 8px;
+  margin: 4px 0;
+}
+
+/* Adjust spacing between sections */
+.message-content br {
+  display: block;
+  margin: 8px 0;
+  content: "";
+}
+
+/* Ensure proper text contrast */
+.message-bubble.user-bubble strong {
+  color: white;
+}
+
+/* Chat messages area - lighter background to contrast with bubbles */
+#chat-messages {
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #f8f9fa !important;
+  height: 340px;
+  transition: none;
+}
+
+/* Add these new styles for the loading animation */
+.loading-bubble {
+  min-width: 80px;
+  text-align: center;
+  background: none !important; /* Remove background */
+  padding: 8px !important;
+}
+
+.loading-content {
+  display: flex;
+  justify-content: center;
+  gap: 3px; /* Slightly larger gap between characters */
+}
+
+.loading-content span {
+  display: inline-block;
+  font-weight: 500;
+  font-family: monospace;
+  font-size: 13px;
+  color: #9370db !important;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  15% {
+    /* Adjusted timing */
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    /* Adjusted timing */
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+/* Update the existing message bubble styles */
+.message-bubble.ai-bubble {
+  transition: background-color 0.3s ease;
+}
+
+/* Update header mic button styling - simplified */
+.mic-button-header {
+  background: none !important;
+  border: none;
+  padding: 8px;
+  margin: -8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.mic-button-header .mic-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--voicero-theme-color-light) !important; /* Force theme color */
+}
+
+/* Only change color when recording */
+.mic-button-header.recording .mic-icon {
+  color: #ff0000 !important; /* Force red color when recording */
+}
+
+/* Remove ALL other mic-related styles */
+.voice-header .mic-icon {
+  color: var(
+    --voicero-theme-color-light
+  ) !important; /* Override any inherited colors */
+}
+
+/* Mobile styles for when interfaces are open */
+@media (max-width: 768px) {
+  #voice-chat-interface[style*="display: block"] ~ #voice-toggle-container,
+  #voicero-text-chat-container[style*="display: block"]
+    ~ #voice-toggle-container {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+}
+
+/* Desktop styles - ensure chat icon is always visible */
+@media (min-width: 769px) {
+  /* Only show when website is active */
+  .website-active #voice-toggle-container {
+    display: block;
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .website-active #chat-website-button {
+    display: flex;
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+/* Send button styling - ensure this matches the JS element ID */
+#send-message-btn {
+  background-color: var(
+    --voicero-theme-color
+  ) !important; /* Use main theme color with !important */
+  color: white;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Send button hover state */
+#send-message-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Siri-like animation for the send button when waiting for response */
+@keyframes siriGradientAnimation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.siri-active {
+  background: linear-gradient(
+    90deg,
+    var(--voicero-theme-color),
+    #ff4444,
+    var(--voicero-theme-color)
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: siriGradientAnimation 2s ease infinite !important;
+}
+
+/* Voice interface buttons */
+#voice-mic-button {
+  background-color: var(--voicero-theme-color) !important;
+  border-color: transparent !important;
+}
+
+#maximize-voice-chat {
+  background-color: var(--voicero-theme-color) !important;
+  color: white !important;
+}
+
+/* Maximize chat button - text interface */
+#maximize-chat button {
+  background-color: var(--voicero-theme-color) !important;
+  color: white !important;
+}
+
+/* Make gradient-less variation for I'm listening title */
+.welcome-message .welcome-title.listening-title {
+  background: none !important;
+  color: #ff4444 !important;
+  -webkit-text-fill-color: #ff4444 !important;
+}
+
+/* Make sure user message bubbles in voice interface match text interface */
+#voice-messages .user-message .message-content {
+  background-color: var(--voicero-theme-color) !important;
+  color: white !important;
+}
+
+/* Read status color */
+#voice-messages .read-status {
+  color: var(--voicero-theme-color) !important;
+}
+
+/* Super specific selector for welcome highlight in subtitle */
+.welcome-message .welcome-subtitle .welcome-highlight,
+.welcome-subtitle .welcome-highlight,
+#chat-messages .welcome-subtitle .welcome-highlight {
+  color: var(--voicero-theme-color) !important;
+  font-weight: 600 !important;
+  text-shadow: none !important;
+}
+
+/* Hide voice input wrapper in text interface */
+#voicero-text-chat-container #voice-input-wrapper,
+#text-interface #voice-input-wrapper {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+
+/* Only show voice input wrapper in voice interface when needed */
+#voice-chat-interface #voice-input-wrapper {
+  display: block;
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Base state - completely hidden */
+#voice-chat-interface {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  z-index: -1 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  clip: rect(0 0 0 0) !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Only show when explicitly opened */
+#voice-chat-interface[style*="display: block"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 999999 !important;
+  height: auto !important;
+  width: 85% !important;
+  max-width: 480px !important;
+  min-width: 280px !important;
+  overflow: visible !important;
+  clip: auto !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* Mobile styles - ensure voice interface is hidden when text chat is open */
+@media (max-width: 768px) {
+  #voicero-text-chat-container[style*="display: block"]
+    ~ #voice-chat-interface {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
