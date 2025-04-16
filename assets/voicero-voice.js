@@ -2579,14 +2579,21 @@ const VoiceroVoice = {
 
               // Set the new thread (should be the first one in the array)
               if (data.session.threads && data.session.threads.length > 0) {
+                // Get the most recent thread (first in the array since it's sorted by lastMessageAt desc)
                 window.VoiceroCore.thread = data.session.threads[0];
                 window.VoiceroCore.currentThreadId =
                   data.session.threads[0].threadId;
+
+                // IMPORTANT: Also update the currentThreadId in this component
+                // to ensure new requests use the new thread
+                this.currentThreadId = data.session.threads[0].threadId;
               }
             }
           }
         })
-        .catch((error) => {});
+        .catch((error) => {
+          console.error("Failed to clear chat history:", error);
+        });
     }
 
     const messagesContainer = document.getElementById("voice-messages");
@@ -2608,6 +2615,9 @@ const VoiceroVoice = {
       }
       msg.remove();
     });
+
+    // Reset the messages array as well
+    this.messages = [];
 
     // Add welcome message again with the exact same format as in openVoiceChat
     this.addSystemMessage(`

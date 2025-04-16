@@ -834,7 +834,7 @@ const VoiceroText = {
           scrollbar-width: none; /* Firefox */
           -ms-overflow-style: none; /* IE and Edge */
           padding: 15px !important; 
-          padding-top: 0 !important;
+          padding-top: 10px !important; // Changed from 0px
           margin: 0 !important;
           background-color: #f2f2f7 !important; /* iOS light gray background */
           border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
@@ -892,6 +892,7 @@ const VoiceroText = {
           margin-bottom: 16px; /* Increased from default */
           position: relative;
           padding-right: 8px;
+          padding-top: 2px;
         }
 
         .user-message .message-content {
@@ -1224,7 +1225,7 @@ const VoiceroText = {
             scrollbar-width: none; /* Firefox */
             -ms-overflow-style: none; /* IE and Edge */
             padding: 15px !important; 
-            padding-top: 0 !important;
+            padding-top: 10px !important; // Changed from 0px
             margin: 0 !important;
             background-color: #f2f2f7 !important; /* iOS light gray background */
             border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
@@ -1541,7 +1542,7 @@ const VoiceroText = {
             z-index: 9999999;
           "></div>
           
-          <div style="padding-top: 15px;">
+          <div style="padding-top: 20px;">
             <div id="initial-suggestions" style="
               padding: 10px 0;
               opacity: 1;
@@ -1762,14 +1763,10 @@ const VoiceroText = {
 
   // Clear chat history
   clearChatHistory: function () {
-    // Get the main color
-    const mainColor = this.websiteColor || "#882be6";
-
     // Call the session/clear API endpoint
     if (window.VoiceroCore && window.VoiceroCore.sessionId) {
-      const proxyUrl = "/wp-json/voicero/v1/session_clear";
-
-      fetch(proxyUrl, {
+      // Use the WordPress proxy endpoint
+      fetch("/wp-json/voicero/v1/session_clear", {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -1793,14 +1790,20 @@ const VoiceroText = {
 
               // Set the new thread (should be the first one in the array)
               if (data.session.threads && data.session.threads.length > 0) {
+                // Get the most recent thread (first in the array since it's sorted by lastMessageAt desc)
                 window.VoiceroCore.thread = data.session.threads[0];
                 window.VoiceroCore.currentThreadId =
                   data.session.threads[0].threadId;
+
+                // IMPORTANT: Also update this component's currentThreadId to ensure new requests use the new thread
+                this.currentThreadId = data.session.threads[0].threadId;
               }
             }
           }
         })
-        .catch((error) => {});
+        .catch((error) => {
+          console.error("Failed to clear chat history:", error);
+        });
     }
 
     // Also update the UI if the chat is currently open
