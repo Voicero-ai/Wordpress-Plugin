@@ -28,8 +28,6 @@ const VoiceroText = {
 
   // Initialize the text module
   init: function () {
-    
-
     // Apply global welcome styles immediately
     this.forceGlobalWelcomeStyles();
 
@@ -51,20 +49,19 @@ const VoiceroText = {
       // Get website color from VoiceroCore
       if (window.VoiceroCore.websiteColor) {
         this.websiteColor = window.VoiceroCore.websiteColor;
-        
 
         // Generate color variants
         this.getColorVariants(this.websiteColor);
       } else {
         // Use default color and generate variants
-        
+
         this.getColorVariants(this.websiteColor);
       }
 
       // SECURITY: Direct API access and accessKey handling removed - now using server-side proxy
     } else {
       // Use default color and generate variants
-      
+
       this.getColorVariants(this.websiteColor);
     }
 
@@ -92,7 +89,6 @@ const VoiceroText = {
 
     // Get the main color - USE WEBSITE COLOR DIRECTLY INSTEAD OF VARIANTS
     const mainColor = this.websiteColor || "#882be6"; // Use website color directly
-    
 
     // Update send button color
     const sendButton = this.shadowRoot.getElementById("send-message-btn");
@@ -146,14 +142,10 @@ const VoiceroText = {
 
     // Also force global welcome styles for maximum compatibility
     this.forceGlobalWelcomeStyles();
-
-    
   },
 
   // Open text chat interface
   openTextChat: function () {
-    
-
     // Check if thread has messages
     const hasMessages = this.messages && this.messages.length > 0;
 
@@ -163,7 +155,6 @@ const VoiceroText = {
     // If we have a session with textWelcome defined, use that value instead
     if (this.session && typeof this.session.textWelcome !== "undefined") {
       shouldShowWelcome = this.session.textWelcome;
-      
     }
 
     // Get current state of textOpenWindowUp if available
@@ -172,12 +163,10 @@ const VoiceroText = {
     // Check if there's already a session with textOpenWindowUp defined
     if (this.session && typeof this.session.textOpenWindowUp !== "undefined") {
       shouldBeMaximized = this.session.textOpenWindowUp;
-      
     }
 
     // Update window state if it hasn't been done already
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: shouldBeMaximized, // Respect existing window state if available
@@ -187,7 +176,6 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      
     }
 
     // Close voice interface if it's open
@@ -276,8 +264,6 @@ const VoiceroText = {
 
   // Load existing messages from session and display them
   loadMessagesFromSession: function () {
-    
-
     // Check if we have a session with threads
     if (
       window.VoiceroCore &&
@@ -299,15 +285,11 @@ const VoiceroText = {
       // Use the most recent thread (first after sorting)
       const currentThread = sortedThreads[0];
 
-      
-
       if (
         currentThread &&
         currentThread.messages &&
         currentThread.messages.length > 0
       ) {
-        
-
         // Sort messages by createdAt (oldest first)
         const sortedMessages = [...currentThread.messages].sort((a, b) => {
           return new Date(a.createdAt) - new Date(b.createdAt);
@@ -347,15 +329,13 @@ const VoiceroText = {
                 }
               } catch (e) {
                 // If parsing fails, use the raw content
-                
+
                 aiMessage = content;
               }
 
               // Add AI message
               this.addMessage(aiMessage, "ai", true); // true = skip adding to messages array
-            } catch (e) {
-              
-            }
+            } catch (e) {}
           }
         });
 
@@ -377,7 +357,6 @@ const VoiceroText = {
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
       } else {
-        
         // Still store the thread ID even if no messages
         this.currentThreadId = currentThread.threadId;
       }
@@ -465,7 +444,6 @@ const VoiceroText = {
   fetchWebsiteData: function () {
     // SECURITY: Direct API access removed - now using server-side proxy through WordPress AJAX
     if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
-      
       this.createFallbackPopupQuestions();
       return;
     }
@@ -507,7 +485,6 @@ const VoiceroText = {
         this.updatePopupQuestions();
       })
       .catch((error) => {
-        
         this.createFallbackPopupQuestions();
       });
   },
@@ -1785,8 +1762,6 @@ const VoiceroText = {
 
   // Clear chat history
   clearChatHistory: function () {
-    
-
     // Get the main color
     const mainColor = this.websiteColor || "#882be6";
 
@@ -1811,8 +1786,6 @@ const VoiceroText = {
           return response.json();
         })
         .then((data) => {
-          
-
           // Update the session and thread in VoiceroCore
           if (data.session) {
             if (window.VoiceroCore) {
@@ -1827,9 +1800,7 @@ const VoiceroText = {
             }
           }
         })
-        .catch((error) => {
-          
-        });
+        .catch((error) => {});
     }
 
     // Also update the UI if the chat is currently open
@@ -1887,7 +1858,6 @@ const VoiceroText = {
   sendChatToApi: function (messageText, threadId) {
     // SECURITY: Direct API access removed - now using WordPress proxy
     if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
-      
       return Promise.reject("WordPress configuration not available");
     }
 
@@ -1924,7 +1894,6 @@ const VoiceroText = {
 
       // Use the most recent thread ID
       requestBody.threadId = sortedThreads[0].threadId;
-      
     } else if (
       window.VoiceroCore &&
       window.VoiceroCore.thread &&
@@ -1937,6 +1906,9 @@ const VoiceroText = {
     if (window.VoiceroCore && window.VoiceroCore.websiteId) {
       requestBody.websiteId = window.VoiceroCore.websiteId;
     }
+
+    // Add current page URL
+    requestBody.currentPageUrl = window.location.href;
 
     // Initialize pastContext array
     requestBody.pastContext = [];
@@ -1998,11 +1970,8 @@ const VoiceroText = {
             id: userMsg.id,
             threadId: userMsg.threadId,
           });
-
-          
         }
       } else {
-        
       }
     }
     // Fallback to local messages array if session data isn't available
@@ -2027,12 +1996,8 @@ const VoiceroText = {
           question: this.messages[lastUserIndex].content,
           answer: this.messages[lastUserIndex + 1].content,
         });
-
-        
       }
     }
-
-    
 
     // Use WordPress proxy endpoint instead of direct API call
     return fetch("/wp-json/voicero/v1/chat", {
@@ -2197,7 +2162,6 @@ const VoiceroText = {
           removeTypingIndicator();
 
           // Log the complete response data
-          
 
           // Extract message from new response format
           let message = "";
@@ -2206,41 +2170,33 @@ const VoiceroText = {
 
           // Check for the nested response object structure
           if (data && data.response && data.response.answer) {
-            
             message = data.response.answer;
 
             // Get action and URL from the nested response
             if (data.response.action) {
               action = data.response.action;
-              
             }
             if (data.response.url) {
               url = data.response.url;
-              
             }
           }
           // Fall back to previous format with direct 'answer' field
           else if (data && data.answer) {
-            
             message = data.answer;
 
             if (data.action) {
               action = data.action;
-              
             }
             if (data.url) {
               url = data.url;
-              
             }
           }
           // Fall back to direct 'response' string
           else if (data && data.response && typeof data.response === "string") {
-            
             message = data.response;
           }
           // Default fallback
           else {
-            
             message = "I'm sorry, I couldn't process that request.";
           }
 
@@ -2253,7 +2209,6 @@ const VoiceroText = {
 
             // Update window state after receiving response
             if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-              
               window.VoiceroCore.updateWindowState({
                 textWelcome: false, // Don't show welcome again
                 threadId: data.threadId, // Update with the latest thread ID
@@ -2274,15 +2229,12 @@ const VoiceroText = {
               if (matchingThread) {
                 // Update VoiceroCore.thread reference
                 window.VoiceroCore.thread = matchingThread;
-                
 
                 // Update local messages array with the complete message objects
                 if (
                   matchingThread.messages &&
                   matchingThread.messages.length > 0
                 ) {
-                  
-
                   this.messages = matchingThread.messages.map((msg) => ({
                     ...msg,
                     content:
@@ -2297,7 +2249,6 @@ const VoiceroText = {
 
           // Handle redirect if needed
           if (action === "redirect" && url) {
-            
             setTimeout(() => {
               window.location.href = url;
             }, 1000); // Small delay to let the user see the message
@@ -2393,11 +2344,8 @@ const VoiceroText = {
 
   // Close the text chat interface
   closeTextChat: function () {
-    
-
     // Update window state first (set text closed, core open)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      
       window.VoiceroCore.updateWindowState({
         textOpen: false,
         textOpenWindowUp: false,
@@ -2406,7 +2354,6 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      
     }
 
     // Hide the shadow host (which contains the chat interface)
@@ -2426,11 +2373,8 @@ const VoiceroText = {
 
   // Minimize the chat interface
   minimizeChat: function () {
-    
-
     // Update window state first (text open but window minimized)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: false, // Set to false when minimized
@@ -2439,7 +2383,6 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      
     }
 
     // Get the necessary elements from shadow root
@@ -2517,11 +2460,8 @@ const VoiceroText = {
 
   // Maximize the chat interface
   maximizeChat: function () {
-    
-
     // Update window state first (text open with window up)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: true, // Set to true when maximized
@@ -2530,7 +2470,6 @@ const VoiceroText = {
         voiceOpenWindowUp: false,
       });
     } else {
-      
     }
 
     // Get the necessary elements from shadow root
@@ -2548,7 +2487,6 @@ const VoiceroText = {
     let shouldShowWelcome = false;
     if (this.session && typeof this.session.textWelcome !== "undefined") {
       shouldShowWelcome = this.session.textWelcome;
-      
     }
 
     // Check if we have any messages already visible in the container
@@ -2556,12 +2494,9 @@ const VoiceroText = {
       ".ai-message:not(.typing-wrapper), .user-message"
     );
     const hasVisibleMessages = existingMessages.length > 0;
-    
 
     // If welcome should be shown and no messages are visible, add it
     if (shouldShowWelcome && !hasVisibleMessages) {
-      
-
       // Force global welcome styles BEFORE adding the welcome message
       this.forceGlobalWelcomeStyles();
 
@@ -2891,7 +2826,6 @@ const VoiceroText = {
           .toString(16)
           .padStart(2, "0")}${superdarkB.toString(16).padStart(2, "0")}`;
       } catch (e) {
-        
         // Fallback to default variants
         variants.light = "#9370db";
         variants.dark = "#7a5abf";
@@ -2901,7 +2835,7 @@ const VoiceroText = {
     }
 
     this.colorVariants = variants;
-    
+
     return variants;
   },
 
@@ -3021,7 +2955,6 @@ const VoiceroText = {
         .toString(16)
         .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
     } catch (e) {
-      
       return color;
     }
   },
@@ -3054,8 +2987,6 @@ const VoiceroText = {
         -webkit-text-fill-color: transparent !important;
       }
     `;
-
-    
   },
 };
 
@@ -3082,7 +3013,7 @@ document.addEventListener("DOMContentLoaded", () => {
         VoiceroText.init();
       } else if (attempts >= 50) {
         clearInterval(checkCoreInterval);
-        
+
         // Initialize anyway to at least have the interface elements ready
         VoiceroText.init();
       }
