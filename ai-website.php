@@ -28,7 +28,7 @@ function voicero_activate_plugin() {
 
 // Define the API base URL
 // define('AI_WEBSITE_API_URL', 'https://www.voicero.ai/api');
-define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+define('AI_WEBSITE_API_URL', 'https://www.voicero.ai/api');
 
 // Define a debug function to log messages to the error log
 function voicero_debug_log($message, $data = null) {
@@ -988,7 +988,7 @@ function ai_website_render_admin_page() {
     $encoded_admin_url = urlencode($admin_url);
     
     // Generate the connection URL
-    $connect_url = "http://localhost:3000/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
+    $connect_url = "https://www.voicero.ai/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
 
     // Output the admin interface
     ?>
@@ -1493,7 +1493,7 @@ function ai_website_render_admin_page() {
                     </table>
 
                     <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="http://localhost:3000/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
+                        <a href="https://www.voicero.ai/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
                             Open Dashboard
                         </a>
                         <button class="button toggle-status-btn" 
@@ -1614,7 +1614,7 @@ function ai_website_render_admin_page() {
             // Expose config globally (or use a more structured approach if needed)
              window.aiWebsiteConfig = {
                 accessKey: ACCESS_KEY,
-                apiUrl: 'http://localhost:3000/api',
+                apiUrl: 'https://www.voicero.ai/api',
                 ajaxUrl: '<?php echo esc_js(admin_url('admin-ajax.php')); ?>',
                 nonce: '<?php echo esc_js(wp_create_nonce('ai_website_frontend_nonce')); ?>', // Frontend nonce
                 adminNonce: nonce // Admin nonce already defined above
@@ -2168,7 +2168,7 @@ add_action('init', function() {
     if (isset($_SERVER['HTTP_ORIGIN'])) {
         $origin = esc_url_raw(wp_unslash($_SERVER['HTTP_ORIGIN']));
         // Add allowed origins here if needed, otherwise '*' might be okay for development
-        $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'https://www.voicero.ai']; // Add frontend dev server if different
+        $allowed_origins = ['https://www.voicero.ai', 'http://localhost:5173', 'https://www.voicero.ai']; // Add frontend dev server if different
         if (in_array($origin, $allowed_origins) || $origin === get_site_url()) { // Allow own origin
             header("Access-Control-Allow-Origin: " . esc_url_raw($origin));
             header('Access-Control-Allow-Credentials: true');
@@ -2196,7 +2196,7 @@ add_action('rest_api_init', function() {
     add_filter('rest_pre_serve_request', function($value) {
         if (isset($_SERVER['HTTP_ORIGIN'])) {
             $origin = esc_url_raw(wp_unslash($_SERVER['HTTP_ORIGIN']));
-            $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'https://www.voicero.ai']; 
+            $allowed_origins = ['https://www.voicero.ai', 'http://localhost:5173', 'https://www.voicero.ai']; 
             if (in_array($origin, $allowed_origins) || $origin === get_site_url()) {
                 header("Access-Control-Allow-Origin: " . esc_url_raw($origin));
                 header('Access-Control-Allow-Credentials: true');
@@ -2570,7 +2570,7 @@ function voicero_tts_proxy($request) {
     }
     
     // Forward request to local API
-    $response = wp_remote_post('http://localhost:3000/api/tts', [
+    $response = wp_remote_post('https://www.voicero.ai/api/tts', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -2750,7 +2750,7 @@ function voicero_whisper_proxy($request) {
     $body .= "--$boundary--\r\n";
     
     // Send request to local API
-    $response = wp_remote_post('http://localhost:3000/api/whisper', [
+    $response = wp_remote_post('https://www.voicero.ai/api/whisper', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
