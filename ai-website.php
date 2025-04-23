@@ -2011,6 +2011,9 @@ function voicero_chat_proxy($request) {
             'sections' => [],
             'images' => []
         ];
+    } else {
+        // Filter pageData to remove WordPress admin elements and Voicero UI
+        $decoded_body['pageData'] = voicero_filter_page_data($decoded_body['pageData']);
     }
     
     // Log the pageData for debugging if needed
@@ -2045,6 +2048,142 @@ function voicero_chat_proxy($request) {
     $response_body = wp_remote_retrieve_body($response);
     
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Filter page data to remove WordPress admin and Voicero UI elements
+ * 
+ * @param array $pageData The page data to filter
+ * @return array The filtered page data
+ */
+function voicero_filter_page_data($pageData) {
+    // Define the IDs we want to ignore
+    $ignored_ids = [
+        // WordPress admin elements
+        'wpadminbar',
+        'adminbarsearch',
+        'page',
+        'masthead',
+        
+        // Voicero UI elements
+        'chat-website-button',
+        'voice-mic-button',
+        'voice-toggle-container',
+        'voice-messages',
+        'voice-loading-bar',
+        'voice-controls-header',
+        'voice-input-wrapper',
+    ];
+    
+    // Additional filters for partial matches
+    $ignored_prefixes = [
+        'wp-',
+        'voicero',
+    ];
+    
+    $ignored_substrings = [
+        'voice-',
+        'text-chat',
+    ];
+    
+    // Filter buttons
+    if (isset($pageData['buttons']) && is_array($pageData['buttons'])) {
+        $pageData['buttons'] = array_filter($pageData['buttons'], function($btn) use ($ignored_ids, $ignored_prefixes, $ignored_substrings) {
+            if (empty($btn['id'])) return true;
+            
+            // Check for exact match
+            if (in_array($btn['id'], $ignored_ids)) return false;
+            
+            // Check for prefix match
+            foreach ($ignored_prefixes as $prefix) {
+                if (strpos($btn['id'], $prefix) === 0) return false;
+            }
+            
+            // Check for substring match
+            foreach ($ignored_substrings as $substr) {
+                if (strpos($btn['id'], $substr) !== false) return false;
+            }
+            
+            return true;
+        });
+        
+        // Re-index array
+        $pageData['buttons'] = array_values($pageData['buttons']);
+    }
+    
+    // Filter forms
+    if (isset($pageData['forms']) && is_array($pageData['forms'])) {
+        $pageData['forms'] = array_filter($pageData['forms'], function($form) use ($ignored_ids, $ignored_prefixes, $ignored_substrings) {
+            if (empty($form['id'])) return true;
+            
+            // Check for exact match
+            if (in_array($form['id'], $ignored_ids)) return false;
+            
+            // Check for prefix match
+            foreach ($ignored_prefixes as $prefix) {
+                if (strpos($form['id'], $prefix) === 0) return false;
+            }
+            
+            // Check for substring match
+            foreach ($ignored_substrings as $substr) {
+                if (strpos($form['id'], $substr) !== false) return false;
+            }
+            
+            return true;
+        });
+        
+        // Re-index array
+        $pageData['forms'] = array_values($pageData['forms']);
+    }
+    
+    // Filter sections
+    if (isset($pageData['sections']) && is_array($pageData['sections'])) {
+        $pageData['sections'] = array_filter($pageData['sections'], function($section) use ($ignored_ids, $ignored_prefixes, $ignored_substrings) {
+            if (empty($section['id'])) {
+                // For elements without IDs, check if it's in header/footer based on tag and text
+                if ($section['tag'] === 'header' || $section['tag'] === 'footer') {
+                    return false;
+                }
+                return true;
+            }
+            
+            // Check for exact match
+            if (in_array($section['id'], $ignored_ids)) return false;
+            
+            // Check for prefix match
+            foreach ($ignored_prefixes as $prefix) {
+                if (strpos($section['id'], $prefix) === 0) return false;
+            }
+            
+            // Check for substring match
+            foreach ($ignored_substrings as $substr) {
+                if (strpos($section['id'], $substr) !== false) return false;
+            }
+            
+            return true;
+        });
+        
+        // Re-index array
+        $pageData['sections'] = array_values($pageData['sections']);
+    }
+    
+    // Filter images - usually no need to filter these, but included for completeness
+    if (isset($pageData['images']) && is_array($pageData['images'])) {
+        // Keep images that aren't from admin or Gravatar
+        $pageData['images'] = array_filter($pageData['images'], function($img) {
+            if (empty($img['src'])) return false;
+            
+            // Skip Gravatar images
+            if (strpos($img['src'], 'gravatar.com') !== false) return false;
+            
+            return true;
+        });
+        
+        // Re-index array
+        $pageData['images'] = array_values($pageData['images']);
+    }
+    
+    return $pageData;
 }
 
 /**

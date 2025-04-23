@@ -2173,16 +2173,29 @@ const VoiceroText = {
           let message = "";
           let action = null;
           let url = null;
+          let actionContext = null;
 
           // Check for the nested response object structure
           if (data && data.response && data.response.answer) {
             message = data.response.answer;
 
-            // Get action and URL from the nested response
+            // Get action and check for action_context
             if (data.response.action) {
               action = data.response.action;
+
+              // Get action_context if available
+              if (data.response.action_context) {
+                actionContext = data.response.action_context;
+
+                // For redirect actions, get URL from action_context
+                if (action === "redirect" && actionContext.url) {
+                  url = actionContext.url;
+                }
+              }
             }
-            if (data.response.url) {
+
+            // Fallback to old format if action_context is not available
+            if (!url && data.response.url) {
               url = data.response.url;
             }
           }
@@ -2192,14 +2205,22 @@ const VoiceroText = {
 
             if (data.action) {
               action = data.action;
+
+              // Get action_context if available
+              if (data.action_context) {
+                actionContext = data.action_context;
+
+                // For redirect actions, get URL from action_context
+                if (action === "redirect" && actionContext.url) {
+                  url = actionContext.url;
+                }
+              }
             }
-            if (data.url) {
+
+            // Fallback to old format if action_context is not available
+            if (!url && data.url) {
               url = data.url;
             }
-          }
-          // Fall back to direct 'response' string
-          else if (data && data.response && typeof data.response === "string") {
-            message = data.response;
           }
           // Default fallback
           else {
@@ -3006,76 +3027,172 @@ const VoiceroText = {
       images: [],
     };
 
-    // Collect all buttons
+    // Only include elements that are within the body and not the header
+    const isInHeader = (element) => {
+      let parent = element.parentElement;
+      while (parent) {
+        if (parent.tagName && parent.tagName.toLowerCase() === "header") {
+          return true;
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
+    // Check if element is in footer
+    const isInFooter = (element) => {
+      let parent = element.parentElement;
+      while (parent) {
+        if (
+          parent.tagName &&
+          (parent.tagName.toLowerCase() === "footer" ||
+            parent.id === "colophon" ||
+            parent.id === "ast-scroll-top")
+        ) {
+          return true;
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
+    // Filter function to exclude unwanted elements
+    const shouldExcludeElement = (element) => {
+      if (!element) return false;
+
+      // Skip elements without IDs that are in header, footer, or admin bars
+      if (!element.id) {
+        if (isInHeader(element) || isInFooter(element)) {
+          return true;
+        }
+        return false;
+      }
+
+      const id = element.id.toLowerCase();
+
+      // Specific button IDs to exclude
+      if (id === "chat-website-button" || id === "voice-mic-button") {
+        return true;
+      }
+
+      // Exclude common WordPress admin elements
+      if (id === "wpadminbar" || id === "adminbarsearch" || id === "page") {
+        return true;
+      }
+
+      // Exclude masthead
+      if (id === "masthead" || id.includes("masthead")) {
+        return true;
+      }
+
+      // Exclude elements with ids starting with wp- or voicero
+      if (id.startsWith("wp-") || id.startsWith("voicero")) {
+        return true;
+      }
+
+      // Exclude voice toggle container
+      if (id === "voice-toggle-container") {
+        return true;
+      }
+
+      // Exclude elements related to voice-chat or text-chat
+      if (id.includes("voice-") || id.includes("text-chat")) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Collect all buttons that meet our criteria
     const buttonElements = document.querySelectorAll("button");
     buttonElements.forEach((button) => {
-      pageData.buttons.push({
-        id: button.id || "",
-        text: button.innerText.trim(),
-      });
+      if (
+        !isInHeader(button) &&
+        !isInFooter(button) &&
+        !shouldExcludeElement(button)
+      ) {
+        pageData.buttons.push({
+          id: button.id || "",
+          text: button.innerText.trim(),
+        });
+      }
     });
 
-    // Collect all forms and their inputs/selects
+    // Collect all forms and their inputs/selects that meet our criteria
     const formElements = document.querySelectorAll("form");
     formElements.forEach((form) => {
-      const formData = {
-        id: form.id || "",
-        inputs: [],
-        selects: [],
-      };
-
-      // Get inputs
-      const inputs = form.querySelectorAll("input");
-      inputs.forEach((input) => {
-        formData.inputs.push({
-          name: input.name || "",
-          type: input.type || "",
-          value: input.value || "",
-        });
-      });
-
-      // Get selects
-      const selects = form.querySelectorAll("select");
-      selects.forEach((select) => {
-        const selectData = {
-          name: select.name || "",
-          options: [],
+      if (
+        !isInHeader(form) &&
+        !isInFooter(form) &&
+        !shouldExcludeElement(form)
+      ) {
+        const formData = {
+          id: form.id || "",
+          inputs: [],
+          selects: [],
         };
 
-        // Get options
-        const options = select.querySelectorAll("option");
-        options.forEach((option) => {
-          selectData.options.push({
-            value: option.value || "",
-            text: option.innerText.trim(),
+        // Get inputs
+        const inputs = form.querySelectorAll("input");
+        inputs.forEach((input) => {
+          formData.inputs.push({
+            name: input.name || "",
+            type: input.type || "",
+            value: input.value || "",
           });
         });
 
-        formData.selects.push(selectData);
-      });
+        // Get selects
+        const selects = form.querySelectorAll("select");
+        selects.forEach((select) => {
+          const selectData = {
+            name: select.name || "",
+            options: [],
+          };
 
-      pageData.forms.push(formData);
+          // Get options
+          const options = select.querySelectorAll("option");
+          options.forEach((option) => {
+            selectData.options.push({
+              value: option.value || "",
+              text: option.innerText.trim(),
+            });
+          });
+
+          formData.selects.push(selectData);
+        });
+
+        pageData.forms.push(formData);
+      }
     });
 
-    // Collect important sections
+    // Collect important sections that meet our criteria
     const sectionElements = document.querySelectorAll(
-      "div[id], section, article, header, footer, main, aside"
+      "div[id], section, article, main, aside"
     );
     sectionElements.forEach((section) => {
-      pageData.sections.push({
-        id: section.id || "",
-        tag: section.tagName.toLowerCase(),
-        text_snippet: section.innerText.substring(0, 150).trim(), // First 150 chars
-      });
+      if (
+        !isInHeader(section) &&
+        !isInFooter(section) &&
+        !shouldExcludeElement(section)
+      ) {
+        pageData.sections.push({
+          id: section.id || "",
+          tag: section.tagName.toLowerCase(),
+          text_snippet: section.innerText.substring(0, 150).trim(), // First 150 chars
+        });
+      }
     });
 
-    // Collect images
+    // Collect images that meet our criteria
     const imageElements = document.querySelectorAll("img");
     imageElements.forEach((img) => {
-      pageData.images.push({
-        src: img.src || "",
-        alt: img.alt || "",
-      });
+      if (!isInHeader(img) && !isInFooter(img) && !shouldExcludeElement(img)) {
+        pageData.images.push({
+          src: img.src || "",
+          alt: img.alt || "",
+        });
+      }
     });
 
     return pageData;

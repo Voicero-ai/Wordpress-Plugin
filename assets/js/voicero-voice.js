@@ -1334,31 +1334,34 @@ const VoiceroVoice = {
                 this.addTypingIndicator();
 
                 // Now send the transcription to the Shopify chat endpoint
-                const chatResponse = await fetch("/wp-json/voicero/v1/wordpress/chat", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                  },
-                  body: JSON.stringify({
-                    message: transcription,
-                    type: "voice",
-                    threadId:
-                      this.currentThreadId ||
-                      (window.VoiceroCore &&
-                      window.VoiceroCore.thread &&
-                      window.VoiceroCore.thread.threadId
-                        ? window.VoiceroCore.thread.threadId
-                        : null),
-                    websiteId:
-                      window.VoiceroCore && window.VoiceroCore.websiteId
-                        ? window.VoiceroCore.websiteId
-                        : null,
-                    currentPageUrl: window.location.href,
-                    pageData: this.collectPageData(),
-                    pastContext: this.getPastContext(),
-                  }),
-                });
+                const chatResponse = await fetch(
+                  "/wp-json/voicero/v1/wordpress/chat",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Accept: "application/json",
+                    },
+                    body: JSON.stringify({
+                      message: transcription,
+                      type: "voice",
+                      threadId:
+                        this.currentThreadId ||
+                        (window.VoiceroCore &&
+                        window.VoiceroCore.thread &&
+                        window.VoiceroCore.thread.threadId
+                          ? window.VoiceroCore.thread.threadId
+                          : null),
+                      websiteId:
+                        window.VoiceroCore && window.VoiceroCore.websiteId
+                          ? window.VoiceroCore.websiteId
+                          : null,
+                      currentPageUrl: window.location.href,
+                      pageData: this.collectPageData(),
+                      pastContext: this.getPastContext(),
+                    }),
+                  }
+                );
                 if (!chatResponse.ok)
                   throw new Error("Chat API request failed");
 
@@ -1402,6 +1405,7 @@ const VoiceroVoice = {
                 let aiTextResponse = "";
                 let actionType = null;
                 let actionUrl = null;
+                let actionContext = null;
 
                 try {
                   // First check if the response is already an object
@@ -1413,7 +1417,21 @@ const VoiceroVoice = {
                       chatData.response.answer ||
                       "Sorry, I don't have a response.";
                     actionType = chatData.response.action || null;
-                    actionUrl = chatData.response.url || null;
+
+                    // Check for action_context first (new format)
+                    if (chatData.response.action_context) {
+                      actionContext = chatData.response.action_context;
+
+                      // If it's a redirect action, get the URL from action_context
+                      if (actionType === "redirect" && actionContext.url) {
+                        actionUrl = actionContext.url;
+                      }
+                    }
+
+                    // Fallback to old format if no URL found in action_context
+                    if (!actionUrl) {
+                      actionUrl = chatData.response.url || null;
+                    }
                   }
                   // Then try to parse the response as JSON if it's a string
                   else if (typeof chatData.response === "string") {
@@ -1423,10 +1441,23 @@ const VoiceroVoice = {
                         parsedResponse.answer ||
                         "Sorry, I don't have a response.";
                       actionType = parsedResponse.action || null;
-                      actionUrl = parsedResponse.url || null;
+
+                      // Check for action_context first (new format)
+                      if (parsedResponse.action_context) {
+                        actionContext = parsedResponse.action_context;
+
+                        // If it's a redirect action, get the URL from action_context
+                        if (actionType === "redirect" && actionContext.url) {
+                          actionUrl = actionContext.url;
+                        }
+                      }
+
+                      // Fallback to old format if no URL found in action_context
+                      if (!actionUrl) {
+                        actionUrl = parsedResponse.url || null;
+                      }
                     } catch (e) {
                       // If parsing fails, use the response as is
-
                       aiTextResponse =
                         chatData.response || "Sorry, I don't have a response.";
                     }
@@ -2805,76 +2836,172 @@ const VoiceroVoice = {
       images: [],
     };
 
-    // Collect all buttons
+    // Only include elements that are within the body and not the header
+    const isInHeader = (element) => {
+      let parent = element.parentElement;
+      while (parent) {
+        if (parent.tagName && parent.tagName.toLowerCase() === "header") {
+          return true;
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
+    // Check if element is in footer
+    const isInFooter = (element) => {
+      let parent = element.parentElement;
+      while (parent) {
+        if (
+          parent.tagName &&
+          (parent.tagName.toLowerCase() === "footer" ||
+            parent.id === "colophon" ||
+            parent.id === "ast-scroll-top")
+        ) {
+          return true;
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
+    // Filter function to exclude unwanted elements
+    const shouldExcludeElement = (element) => {
+      if (!element) return false;
+
+      // Skip elements without IDs that are in header, footer, or admin bars
+      if (!element.id) {
+        if (isInHeader(element) || isInFooter(element)) {
+          return true;
+        }
+        return false;
+      }
+
+      const id = element.id.toLowerCase();
+
+      // Specific button IDs to exclude
+      if (id === "chat-website-button" || id === "voice-mic-button") {
+        return true;
+      }
+
+      // Exclude common WordPress admin elements
+      if (id === "wpadminbar" || id === "adminbarsearch" || id === "page") {
+        return true;
+      }
+
+      // Exclude masthead
+      if (id === "masthead" || id.includes("masthead")) {
+        return true;
+      }
+
+      // Exclude elements with ids starting with wp- or voicero
+      if (id.startsWith("wp-") || id.startsWith("voicero")) {
+        return true;
+      }
+
+      // Exclude voice toggle container
+      if (id === "voice-toggle-container") {
+        return true;
+      }
+
+      // Exclude elements related to voice-chat or text-chat
+      if (id.includes("voice-") || id.includes("text-chat")) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Collect all buttons that meet our criteria
     const buttonElements = document.querySelectorAll("button");
     buttonElements.forEach((button) => {
-      pageData.buttons.push({
-        id: button.id || "",
-        text: button.innerText.trim(),
-      });
+      if (
+        !isInHeader(button) &&
+        !isInFooter(button) &&
+        !shouldExcludeElement(button)
+      ) {
+        pageData.buttons.push({
+          id: button.id || "",
+          text: button.innerText.trim(),
+        });
+      }
     });
 
-    // Collect all forms and their inputs/selects
+    // Collect all forms and their inputs/selects that meet our criteria
     const formElements = document.querySelectorAll("form");
     formElements.forEach((form) => {
-      const formData = {
-        id: form.id || "",
-        inputs: [],
-        selects: [],
-      };
-
-      // Get inputs
-      const inputs = form.querySelectorAll("input");
-      inputs.forEach((input) => {
-        formData.inputs.push({
-          name: input.name || "",
-          type: input.type || "",
-          value: input.value || "",
-        });
-      });
-
-      // Get selects
-      const selects = form.querySelectorAll("select");
-      selects.forEach((select) => {
-        const selectData = {
-          name: select.name || "",
-          options: [],
+      if (
+        !isInHeader(form) &&
+        !isInFooter(form) &&
+        !shouldExcludeElement(form)
+      ) {
+        const formData = {
+          id: form.id || "",
+          inputs: [],
+          selects: [],
         };
 
-        // Get options
-        const options = select.querySelectorAll("option");
-        options.forEach((option) => {
-          selectData.options.push({
-            value: option.value || "",
-            text: option.innerText.trim(),
+        // Get inputs
+        const inputs = form.querySelectorAll("input");
+        inputs.forEach((input) => {
+          formData.inputs.push({
+            name: input.name || "",
+            type: input.type || "",
+            value: input.value || "",
           });
         });
 
-        formData.selects.push(selectData);
-      });
+        // Get selects
+        const selects = form.querySelectorAll("select");
+        selects.forEach((select) => {
+          const selectData = {
+            name: select.name || "",
+            options: [],
+          };
 
-      pageData.forms.push(formData);
+          // Get options
+          const options = select.querySelectorAll("option");
+          options.forEach((option) => {
+            selectData.options.push({
+              value: option.value || "",
+              text: option.innerText.trim(),
+            });
+          });
+
+          formData.selects.push(selectData);
+        });
+
+        pageData.forms.push(formData);
+      }
     });
 
-    // Collect important sections
+    // Collect important sections that meet our criteria
     const sectionElements = document.querySelectorAll(
-      "div[id], section, article, header, footer, main, aside"
+      "div[id], section, article, main, aside"
     );
     sectionElements.forEach((section) => {
-      pageData.sections.push({
-        id: section.id || "",
-        tag: section.tagName.toLowerCase(),
-        text_snippet: section.innerText.substring(0, 150).trim(), // First 150 chars
-      });
+      if (
+        !isInHeader(section) &&
+        !isInFooter(section) &&
+        !shouldExcludeElement(section)
+      ) {
+        pageData.sections.push({
+          id: section.id || "",
+          tag: section.tagName.toLowerCase(),
+          text_snippet: section.innerText.substring(0, 150).trim(), // First 150 chars
+        });
+      }
     });
 
-    // Collect images
+    // Collect images that meet our criteria
     const imageElements = document.querySelectorAll("img");
     imageElements.forEach((img) => {
-      pageData.images.push({
-        src: img.src || "",
-        alt: img.alt || "",
-      });
+      if (!isInHeader(img) && !isInFooter(img) && !shouldExcludeElement(img)) {
+        pageData.images.push({
+          src: img.src || "",
+          alt: img.alt || "",
+        });
+      }
     });
 
     return pageData;
