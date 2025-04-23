@@ -1355,6 +1355,7 @@ const VoiceroVoice = {
                         ? window.VoiceroCore.websiteId
                         : null,
                     currentPageUrl: window.location.href,
+                    pageData: this.collectPageData(),
                     pastContext: this.getPastContext(),
                   }),
                 });
@@ -2791,6 +2792,92 @@ const VoiceroVoice = {
     } catch (e) {
       return color;
     }
+  },
+
+  // Collect page data for better context
+  collectPageData: function () {
+    const pageData = {
+      url: window.location.href,
+      full_text: document.body.innerText.trim(),
+      buttons: [],
+      forms: [],
+      sections: [],
+      images: [],
+    };
+
+    // Collect all buttons
+    const buttonElements = document.querySelectorAll("button");
+    buttonElements.forEach((button) => {
+      pageData.buttons.push({
+        id: button.id || "",
+        text: button.innerText.trim(),
+      });
+    });
+
+    // Collect all forms and their inputs/selects
+    const formElements = document.querySelectorAll("form");
+    formElements.forEach((form) => {
+      const formData = {
+        id: form.id || "",
+        inputs: [],
+        selects: [],
+      };
+
+      // Get inputs
+      const inputs = form.querySelectorAll("input");
+      inputs.forEach((input) => {
+        formData.inputs.push({
+          name: input.name || "",
+          type: input.type || "",
+          value: input.value || "",
+        });
+      });
+
+      // Get selects
+      const selects = form.querySelectorAll("select");
+      selects.forEach((select) => {
+        const selectData = {
+          name: select.name || "",
+          options: [],
+        };
+
+        // Get options
+        const options = select.querySelectorAll("option");
+        options.forEach((option) => {
+          selectData.options.push({
+            value: option.value || "",
+            text: option.innerText.trim(),
+          });
+        });
+
+        formData.selects.push(selectData);
+      });
+
+      pageData.forms.push(formData);
+    });
+
+    // Collect important sections
+    const sectionElements = document.querySelectorAll(
+      "div[id], section, article, header, footer, main, aside"
+    );
+    sectionElements.forEach((section) => {
+      pageData.sections.push({
+        id: section.id || "",
+        tag: section.tagName.toLowerCase(),
+        text_snippet: section.innerText.substring(0, 150).trim(), // First 150 chars
+      });
+    });
+
+    // Collect images
+    const imageElements = document.querySelectorAll("img");
+    imageElements.forEach((img) => {
+      pageData.images.push({
+        src: img.src || "",
+        alt: img.alt || "",
+      });
+    });
+
+    return pageData;
   },
 };
 

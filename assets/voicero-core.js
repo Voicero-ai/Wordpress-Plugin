@@ -4,10 +4,8 @@
 
 // Ensure compatibility with WordPress jQuery
 (function ($, window, document) {
-  
-
   const VoiceroCore = {
-    apiBaseUrls: ["https://www.voicero.ai"],
+    apiBaseUrls: ["http://localhost:3000"],
     apiBaseUrl: null, // Store the working API URL
     apiConnected: false, // Track connection status
     session: null, // Store the current session
@@ -24,8 +22,6 @@
 
     // Initialize on page load
     init: function () {
-      
-
       // Set up global reference
       window.VoiceroCore = this;
 
@@ -41,9 +37,7 @@
 
       // Check if config is available
       if (typeof aiWebsiteConfig !== "undefined") {
-        
       } else {
-        
       }
 
       // Step 1: First set up basic containers (but not the button yet)
@@ -52,26 +46,22 @@
 
       // Step 2: Initialize the API connection - this will create the button
       // only after we know the website color
-      
+
       this.checkApiConnection();
 
       // Don't force the button to show here anymore - wait for API
       // setTimeout(() => {
       //   this.ensureMainButtonVisible();
       // }, 500);
-
-      
     },
 
     // Initialize API connection - empty since we call checkApiConnection directly now
     initializeApiConnection: function () {
-      
       // This method is now empty as we call checkApiConnection directly from init
     },
 
     // Set up event listeners
     setupEventListeners: function () {
-      
       // Don't create the button here - wait for API connection first
 
       // Create chat interface elements that might be needed
@@ -81,12 +71,9 @@
 
     // Create the main interface with the two option buttons
     createButton: function () {
-      
-
       // DON'T SKIP BUTTON CREATION - Even if API isn't connected, we need the main button
       // Just log a warning instead of completely skipping
       if (!this.apiConnected) {
-        
       }
 
       // Make sure theme colors are updated
@@ -107,18 +94,16 @@
       }
     `;
       document.head.appendChild(styleEl);
-      
 
       // Use the website color from API or default
       const themeColor = this.websiteColor || "#882be6";
-      
 
       // Check if the container exists, otherwise append to body
       let container = document.getElementById("voicero-app-container");
 
       if (!container) {
         // If the WordPress-added container doesn't exist, create one on the body
-        
+
         document.body.insertAdjacentHTML(
           "beforeend",
           `<div id="voicero-app-container"></div>`
@@ -134,8 +119,6 @@
       }
 
       if (container) {
-        
-
         // Create the button container inside the main container
         container.innerHTML = `<div id="voice-toggle-container"></div>`;
         const buttonContainer = document.getElementById(
@@ -291,8 +274,6 @@
               e.preventDefault();
               e.stopPropagation();
 
-              
-
               // Check if any interfaces are open and close them (acting as home button)
               const voiceInterface = document.getElementById(
                 "voice-chat-interface"
@@ -428,13 +409,9 @@
               }
             });
           }
-
-          
         } else {
-          
         }
       } else {
-        
       }
     },
 
@@ -461,9 +438,7 @@
           "beforeend",
           `<div id="voicero-text-chat-container" style="display: none;"></div>`
         );
-        
       } else {
-        
       }
     },
 
@@ -490,9 +465,7 @@
           "beforeend",
           `<div id="voice-chat-interface" style="display: none;"></div>`
         );
-        
       } else {
-        
       }
     },
 
@@ -520,8 +493,6 @@
 
     // Check API connection
     checkApiConnection: function () {
-      
-
       // Use WordPress REST API proxy endpoint instead of direct API call
       const proxyUrl = "/wp-json/voicero/v1/connect";
 
@@ -534,10 +505,8 @@
         },
       })
         .then((response) => {
-          
           // Check if the response status is not 200
           if (!response.ok) {
-            
             // Set connection status to false since we got an error
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
@@ -547,16 +516,11 @@
           return response.json();
         })
         .then((data) => {
-          
-          
-          
-
           // Store the working API URL
           this.apiBaseUrl = this.apiBaseUrls[0]; // Just use first URL since proxy handles actual endpoint
 
           // Check if the website exists and is active
           if (!data.website || data.website.active !== true) {
-            
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
 
@@ -581,19 +545,15 @@
             this.websiteColor = data.website.color
               ? data.website.color
               : "#882be6";
-            
 
             // Update CSS variables with the theme color
             this.updateThemeColor(this.websiteColor);
 
             // ALWAYS ensure main button is visible when website is active
             this.ensureMainButtonVisible();
-            
 
             // NOW set up the failsafe (only for active sites)
             this.setupButtonFailsafe();
-
-            
 
             // Don't create the button yet - wait for session initialization
             // We'll make sure initializeSession will call createButton when done
@@ -601,7 +561,6 @@
             // Initialize session after successful connection
             this.initializeSession();
           } else {
-            
             this.apiConnected = false;
             this.isWebsiteActive = false; // Mark site as inactive
             this.hideMainButton(); // Hide button if no website ID
@@ -621,7 +580,6 @@
           }
         })
         .catch((error) => {
-          
           // Set connection status to false since we got an error
           this.apiConnected = false;
           this.isWebsiteActive = false; // Mark site as inactive
@@ -629,14 +587,11 @@
           this.removeAllButtons(); // Force remove all buttons
 
           // Ensure no UI elements are created in error case
-          
         });
     },
 
     // Hide main button when website not active
     hideMainButton: function () {
-      
-
       // Find the button
       const mainButton = document.getElementById("chat-website-button");
       if (mainButton) {
@@ -666,7 +621,6 @@
     initializeSession: function () {
       // Prevent multiple initialization attempts at the same time
       if (this.isInitializingSession) {
-        
         return;
       }
 
@@ -676,20 +630,16 @@
       // Check if we have a saved sessionId in localStorage
       const savedSessionId = localStorage.getItem("voicero_session_id");
 
-      
-
       try {
         // Verify localStorage is actually working
         localStorage.setItem("voicero_test", "test");
         if (localStorage.getItem("voicero_test") !== "test") {
-          
           // If localStorage isn't working, just create a new session
           this.createSession();
           return;
         }
         localStorage.removeItem("voicero_test");
       } catch (e) {
-        
         // If localStorage isn't available, just create a new session
         this.createSession();
         return;
@@ -700,11 +650,9 @@
         typeof savedSessionId === "string" &&
         savedSessionId.trim() !== ""
       ) {
-        
         // Try to get the existing session
         this.getSession(savedSessionId);
       } else {
-        
         // Create a new session
         this.createSession();
       }
@@ -715,8 +663,6 @@
       if (this.pendingWindowStateUpdates.length === 0 || !this.sessionId) {
         return;
       }
-
-      
 
       // Process each pending update
       for (const update of this.pendingWindowStateUpdates) {
@@ -730,7 +676,6 @@
     // Get an existing session by ID
     getSession: function (sessionId) {
       if (!this.websiteId || !sessionId) {
-        
         this.isInitializingSession = false; // Reset flag even in error case
         return;
       }
@@ -748,7 +693,6 @@
           if (!response.ok) {
             // If we can't get the session, try creating a new one
             if (response.status === 404) {
-              
               // Set a flag to indicate we're calling from getSession to prevent checks
               this.createSessionFromGetSession();
               return null;
@@ -760,7 +704,6 @@
         .then((data) => {
           if (!data) return; // Handle the case where we're creating a new session
 
-          
           this.session = data.session;
 
           // Get the most recent thread
@@ -770,12 +713,10 @@
             data.session.threads.length > 0
           ) {
             this.thread = data.session.threads[0];
-            
           }
 
           // Log detailed session info
           if (data.session) {
-            
           }
 
           // Store session ID in global variable and localStorage
@@ -809,7 +750,6 @@
           this.isInitializingSession = false;
         })
         .catch((error) => {
-          
           // Reset initialization flag in error case
           this.isInitializingSession = false;
 
@@ -822,19 +762,13 @@
     restoreInterfaceState: function () {
       if (!this.session) return;
 
-      
-
       // Always ensure the main button is visible regardless of session state
       this.ensureMainButtonVisible();
 
       // Log the welcome message state
-      
 
       // Check if text interface should be open
       if (this.session.textOpen === true) {
-        
-        
-
         // Make sure VoiceroText is initialized
         if (window.VoiceroText) {
           // Open the text chat (will always open maximized now)
@@ -842,7 +776,6 @@
 
           // AFTER opening, check if it should be minimized based on session
           if (this.session.textOpenWindowUp === false) {
-            
             // Use setTimeout to allow the interface to render first
             setTimeout(() => {
               if (window.VoiceroText && window.VoiceroText.minimizeChat) {
@@ -855,9 +788,6 @@
 
       // Check if voice interface should be open
       else if (this.session.voiceOpen === true) {
-        
-        
-
         // Make sure VoiceroVoice is initialized
         if (window.VoiceroVoice) {
           // Open voice chat
@@ -865,12 +795,10 @@
 
           // Check if it should be minimized
           if (this.session.voiceOpenWindowUp === false) {
-            
             setTimeout(() => {
               window.VoiceroVoice.minimizeVoiceChat();
             }, 500); // Short delay to ensure interface is fully open first
           } else {
-            
           }
 
           // Check if auto mic should be activated
@@ -886,7 +814,7 @@
     // Create a new session specifically called from getSession
     createSessionFromGetSession: function () {
       // This is a wrapper to avoid infinite loops
-      
+
       // Always allow this call to proceed even if isInitializingSession is true
       this.isInitializingSession = false;
       this.createSession();
@@ -895,14 +823,12 @@
     // Create a new session
     createSession: function () {
       if (!this.websiteId) {
-        
         this.isInitializingSession = false; // Reset flag even in error case
         return;
       }
 
       // NEVER SKIP - Force proceed even if already initializing
       if (this.isInitializingSession) {
-        
         // Force reset the flag to allow a new attempt
         this.isInitializingSession = false;
       }
@@ -914,8 +840,6 @@
       const requestBody = JSON.stringify({
         websiteId: this.websiteId,
       });
-
-      
 
       try {
         // Use a longer timeout and add more detailed error handling
@@ -939,28 +863,23 @@
         // Race between fetch and timeout
         Promise.race([fetchPromise, timeoutPromise])
           .then((response) => {
-            
             if (!response.ok) {
               throw new Error(`Create session failed: ${response.status}`);
             }
             return response.json();
           })
           .then((data) => {
-            
-
             // Store session and thread data
             if (data.session) {
               this.session = data.session;
 
               // Log detailed session info
-              
             }
 
             if (data.thread) {
               this.thread = data.thread;
 
               // Log detailed thread info
-              
             } else if (
               data.session &&
               data.session.threads &&
@@ -969,7 +888,6 @@
               this.thread = data.session.threads[0];
 
               // Log detailed thread info
-              
             }
 
             // Store session ID in localStorage for persistence
@@ -977,9 +895,7 @@
               // Validate the session ID format
               const sessionId = data.session.id;
               if (typeof sessionId !== "string" || sessionId.trim() === "") {
-                
               } else {
-                
                 this.sessionId = sessionId;
 
                 try {
@@ -989,19 +905,14 @@
                   // Verify it was saved correctly
                   const verifiedId = localStorage.getItem("voicero_session_id");
                   if (verifiedId !== sessionId) {
-                    
                   } else {
-                    
                   }
-                } catch (e) {
-                  
-                }
+                } catch (e) {}
 
                 // Process any pending window state updates now that we have a sessionId
                 this.processPendingWindowStateUpdates();
               }
             } else {
-              
             }
 
             // Make session available to other modules
@@ -1024,34 +935,28 @@
             this.isInitializingSession = false;
 
             // Now create the button since we have a session
-            
+
             this.createButton();
           })
           .catch((error) => {
-            
-
             // Make a direct AJAX call as a fallback to see if that works better
             this._createSessionFallback();
           });
       } catch (error) {
-        
         // Reset initialization flags in error case
         this.isInitializingSession = false;
         this.sessionInitialized = false;
 
         // Create the button anyway, since we at least have website info
-        
+
         this.createButton();
       }
     },
 
     // Fallback method to try creating a session using jQuery AJAX
     _createSessionFallback: function () {
-      
-
       // Only run if jQuery is available
       if (typeof $ === "undefined") {
-        
         this.isInitializingSession = false;
         this.sessionInitialized = false;
         this.createButton();
@@ -1065,18 +970,13 @@
         contentType: "application/json",
         dataType: "json",
         success: (data) => {
-          
-
           if (data.session && data.session.id) {
             this.session = data.session;
             this.sessionId = data.session.id;
 
             try {
               localStorage.setItem("voicero_session_id", data.session.id);
-              
-            } catch (e) {
-              
-            }
+            } catch (e) {}
           }
 
           this.sessionInitialized = true;
@@ -1084,7 +984,6 @@
           this.createButton();
         },
         error: (xhr, status, error) => {
-          
           this.isInitializingSession = false;
           this.sessionInitialized = false;
           this.createButton();
@@ -1109,8 +1008,6 @@
 
     // Ensure the main button is always visible
     ensureMainButtonVisible: function () {
-      
-
       // Make sure the container is visible
       const container = document.getElementById("voicero-app-container");
       if (container) {
@@ -1178,25 +1075,19 @@
 
     // Update window state via API
     updateWindowState: function (windowState) {
-      
-
       // Check if session initialization is in progress
       if (this.isInitializingSession) {
-        
         this.pendingWindowStateUpdates.push(windowState);
         return;
       }
 
       // Check if we have a session ID
       if (!this.sessionId) {
-        
-
         // Add to pending updates queue
         this.pendingWindowStateUpdates.push(windowState);
 
         // If session is not initialized yet, trigger initialization
         if (!this.sessionInitialized && !this.isInitializingSession) {
-          
           this.initializeSession();
         }
 
@@ -1213,8 +1104,6 @@
           if (window.VoiceroVoice) {
             window.VoiceroVoice.session = this.session;
           }
-
-          
         }
 
         return;
@@ -1233,8 +1122,6 @@
         if (window.VoiceroVoice) {
           window.VoiceroVoice.session = this.session;
         }
-
-        
       }
 
       // Store the values we need for the API call to avoid timing issues
@@ -1249,22 +1136,17 @@
           typeof sessionIdForApi !== "string" ||
           sessionIdForApi.trim() === ""
         ) {
-          
           return;
         }
 
         // Make API call to persist the changes
         const proxyUrl = "/wp-json/voicero/v1/window_state";
 
-        
-
         // Format the request body to match what the Next.js API expects
         const requestBody = {
           sessionId: sessionIdForApi,
           windowState: windowStateForApi,
         };
-
-        
 
         fetch(proxyUrl, {
           method: "POST",
@@ -1281,8 +1163,6 @@
             return response.json();
           })
           .then((data) => {
-            
-
             // Update our local session data with the full server response
             if (data.session) {
               // Need to update the global VoiceroCore session
@@ -1300,9 +1180,7 @@
               }
             }
           })
-          .catch((error) => {
-            
-          });
+          .catch((error) => {});
       }, 0);
     },
 
@@ -1373,7 +1251,6 @@
           pulseStyle.id = "voicero-pulse-style";
           document.head.appendChild(pulseStyle);
         } catch (e) {
-          
           // Fallback to default variants
           lighterVariant = "#9370db";
           hoverVariant = "#7a5abf";
@@ -1389,19 +1266,14 @@
         "--voicero-theme-color-hover",
         hoverVariant
       );
-
-      
     },
 
     // BULLETPROOF FAILSAFE to ensure button always exists and is visible
     setupButtonFailsafe: function () {
       // Only set up failsafe if website is active
       if (!this.isWebsiteActive) {
-        
         return;
       }
-
-      
 
       // Set multiple timers at different intervals to guarantee button creation
       setTimeout(() => this.createFailsafeButton(), 1000);
@@ -1412,7 +1284,6 @@
       window.addEventListener("load", () => {
         // Check if site is active before creating button
         if (this.isWebsiteActive) {
-          
           setTimeout(() => this.createFailsafeButton(), 500);
         }
       });
@@ -1420,7 +1291,6 @@
       // Add visibility change listener to ensure button when tab becomes visible
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && this.isWebsiteActive) {
-          
           setTimeout(() => this.createFailsafeButton(), 300);
         }
       });
@@ -1430,7 +1300,6 @@
     createFailsafeButton: function () {
       // CRITICAL: Only create button if website is active
       if (!this.isWebsiteActive) {
-        
         // Actually hide the button if it exists and site is inactive
         this.hideMainButton();
         return;
@@ -1438,17 +1307,13 @@
 
       // Check if button already exists
       if (document.getElementById("chat-website-button")) {
-        
         this.ensureMainButtonVisible();
         return;
       }
 
-      
-
       // Create app container if it doesn't exist
       let container = document.getElementById("voicero-app-container");
       if (!container) {
-        
         document.body.insertAdjacentHTML(
           "beforeend",
           `<div id="voicero-app-container" style="display:block!important;visibility:visible!important;opacity:1!important;"></div>`
@@ -1463,7 +1328,6 @@
       // Check if button container exists, create if not
       let buttonContainer = document.getElementById("voice-toggle-container");
       if (!buttonContainer) {
-        
         container.insertAdjacentHTML(
           "beforeend",
           `<div id="voice-toggle-container" style="position:fixed!important;bottom:20px!important;right:20px!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important;"></div>`
@@ -1479,7 +1343,7 @@
       const chatButton = document.getElementById("chat-website-button");
       if (!chatButton && buttonContainer) {
         const themeColor = this.websiteColor || "#882be6";
-        
+
         buttonContainer.insertAdjacentHTML(
           "beforeend",
           `<button id="chat-website-button" class="visible" style="background-color:${themeColor};display:flex!important;visibility:visible!important;opacity:1!important;width:50px!important;height:50px!important;border-radius:50%!important;justify-content:center!important;align-items:center!important;color:white!important;box-shadow:0 4px 15px rgba(0,0,0,0.2)!important;border:none!important;cursor:pointer!important;transition:all 0.2s ease!important;padding:0!important;margin:0!important;position:relative!important;z-index:2147483647!important;">
@@ -1507,8 +1371,6 @@
 
     // Attach bulletproof click handler to button
     attachButtonClickHandler: function () {
-      
-
       const mainButton = document.getElementById("chat-website-button");
       if (!mainButton) return;
 
@@ -1523,12 +1385,9 @@
         e.preventDefault();
         e.stopPropagation();
 
-        
-
         // Create chooser if it doesn't exist
         let chooser = document.getElementById("interaction-chooser");
         if (!chooser) {
-          
           const themeColor = this.websiteColor || "#882be6";
           const buttonContainer = document.getElementById(
             "voice-toggle-container"
@@ -1623,7 +1482,6 @@
             const voiceButton = document.getElementById("voice-chooser-button");
             if (voiceButton) {
               voiceButton.addEventListener("click", () => {
-                
                 if (chooser) {
                   chooser.style.display = "none";
                 }
@@ -1658,7 +1516,6 @@
             const textButton = document.getElementById("text-chooser-button");
             if (textButton) {
               textButton.addEventListener("click", () => {
-                
                 if (chooser) {
                   chooser.style.display = "none";
                 }
@@ -1710,8 +1567,6 @@
             chooser.style.opacity = "1";
           }
         } else {
-          
-
           // Last resort - create direct interface
           const voiceInterface = document.getElementById(
             "voice-chat-interface"
@@ -1742,8 +1597,6 @@
 
     // Force remove all buttons from the DOM
     removeAllButtons: function () {
-      
-
       // Try to remove the toggle container completely
       const toggleContainer = document.getElementById("voice-toggle-container");
       if (toggleContainer && toggleContainer.parentNode) {
