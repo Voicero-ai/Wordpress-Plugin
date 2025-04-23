@@ -1334,7 +1334,7 @@ const VoiceroVoice = {
                 this.addTypingIndicator();
 
                 // Now send the transcription to the Shopify chat endpoint
-                const chatResponse = await fetch("/wp-json/voicero/v1/chat", {
+                const chatResponse = await fetch("/wp-json/voicero/v1/wordpress/chat", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",

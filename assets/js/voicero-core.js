@@ -5,7 +5,7 @@
 // Ensure compatibility with WordPress jQuery
 (function ($, window, document) {
   const VoiceroCore = {
-    apiBaseUrls: ["http://localhost:3000"],
+    apiBaseUrls: ["https://www.voicero.ai"],
     apiBaseUrl: null, // Store the working API URL
     apiConnected: false, // Track connection status
     session: null, // Store the current session
@@ -36,7 +36,7 @@
       this.apiConnected = false;
 
       // Check if config is available
-      if (typeof aiWebsiteConfig !== "undefined") {
+      if (typeof voiceroConfig !== "undefined") {
       } else {
       }
 

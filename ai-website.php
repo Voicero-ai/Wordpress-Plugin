@@ -6,12 +6,18 @@
  * Author: Voicero.AI
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: voiceroai
  */
 
 
 if (!defined('ABSPATH')) {
     exit; // Prevent direct access
 }
+
+// Load text domain for translations
+add_action('plugins_loaded', function() {
+    load_plugin_textdomain('voiceroai', false, dirname(plugin_basename(__FILE__)) . '/languages');
+});
 
 // Register activation hook to flush rewrite rules
 register_activation_hook(__FILE__, 'voicero_activate_plugin');
@@ -27,8 +33,7 @@ function voicero_activate_plugin() {
 }
 
 // Define the API base URL
-// define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
-define('AI_WEBSITE_API_URL', 'http://localhost:3000/api');
+define('VOICERO_API_URL', 'https://www.voicero.ai/api');
 
 // Define a debug function to log messages to the error log
 function voicero_debug_log($message, $data = null) {
@@ -51,7 +56,7 @@ add_action('wp_ajax_voicero_flush_rules', 'voicero_flush_rules');
 function voicero_flush_rules() {
     // Verify user has admin capabilities
     if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied']);
+        wp_send_json_error(['message' => esc_html__('Permission denied', 'voiceroai')]);
         return;
     }
     
@@ -61,7 +66,7 @@ function voicero_flush_rules() {
     // Reinitialize REST API
     do_action('rest_api_init');
     
-    wp_send_json_success(['message' => 'Rewrite rules flushed successfully']);
+    wp_send_json_success(['message' => esc_html__('Rewrite rules flushed successfully', 'voiceroai')]);
 }
 
 function voicero_debug_info() {
@@ -70,7 +75,7 @@ function voicero_debug_info() {
         'php_version' => phpversion(),
         'theme' => wp_get_theme()->get('Name'),
         'plugins' => array(),
-        'access_key' => !empty(get_option('ai_website_access_key', '')),
+        'access_key' => !empty(voicero_get_access_key()),
         'script_handles' => array(),
         'hooks' => array(
             'wp_body_open' => has_action('wp_body_open'),
@@ -101,41 +106,41 @@ function voicero_debug_info() {
 /* ------------------------------------------------------------------------
    1. ADMIN PAGE TO DISPLAY CONNECTION INTERFACE
 ------------------------------------------------------------------------ */
-add_action('admin_menu', 'ai_website_add_admin_page');
-function ai_website_add_admin_page() {
+add_action('admin_menu', 'voicero_admin_page');
+function voicero_admin_page() {
     add_menu_page(
-        'Voicero.AI',         // Page <title>
-        'Voicero.AI',         // Menu label
-        'manage_options',     // Capability required
-        'ai-website-admin',   // Menu slug (unique ID)
-        'ai_website_render_admin_page', // Callback that renders the page
-        'dashicons-analytics',// Icon (dashicons)
-        100                   // Position in the menu
+        esc_html__('Voicero AI', 'voiceroai'),          // Page title
+        esc_html__('Voicero AI', 'voiceroai'),          // Menu title
+        'manage_options',                              // Capability required
+        'voicero-ai-admin',                            // Menu slug (unique ID)
+        'voicero_render_admin_page',                   // Callback function for the settings page
+        'dashicons-microphone',                        // Menu icon
+        30                                             // Menu position
     );
 }
 
 // Add AJAX handlers for the admin page
-add_action('wp_ajax_ai_website_check_connection', 'ai_website_check_connection');
-add_action('wp_ajax_ai_website_sync_content', 'ai_website_sync_content');
-add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
-add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
-add_action('wp_ajax_ai_website_clear_connection', 'ai_website_clear_connection');
+add_action('wp_ajax_voicero_check_connection', 'voicero_check_connection');
+add_action('wp_ajax_voicero_sync_content', 'voicero_sync_content');
+add_action('wp_ajax_voicero_vectorize_content', 'voicero_vectorize_content');
+add_action('wp_ajax_voicero_setup_assistant', 'voicero_setup_assistant');
+add_action('wp_ajax_voicero_clear_connection', 'voicero_clear_connection');
 
 // Add new AJAX handlers for training steps
-add_action('wp_ajax_ai_website_train_page', 'ai_website_train_page');
-add_action('wp_ajax_ai_website_train_post', 'ai_website_train_post');
-add_action('wp_ajax_ai_website_train_product', 'ai_website_train_product');
-add_action('wp_ajax_ai_website_train_general', 'ai_website_train_general');
+add_action('wp_ajax_voicero_train_page', 'voicero_train_page');
+add_action('wp_ajax_voicero_train_post', 'voicero_train_post');
+add_action('wp_ajax_voicero_train_product', 'voicero_train_product');
+add_action('wp_ajax_voicero_train_general', 'voicero_train_general');
 
-function ai_website_check_connection() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_check_connection() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
     
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
-    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -148,7 +153,7 @@ function ai_website_check_connection() {
     if (is_wp_error($response)) {
         // Remove error log
         return new WP_REST_Response([
-            'message' => 'Connection failed: ' . $response->get_error_message()
+            'message' => esc_html__('Connection failed: ', 'voiceroai') . esc_html($response->get_error_message())
         ], 500);
     }
 
@@ -158,7 +163,7 @@ function ai_website_check_connection() {
     if ($response_code !== 200) {
         // Remove error log
         return new WP_REST_Response([
-            'message' => 'Server returned error: ' . $response_code,
+            'message' => esc_html__('Server returned error: ', 'voiceroai') . esc_html($response_code),
             'body' => $body
         ]);
     }
@@ -166,7 +171,7 @@ function ai_website_check_connection() {
     $data = json_decode($body, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
         wp_send_json_error([
-            'message' => 'Invalid response from server',
+            'message' => esc_html__('Invalid response from server', 'voiceroai'),
             'code' => 'invalid_json'
         ]);
     }
@@ -174,19 +179,19 @@ function ai_website_check_connection() {
     wp_send_json_success($data);
 }
 
-function ai_website_sync_content() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_sync_content() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
+
+    $data = voicero_collect_wordpress_data();
     
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
     try {
         // 1. Sync the content
-        $data = collect_wordpress_data();
-
-        $sync_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/sync', [
+        $sync_response = wp_remote_post(VOICERO_API_URL . '/wordpress/sync', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $access_key,
                 'Content-Type' => 'application/json',
@@ -199,7 +204,7 @@ function ai_website_sync_content() {
 
         if (is_wp_error($sync_response)) {
             wp_send_json_error([
-                'message' => 'Sync failed: ' . $sync_response->get_error_message(),
+                'message' => esc_html__('Sync failed: ', 'voiceroai') . esc_html($sync_response->get_error_message()),
                 'code' => $sync_response->get_error_code(),
                 'stage' => 'sync',
                 'progress' => 0
@@ -209,7 +214,7 @@ function ai_website_sync_content() {
         $response_code = wp_remote_retrieve_response_code($sync_response);
         if ($response_code !== 200) {
             wp_send_json_error([
-                'message' => 'Sync failed: Server returned ' . $response_code,
+                'message' => esc_html__('Sync failed: Server returned ', 'voiceroai') . esc_html($response_code),
                 'code' => $response_code,
                 'stage' => 'sync',
                 'progress' => 0,
@@ -240,15 +245,15 @@ function ai_website_sync_content() {
 
 
 // Add new endpoint for vectorization
-function ai_website_vectorize_content() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_vectorize_content() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
     
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
-    $vectorize_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/vectorize', [
+    $vectorize_response = wp_remote_post(VOICERO_API_URL . '/wordpress/vectorize', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -260,7 +265,11 @@ function ai_website_vectorize_content() {
 
     if (is_wp_error($vectorize_response)) {
         wp_send_json_error([
-            'message' => 'Vectorization failed: ' . $vectorize_response->get_error_message(),
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Vectorization failed: %s', 'voiceroai'), 
+                esc_html($vectorize_response->get_error_message())
+            ),
             'code' => $vectorize_response->get_error_code(),
             'stage' => 'vectorize',
             'progress' => 17 // Keep progress at previous step
@@ -269,17 +278,26 @@ function ai_website_vectorize_content() {
     
     $response_code = wp_remote_retrieve_response_code($vectorize_response);
     if ($response_code !== 200) {
-         wp_send_json_error([
-            'message' => 'Vectorization failed: Server returned ' . $response_code,
+        $response_body = wp_remote_retrieve_body($vectorize_response);
+        
+        // Sanitize the response body to prevent XSS
+        $sanitized_body = wp_kses_post($response_body);
+         
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: HTTP status code */
+                esc_html__('Vectorization failed: Server returned %s', 'voiceroai'),
+                esc_html($response_code)
+            ),
             'code' => $response_code,
             'stage' => 'vectorize',
             'progress' => 17,
-            'body' => wp_remote_retrieve_body($vectorize_response)
+            'body' => $sanitized_body
         ]);
     }
 
     wp_send_json_success([
-        'message' => 'Vectorization completed, setting up assistant...',
+        'message' => esc_html__('Vectorization completed, setting up assistant...', 'voiceroai'),
         'stage' => 'vectorize',
         'progress' => 34, // Updated progress
         'complete' => false,
@@ -288,15 +306,15 @@ function ai_website_vectorize_content() {
 }
 
 // Add new endpoint for assistant setup
-function ai_website_setup_assistant() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_setup_assistant() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
     
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
-    $assistant_response = wp_remote_post(AI_WEBSITE_API_URL . '/wordpress/assistant', [
+    $assistant_response = wp_remote_post(VOICERO_API_URL . '/wordpress/assistant', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -308,7 +326,7 @@ function ai_website_setup_assistant() {
 
     if (is_wp_error($assistant_response)) {
         wp_send_json_error([
-            'message' => 'Assistant setup failed: ' . $assistant_response->get_error_message(),
+            'message' => esc_html__('Assistant setup failed: ', 'voiceroai') . esc_html($assistant_response->get_error_message()),
             'code' => $assistant_response->get_error_code(),
             'stage' => 'assistant',
             'progress' => 34 // Keep progress at previous step
@@ -348,29 +366,31 @@ function ai_website_setup_assistant() {
 }
 
 // Training Endpoints (Page, Post, Product, General)
-function ai_website_train_page() {
-    _handle_training_request('page', 'pageId');
-}
-function ai_website_train_post() {
-    _handle_training_request('post', 'postId');
-}
-function ai_website_train_product() {
-    _handle_training_request('product', 'productId');
-}
-function ai_website_train_general() {
-    _handle_training_request('general');
+function voicero_train_page() {
+    voicero_handle_training_request('page', 'pageId');
 }
 
-// Helper for training requests
-function _handle_training_request($type, $id_key = null) {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_train_post() {
+    voicero_handle_training_request('post', 'postId');
+}
 
-    $access_key = get_option('ai_website_access_key', '');
+function voicero_train_product() {
+    voicero_handle_training_request('product', 'productId');
+}
+
+function voicero_train_general() {
+    voicero_handle_training_request('general');
+}
+
+function voicero_handle_training_request($type, $id_key = null) {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
+
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
-    $api_url = AI_WEBSITE_API_URL . '/wordpress/train/' . $type;
+    $api_url = VOICERO_API_URL . '/wordpress/train/' . $type;
     $request_body = [];
     
     // Add required parameters to the body based on type
@@ -379,7 +399,7 @@ function _handle_training_request($type, $id_key = null) {
         if (isset($_POST['websiteId'])) {
             $request_body['websiteId'] = sanitize_text_field(wp_unslash($_POST['websiteId']));
         } else {
-            wp_send_json_error(['message' => "Missing required parameter: websiteId"]);
+            wp_send_json_error(['message' => esc_html__('Missing required parameter: websiteId', 'voiceroai')]);
             return;
         }
     } else {
@@ -389,7 +409,7 @@ function _handle_training_request($type, $id_key = null) {
             // We don't need to send the page/post/product ID to the API
             // $request_body[$id_key] = sanitize_text_field($_POST[$id_key]);
         } elseif ($id_key) {
-            wp_send_json_error(['message' => "Missing required parameter: $id_key"]);
+            wp_send_json_error(['message' => esc_html__('Missing required parameter: ', 'voiceroai') . esc_html($id_key)]);
             return;
         }
         
@@ -397,7 +417,7 @@ function _handle_training_request($type, $id_key = null) {
         if (isset($_POST['wpId'])) {
             $request_body['wpId'] = sanitize_text_field(wp_unslash($_POST['wpId']));
         } else {
-            wp_send_json_error(['message' => "Missing required parameter: wpId"]);
+            wp_send_json_error(['message' => esc_html__('Missing required parameter: wpId', 'voiceroai')]);
             return;
         }
         
@@ -405,7 +425,7 @@ function _handle_training_request($type, $id_key = null) {
         if (isset($_POST['websiteId'])) {
             $request_body['websiteId'] = sanitize_text_field(wp_unslash($_POST['websiteId']));
         } else {
-            wp_send_json_error(['message' => "Missing required parameter: websiteId"]);
+            wp_send_json_error(['message' => esc_html__('Missing required parameter: websiteId', 'voiceroai')]);
             return;
         }
     }
@@ -453,7 +473,11 @@ function _handle_training_request($type, $id_key = null) {
     
     // Return success immediately with tracking info
     wp_send_json_success([
-        'message' => ucfirst($type) . ' training initiated.',
+        'message' => sprintf(
+            /* translators: %s: content type being trained (Page, Post, Product, etc.) */
+            esc_html__('%s training initiated.', 'voiceroai'),
+            ucfirst($type)
+        ),
         'type' => $type,
         'request_id' => $request_id,
         'status_tracking' => true
@@ -478,12 +502,12 @@ function voicero_check_training_status($type, $request_id) {
 add_action('voicero_check_training_status', 'voicero_check_training_status', 10, 2);
 
 // Updated function for batch training
-function ai_website_batch_train() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_batch_train() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
 
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        wp_send_json_error(['message' => 'No access key found']);
+        wp_send_json_error(['message' => esc_html__('No access key found', 'voiceroai')]);
     }
 
     // Initialize training status
@@ -521,11 +545,11 @@ function ai_website_batch_train() {
     $website_id = isset($_POST['websiteId']) ? sanitize_text_field(wp_unslash($_POST['websiteId'])) : '';
     
     if (empty($website_id)) {
-        wp_send_json_error(['message' => 'Missing required parameter: websiteId']);
+        wp_send_json_error(['message' => esc_html__('Missing required parameter: websiteId', 'voiceroai')]);
     }
     
     if (empty($batch_data) || !is_array($batch_data)) {
-        wp_send_json_error(['message' => 'Invalid or missing batch data']);
+        wp_send_json_error(['message' => esc_html__('Invalid or missing batch data', 'voiceroai')]);
     }
     
     // Set total items count in the training status
@@ -551,7 +575,7 @@ function ai_website_batch_train() {
         $type = $item['type']; // 'page', 'post', 'product', or 'general'
         
         // Ensure proper API URL format
-        $api_url = AI_WEBSITE_API_URL;
+        $api_url = VOICERO_API_URL;
         if (substr($api_url, -1) !== '/') {
             $api_url .= '/';
         }
@@ -593,7 +617,7 @@ function ai_website_batch_train() {
     }
     
     wp_send_json_success([
-        'message' => 'Batch training initiated.',
+        'message' => esc_html__('Batch training initiated.', 'voiceroai'),
         'request_id' => $batch_id,
         'total_items' => $total_items,
         'status_tracking' => true
@@ -642,14 +666,14 @@ function voicero_check_batch_status($batch_id, $check_num) {
 add_action('voicero_check_batch_status', 'voicero_check_batch_status', 10, 2);
 
 // Register the new AJAX action
-add_action('wp_ajax_ai_website_batch_train', 'ai_website_batch_train');
+add_action('wp_ajax_voicero_batch_train', 'voicero_batch_train');
 
 // Register the new AJAX actions
-add_action('wp_ajax_ai_website_vectorize_content', 'ai_website_vectorize_content');
-add_action('wp_ajax_ai_website_setup_assistant', 'ai_website_setup_assistant');
+add_action('wp_ajax_voicero_vectorize_content', 'voicero_vectorize_content');
+add_action('wp_ajax_voicero_setup_assistant', 'voicero_setup_assistant');
 
 // Helper function to collect WordPress data
-function collect_wordpress_data() {
+function voicero_collect_wordpress_data() {
     $data = [
         'posts' => [],
         'pages' => [],
@@ -914,18 +938,35 @@ function collect_wordpress_data() {
     return $data;
 }
 
-function ai_website_render_admin_page() {
-    // Check for access key in URL
-    $url_access_key = isset($_GET['access_key']) ? sanitize_text_field(wp_unslash($_GET['access_key'])) : '';
+function voicero_render_admin_page() {
+    // 1) Handle key coming back via GET redirect
+    if ( ! empty( $_GET['access_key'] ) ) {
+    if ( current_user_can('manage_options') ) {
+      $key = sanitize_text_field( wp_unslash( $_GET['access_key'] ) );
+      update_option( 'voicero_access_key', $key );
+      add_settings_error(
+        'voicero_messages',
+        'key_updated',
+        __( 'Successfully connected to AI service!', 'voiceroai' ),
+        'updated'
+      );
+        } else {
+            add_settings_error(
+                'voicero_messages',
+                'invalid_nonce',
+                __('Invalid connection link — please try again.', 'voiceroai'),
+                'error'
+            );
+        }
+    }
     
     // Handle form submission
-    if (isset($_POST['access_key']) || !empty($url_access_key)) {
-        // Don't check nonce if we have a URL access key
-        if (!empty($url_access_key) || check_admin_referer('save_access_key_nonce')) {
-            $access_key = !empty($_POST['access_key']) ? sanitize_text_field(wp_unslash($_POST['access_key'])) : $url_access_key;
+    if (isset($_POST['access_key'])) {
+        if (check_admin_referer('voicero_save_access_key_nonce')) {
+            $access_key = sanitize_text_field(wp_unslash($_POST['access_key']));
             
             // Verify the key is valid by making a test request
-            $test_response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+            $test_response = wp_remote_get(VOICERO_API_URL . '/connect', [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $access_key,
                     'Content-Type' => 'application/json'
@@ -936,9 +977,9 @@ function ai_website_render_admin_page() {
 
             if (is_wp_error($test_response)) {
                 add_settings_error(
-                    'ai_website_messages',
+                    'voicero_messages',
                     'connection_error',
-                    'Could not connect to AI service. Please check your internet connection and try again.',
+                    esc_html__('Could not connect to AI service. Please check your internet connection and try again.', 'voiceroai'),
                     'error'
                 );
             } else {
@@ -947,17 +988,17 @@ function ai_website_render_admin_page() {
                 
                 if ($response_code !== 200) {
                     add_settings_error(
-                        'ai_website_messages',
+                        'voicero_messages',
                         'connection_error',
-                        'Could not validate access key. Please try connecting again.',
+                        esc_html__('Could not validate access key. Please try connecting again.', 'voiceroai'),
                         'error'
                     );
                 } else {
-                    update_option('ai_website_access_key', $access_key);
+                    update_option('voicero_access_key', $access_key);
                     add_settings_error(
-                        'ai_website_messages',
+                        'voicero_messages',
                         'key_updated',
-                        'Successfully connected to AI service!',
+                        esc_html__('Successfully connected to AI service!', 'voiceroai'),
                         'updated'
                     );
                 }
@@ -966,46 +1007,49 @@ function ai_website_render_admin_page() {
     }
 
     // Handle manual sync
-    if (isset($_POST['sync_content']) && check_admin_referer('sync_content_nonce')) {
+    if (isset($_POST['sync_content']) && check_admin_referer('voicero_sync_content_nonce')) {
         // We'll handle the sync status message in the AJAX response
         add_settings_error(
-            'ai_website_messages',
+            'voicero_messages',
             'sync_started',
-            'Content sync initiated...',
+            esc_html__('Content sync initiated...', 'voiceroai'),
             'info'
         );
     }
 
     // Get saved values
-    $saved_key = get_option('ai_website_access_key', '');
+    $saved_key = voicero_get_access_key();
 
     // Get the current site URL
     $site_url = get_site_url();
-    $admin_url = admin_url('admin.php?page=ai-website-admin');
+    $admin_url = admin_url('admin.php?page=voicero-ai-admin');
     
     // Encode URLs for safe transport
     $encoded_site_url = urlencode($site_url);
     $encoded_admin_url = urlencode($admin_url);
     
-    // Generate the connection URL
-    $connect_url = "http://localhost:3000/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}";
+    // Generate the connection URL with nonce
+    $connect_url = wp_nonce_url(
+        "https://www.voicero.ai/app/connect?site_url={$encoded_site_url}&redirect_url={$encoded_admin_url}",
+        'voicero_connect'
+    );
 
     // Output the admin interface
     ?>
     <div class="wrap">
-        <h1>AI Website Connection</h1>
+        <h1><?php esc_html_e('AI Website Connection', 'voiceroai'); ?></h1>
         
-        <?php settings_errors('ai_website_messages'); ?>
+        <?php settings_errors('voicero_messages'); ?>
 
         <div class="card" style="max-width: 800px; margin-top: 20px;">
-            <h2>Connect Your Website</h2>
-            <p>Enter your access key to connect to the AI Website service.</p>
+            <h2><?php esc_html_e('Connect Your Website', 'voiceroai'); ?></h2>
+            <p><?php esc_html_e('Enter your access key to connect to the AI Website service.', 'voiceroai'); ?></p>
 
             <form method="post" action="">
-                <?php if (empty($url_access_key)) wp_nonce_field('save_access_key_nonce'); ?>
+                <?php wp_nonce_field('voicero_save_access_key_nonce'); ?>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><label for="access_key">Access Key</label></th>
+                        <th scope="row"><label for="access_key"><?php esc_html_e('Access Key', 'voiceroai'); ?></label></th>
                         <td>
                             <div style="display: flex; gap: 10px; align-items: flex-start;">
                                 <input type="text" 
@@ -1013,16 +1057,16 @@ function ai_website_render_admin_page() {
                                        name="access_key" 
                                        value="<?php echo esc_attr($saved_key); ?>" 
                                        class="regular-text"
-                                       placeholder="Enter your 64-character access key"
+                                       placeholder="<?php esc_attr_e('Enter your 64-character access key', 'voiceroai'); ?>"
                                        pattern=".{64,64}"
-                                       title="Access key should be exactly 64 characters long">
+                                       title="<?php esc_attr_e('Access key should be exactly 64 characters long', 'voiceroai'); ?>">
                                 <?php if ($saved_key): ?>
                                     <button type="button" id="clear-connection" class="button button-secondary">
-                                        Clear Connection
+                                        <?php esc_html_e('Clear Connection', 'voiceroai'); ?>
                                     </button>
                                 <?php endif; ?>
                             </div>
-                            <p class="description">Your access key should be exactly 64 characters long.</p>
+                            <p class="description"><?php esc_html_e('Your access key should be exactly 64 characters long.', 'voiceroai'); ?></p>
                         </td>
                     </tr>
                 </table>
@@ -1031,16 +1075,16 @@ function ai_website_render_admin_page() {
                            name="submit" 
                            id="submit" 
                            class="button button-primary" 
-                           value="Save & Connect">
+                           value="<?php esc_attr_e('Save & Connect', 'voiceroai'); ?>">
                 </p>
             </form>
 
             <?php if (!$saved_key): ?>
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                    <h3>New to Voicero?</h3>
-                    <p>Connect your website in one click and create your account.</p>
+                    <h3><?php esc_html_e('New to Voicero?', 'voiceroai'); ?></h3>
+                    <p><?php esc_html_e('Connect your website in one click and create your account.', 'voiceroai'); ?></p>
                     <a href="<?php echo esc_url($connect_url); ?>" class="button button-secondary">
-                        Connect with Voicero
+                        <?php esc_html_e('Connect with Voicero', 'voiceroai'); ?>
                     </a>
                 </div>
             <?php endif; ?>
@@ -1050,610 +1094,26 @@ function ai_website_render_admin_page() {
         <?php if ($saved_key): ?>
             <!-- Website info card -->
             <div class="card" style="max-width: 800px; margin-top: 20px;">
-                <h2>Website Information</h2>
+                <h2><?php esc_html_e('Website Information', 'voiceroai'); ?></h2>
                 <div id="website-info-container">
                     <div class="spinner is-active" style="float: none;"></div>
-                    <p>Loading website information...</p>
+                    <p><?php esc_html_e('Loading website information...', 'voiceroai'); ?></p>
                 </div>
                 
                 <div style="margin-top: 20px;">
                     <form method="post" action="" id="sync-form">
-                        <?php wp_nonce_field('sync_content_nonce'); ?>
+                        <?php wp_nonce_field('voicero_sync_content_nonce'); ?>
                         <input type="submit" 
                                name="sync_content" 
                                id="sync-button" 
                                class="button" 
-                               value="Sync Content Now">
+                               value="<?php esc_attr_e('Sync Content Now', 'voiceroai'); ?>">
                         <span id="sync-status" style="margin-left: 10px;"></span>
                     </form>
                 </div>
             </div>
         <?php endif; ?>
-    </div>
-
-    <style>
-    .modal {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.6);
-        z-index: 100000;
-    }
-    .modal-content {
-        position: relative;
-        background: #fff;
-        width: 90%;
-        max-width: 600px;
-        margin: 50px auto;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    }
-    .modal-close {
-        position: absolute;
-        right: 10px;
-        top: 10px;
-        font-size: 24px;
-        cursor: pointer;
-        color: #666;
-    }
-    .modal-close:hover {
-        color: #000;
-    }
-    </style>
-
-    <script>
-    jQuery(document).ready(function($) {
-        // Add toggle functionality
-        $('.connection-details-toggle button').on('click', function() {
-            const $toggle = $(this).parent();
-            const $details = $('.connection-details');
-            const isVisible = $details.is(':visible');
-            
-            $details.slideToggle();
-            $toggle.toggleClass('active');
-            $(this).html(`
-                <span class="dashicons dashicons-arrow-${isVisible ? 'down' : 'up'}-alt2"></span>
-                ${isVisible ? 'Show' : 'Hide'} Connection Details
-            `);
-        });
-
-        // Check if WordPress shows expired message - only once
-        const bodyText = $('body').text();
-        if (bodyText.includes('link you followed has expired') && window.location.search.includes('access_key')) {
-            // Only refresh if we came from an access_key URL
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete('access_key');
-            window.location.replace(newUrl.toString()); // Use replace instead of href
-            return;
-        }
-
-        // Add a flag to localStorage when clearing connection
-        $('#clear-connection').on('click', function() {
-            if (confirm('Are you sure you want to clear the connection?')) {
-                localStorage.setItem('connection_cleared', 'true');
-                
-                // Make AJAX call to clear the connection
-                $.post(ajaxurl, {
-                    action: 'ai_website_clear_connection',
-                    nonce: nonce
-                })
-                .then(function() {
-                    // Clear the form and reload
-                    $('#access_key').val('');
-                    window.location.reload();
-                });
-            }
-        });
-
-        // Check for access key in URL - but only if we haven't just cleared
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessKey = urlParams.get('access_key');
-        const wasCleared = localStorage.getItem('connection_cleared') === 'true';
-        
-        if (accessKey && !wasCleared) {
-            // Just fill the form
-            $('#access_key').val(accessKey);
-            
-            // Clean the URL
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete('access_key');
-            window.history.replaceState({}, '', newUrl.toString());
-        }
-
-        // Clear the flag after handling
-        localStorage.removeItem('connection_cleared');
-
-        const ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
-        const nonce = '<?php echo esc_js(wp_create_nonce('ai_website_ajax_nonce')); ?>';
-        const savedAccessKey = '<?php echo esc_js($saved_key); ?>'; // Get saved key for JS
-
-        // Handle sync form submission
-        $('#sync-form').on('submit', function(e) {
-            e.preventDefault();
-            const syncButton = $('#sync-button');
-            const syncStatusContainer = $('#sync-status'); 
-
-            // Reset initial state
-            syncButton.prop('disabled', true);
-
-            // Create progress bar and status text elements
-            syncStatusContainer.html(`
-                <div id="sync-progress-bar-container" style="width: 100%; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 5px; height: 24px; position: relative; margin-top: 15px;">
-                    <div id="sync-progress-bar" style="width: 0%; height: 100%; background-color: #0073aa; transition: width 0.3s ease;"></div>
-                    <div id="sync-progress-percentage" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; line-height: 24px; text-align: center; color: #fff; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,0.2);">
-                        0%
-                    </div>
-                </div>
-                <div id="sync-progress-text" style="font-style: italic; text-align: center;">Initiating sync...</div>
-                <div id="sync-warning" style="margin-top: 10px; padding: 8px; background-color: #f0f6fc; border-left: 4px solid #2271b1; color: #1d2327; font-size: 13px; text-align: left;">
-                    <p><strong>⚠️ Important:</strong> Please do not close this page during training. You can leave the page and do other things while the training is happening. This process could take up to 20 minutes to complete depending on the size of your website.</p>
-                </div>
-            `);
-
-            const progressBar = $('#sync-progress-bar');
-            const progressPercentage = $('#sync-progress-percentage');
-            const progressText = $('#sync-progress-text');
-
-            function updateProgress(percentage, text, isError = false) {
-                const p = Math.min(100, Math.max(0, Math.round(percentage))); // Clamp between 0 and 100
-                progressBar.css('width', p + '%');
-                progressPercentage.text(p + '%');
-                progressText.text(text);
-                
-                if (isError) {
-                    progressBar.css('background-color', '#d63638'); // Red for error
-                    progressPercentage.css('color', '#fff'); 
-                } else {
-                     progressBar.css('background-color', '#0073aa'); // Blue for progress/success
-                     progressPercentage.css('color', p < 40 ? '#333' : '#fff'); 
-                }
-            }
-
-            updateProgress(5, '⏳ Syncing content...'); 
-
-            try {
-                let assistantData = null; // To store assistant response
-                let websiteId = null; // Declare websiteId at a higher scope level
-
-                // Step 1: Initial Sync (to 17%)
-                $.post(ajaxurl, { action: 'ai_website_sync_content', nonce: nonce })
-                .then(function(response) {
-                    if (!response.success) throw new Error(response.data.message || "Sync failed");
-                    updateProgress(response.data.progress || 17, '⏳ Vectorizing content...');
-                    // Step 2: Vectorization (to 34%)
-                    return $.post(ajaxurl, { action: 'ai_website_vectorize_content', nonce: nonce });
-                })
-                .then(function(response) {
-                    if (!response.success) throw new Error(response.data.message || "Vectorization failed");
-                    updateProgress(response.data.progress || 34, '⏳ Setting up assistant...');
-                    // Step 3: Assistant Setup (to 50%)
-                    return $.post(ajaxurl, { action: 'ai_website_setup_assistant', nonce: nonce });
-                })
-                .then(function(response) {
-                    if (!response.success) throw new Error(response.data.message || "Assistant setup failed");
-                    updateProgress(response.data.progress || 50, '⏳ Preparing content training...');
-                    assistantData = response.data.data; // Store the content IDs
-                    
-                    // Store websiteId at the higher scope
-                    if (assistantData && assistantData.websiteId) {
-                        websiteId = assistantData.websiteId;
-                    } else {
-                        // Try to use the first content item's websiteId as fallback
-                        if (assistantData && assistantData.content && 
-                            assistantData.content.pages && assistantData.content.pages.length > 0) {
-                            websiteId = assistantData.content.pages[0].websiteId;
-                        }
-                        // If still no websiteId, we'll need to handle that error case
-                        if (!websiteId) {
-                            throw new Error("No websiteId available for training");
-                        }
-                    }
-                    
-                    // --- Step 4: All Training (50% to 100%) ---
-                    if (!assistantData || !assistantData.content) {
-                         // Even if no content items, we still need to do general training
-                    }
-                    
-                    // Prepare training data
-                    const pages = assistantData && assistantData.content ? (assistantData.content.pages || []) : [];
-                    const posts = assistantData && assistantData.content ? (assistantData.content.posts || []) : [];
-                    const products = assistantData && assistantData.content ? (assistantData.content.products || []) : [];
-                    
-                    // Calculate total items including general training which we'll do last
-                    const totalItems = pages.length + posts.length + products.length + 1; // +1 for general training
-                    updateProgress(50, `⏳ Preparing to train ${totalItems} items...`);
-
-                    // Build combined array of all items to train
-                    const allItems = [
-                        ...pages.map(item => ({ type: 'page', wpId: item.id })),
-                        ...posts.map(item => ({ type: 'post', wpId: item.id })),
-                        ...products.map(item => ({ type: 'product', wpId: item.id })),
-                        { type: 'general' } // Add general training as the last item
-                    ];
-                    
-                    // Process all items in a single batch request
-                    return $.post(ajaxurl, {
-                        action: 'ai_website_batch_train',
-                        nonce: nonce,
-                        websiteId: websiteId,
-                        batch_data: JSON.stringify(allItems)
-                    });
-                })
-                .then(function(response) {
-                    if (!response.success) throw new Error(response.data.message || "Batch training failed");
-                    // Training requests have been initiated
-                    updateProgress(60, '⏳ Training requests initiated. Monitoring progress...');
-                    
-                    // Show explanation about background processing
-                    $('#sync-warning').html(`
-                        <p><strong>ℹ️ Training In Progress:</strong> All training requests have been initiated and 
-                        are now processing. This can take several minutes to complete depending on the 
-                        size of your website. Progress will be tracked below.</p>
-                        <div id="training-status-container">
-                            <p id="training-status">Status: <span>Processing...</span></p>
-                            <div id="training-progress-container" style="width: 100%; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 10px 0; height: 24px; position: relative;">
-                                <div id="training-progress-bar" style="width: 0%; height: 100%; background-color: #0073aa; transition: width 0.3s ease;"></div>
-                                <div id="training-progress-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; line-height: 24px; text-align: center; color: #fff; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,0.2);">
-                                    0%
-                                </div>
-                            </div>
-                        </div>
-                    `);
-                    
-                    // Poll for status updates
-                    let pollingInterval = setInterval(function() {
-                        $.post(ajaxurl, { 
-                            action: 'voicero_get_training_status', 
-                            nonce: nonce 
-                        })
-                        .done(function(response) {
-                            if (response.success) {
-                                const data = response.data;
-                                
-                                // Calculate progress percentage
-                                let progressPercent = 0;
-                                if (data.total_items > 0) {
-                                    progressPercent = Math.round((data.completed_items / data.total_items) * 100);
-                                }
-                                
-                                // Update progress display
-                                $('#training-progress-bar').css('width', progressPercent + '%');
-                                $('#training-progress-text').text(progressPercent + '%');
-                                
-                                // Show status text
-                                let statusText = 'Processing...';
-                                if (data.status === 'completed') {
-                                    statusText = '<span style="color: green;">Completed ✓</span>';
-                                    clearInterval(pollingInterval); // Stop polling if completed
-                                    updateProgress(100, '✅ Training Completed!');
-                                    
-                                    // Update website info after slight delay
-                                    setTimeout(() => {
-                                        loadWebsiteInfo();
-                                    }, 1500);
-                                } else if (data.status === 'stalled') {
-                                    statusText = '<span style="color: orange;">Stalled - Some items may not have completed</span>';
-                                }
-                                
-                                $('#training-status span').html(statusText);
-                                
-                                // If completed, stop polling
-                                if (!data.in_progress || data.status === 'completed') {
-                                    clearInterval(pollingInterval);
-                                }
-                            }
-                        });
-                    }, 3000); // Check every 3 seconds
-                    
-                    // After 10 minutes, stop polling regardless
-                    setTimeout(function() {
-                        if (pollingInterval) {
-                            clearInterval(pollingInterval);
-                            $('#training-status span').html('<span style="color: grey;">Check back later - status updates stopped</span>');
-                        }
-                    }, 600000); // 10 minutes max
-                })
-                .catch(function(error) {
-                    // General Error handling for the entire chain
-                    const currentProgress = parseFloat(progressBar.css('width')) / progressBar.parent().width() * 100;
-                    updateProgress(currentProgress, `❌ Error: ${error.message}`, true); 
-                })
-                .always(function() {
-                    // Re-enable button regardless of success or failure
-                    syncButton.prop('disabled', false);
-                });
-            } catch (error) {
-                // Catch synchronous errors (should be rare)
-                syncButton.prop('disabled', false);
-                updateProgress(0, `❌ Error: ${error.message}`, true);
-            }
-        });
-
-        function loadWebsiteInfo() {
-            const container = $('#website-info-container');
-            
-            $.get(ajaxurl, {
-                action: 'ai_website_get_info',
-                nonce: nonce
-            })
-            .done(function(response) {
-                if (!response || !response.success) {
-                     let errorMsg = 'Failed to load website info';
-                     if(response && response.data && response.data.message) {
-                         errorMsg = response.data.message;
-                     } else if (response && response.data && response.data.body) {
-                         try {
-                            const body = JSON.parse(response.data.body);
-                            errorMsg = body.message || errorMsg;
-                         } catch(e) {}
-                     }
-                     throw new Error(errorMsg);
-                }
-
-                const website = response.data; // The API returns website data directly under 'data'
-                
-                // Only show first-time modal if we have a valid website connection
-                // AND it has never been synced
-                if (website && website.id && !website.lastSyncedAt) {
-                    // Show the modal
-                    $('#first-time-modal').fadeIn();
-                    
-                    // Handle modal close
-                    $('.modal-close').on('click', function() {
-                        $('#first-time-modal').fadeOut();
-                    });
-                    
-                    // Close modal when clicking outside
-                    $(window).on('click', function(e) {
-                        if ($(e.target).is('#first-time-modal')) {
-                            $('#first-time-modal').fadeOut();
-                        }
-                    });
-
-                    // Handle first sync button click in modal (uses the main sync logic)
-                    $('#first-sync-button').on('click', function() {
-                        const $modalContent = $(this).closest('.notice');
-                         $('#first-time-modal').fadeOut(); // Close modal immediately
-                         $('#sync-button').trigger('click'); // Trigger the main sync button
-                    });
-                }
-
-                // Regular website info display code...
-                const html = `
-                    <table class="widefat">
-                        <tbody>
-                            <tr>
-                                <th>Website Name</th>
-                                <td>
-                                    ${website.name || 'Unnamed Site'}
-                                    
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>URL</th>
-                                <td>${website.url || 'Not set'}</td>
-                            </tr>
-                            <tr>
-                                <th>Plan</th>
-                                <td>${website.plan || 'Free'}</td>
-                            </tr>
-                            ${website.color ? `
-                            <tr>
-                                <th>Color</th>
-                                <td style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${website.color}; border: 1px solid #ddd;"></div>
-                                    <code style="font-size: 13px; padding: 4px 8px; background: #f0f0f1; border-radius: 3px;">${website.color}</code>
-                                </td>
-                            </tr>
-                            ` : ''}
-                            <tr>
-                                <th>Status</th>
-                                <td>
-                                    <span class="button button-small ${website.active ? 'button-primary' : 'button-secondary'}">
-                                        ${website.active ? 'Active' : 'Inactive'}
-                                    </span>
-                                    <button class="button button-small toggle-status-btn" 
-                                            data-website-id="${website.id || ''}" 
-                                            data-access-key="${savedAccessKey}"
-                                            ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
-                                        ${website.active ? 'Deactivate' : 'Activate'}
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Monthly Queries</th>
-                                <td>
-                                    ${website.monthlyQueries || 0} / ${website.queryLimit || 200}
-                                    <div class="progress-bar" style="
-                                        background: #f0f0f1;
-                                        height: 10px;
-                                        border-radius: 5px;
-                                        margin-top: 5px;
-                                        overflow: hidden;
-                                    ">
-                                        <div style="
-                                            width: ${((website.monthlyQueries || 0) / (website.queryLimit || 200)) * 100}%;
-                                            background: #2271b1;
-                                            height: 100%;
-                                            transition: width 0.3s ease;
-                                        "></div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Last Synced</th>
-                                <td>${website.lastSyncedAt ? new Date(website.lastSyncedAt).toLocaleString() : 'Never'}</td>
-                            </tr>
-                           
-                        </tbody>
-                    </table>
-
-                    <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="http://localhost:3000/app/websites/website?id=${website.id || ''}" target="_blank" class="button button-primary">
-                            Open Dashboard
-                        </a>
-                        <button class="button toggle-status-btn" 
-                                data-website-id="${website.id || ''}"
-                                data-access-key="${savedAccessKey}"
-                                ${!website.lastSyncedAt ? 'disabled title="Please sync your website first"' : ''}>
-                            ${website.active ? 'Deactivate Plugin' : 'Activate Plugin'}
-                        </button>
-                        ${!website.lastSyncedAt ? `
-                            <span class="description" style="color: #d63638;">
-                                ⚠️ Please sync your website before activating the plugin
-                            </span>
-                        ` : ''}
-                    </div>
-
-                    <div style="margin-top: 20px;">
-                        <h3>Content Statistics</h3>
-                        <table class="widefat">
-                            <thead>
-                                <tr>
-                                    <th>Content Type</th>
-                                    <th>Count</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Pages</td>
-                                    <td>${website._count?.pages || 0}</td>
-                                </tr>
-                                <tr>
-                                    <td>Posts</td>
-                                    <td>${website._count?.posts || 0}</td>
-                                </tr>
-                                <tr>
-                                    <td>Products</td>
-                                    <td>${website._count?.products || 0}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                container.html(html);
-            })
-            .fail(function(xhr, status, error) {
-                container.html(`
-                    <div class="notice notice-error">
-                        <p>Connection Error: ${error || 'Failed to connect to server'}</p>
-                        <p>Status: ${status}</p>
-                        <p>Please check your internet connection and try again.</p>
-                    </div>
-                `);
-            });
-        }
-
-        // Load website info on page load if we have an access key
-        if (savedAccessKey) {
-            loadWebsiteInfo();
-        }
-
-        // If there was an error on page load, show the connect button prominently
-        if ($('#website-info-container .notice-error').length > 0) {
-            $('.button-secondary').addClass('button-primary').css({
-                'margin-top': '10px',
-                'font-weight': 'bold'
-            });
-        }
-
-        // Update the click handler for toggle status button
-        $(document).on('click', '.toggle-status-btn', function() {
-            const websiteId = $(this).data('website-id');
-            const accessKey = $(this).data('access-key');
-            const $button = $(this);
-            
-            if (!websiteId && !accessKey) {
-                alert('Could not identify website. Please try refreshing the page.');
-                return;
-            }
-            
-            // Disable button during request
-            $button.prop('disabled', true);
-            
-            fetch( AI_WEBSITE_API_URL + '/websites/toggle-status', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    websiteId: websiteId || undefined,
-                    accessKey: accessKey || undefined
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                // Refresh the page to show updated status
-                window.location.reload();
-            })
-            .catch(error => {
-                alert('Failed to toggle website status: ' + error.message + '. Please try again.');
-            })
-            .finally(() => {
-                $button.prop('disabled', false);
-            });
-        });
-
-        // Update where we output the ACCESS_KEY constant
-        document.addEventListener("DOMContentLoaded", async () => {
-            // Add this at the top - before any other code
-            const ACCESS_KEY = '<?php 
-                $key = get_option("ai_website_access_key", "");
-                echo esc_js($key); 
-                // Debug log the key to PHP error log
-                // error_log("Access key being used: " + substr($key, 0, 10) + "..."); // Be careful logging keys
-            ?>';
-            
-            // Expose config globally (or use a more structured approach if needed)
-             window.aiWebsiteConfig = {
-                accessKey: ACCESS_KEY,
-                apiUrl: 'http://localhost:3000/api',
-                ajaxUrl: '<?php echo esc_js(admin_url('admin-ajax.php')); ?>',
-                nonce: '<?php echo esc_js(wp_create_nonce('ai_website_frontend_nonce')); ?>', // Frontend nonce
-                adminNonce: nonce // Admin nonce already defined above
-             };
-        });
-
-        // Add script to detect nav height and position button
-        function updateNavbarPositioning() {
-            // Find the navigation element - checking common WordPress nav classes/IDs
-            const nav = document.querySelector(
-                'header, ' + // Try header first
-                '#masthead, ' + // Common WordPress header ID
-                '.site-header, ' + // Common header class
-                'nav.navbar, ' + // Bootstrap navbar
-                'nav.main-navigation, ' + // Common nav classes
-                '.nav-primary, ' +
-                '#site-navigation, ' +
-                '.site-navigation'
-            );
-            
-            if (nav) {
-                const navRect = nav.getBoundingClientRect();
-                const navBottom = Math.max(navRect.bottom, 32); // Minimum 32px from top
-                
-                // Set the custom property for positioning
-                document.documentElement.style.setProperty('--nav-bottom', navBottom + 'px');
-            }
-        }
-
-        // Run on load
-        document.addEventListener('DOMContentLoaded', updateNavbarPositioning);
-        
-        // Run on resize
-        window.addEventListener('resize', updateNavbarPositioning);
-        
-        // Run after a short delay to catch any dynamic header changes
-        setTimeout(updateNavbarPositioning, 500);
-    });
-    </script>
+    </div>   
     <?php
 }
 
@@ -1677,11 +1137,15 @@ add_action('init', function() {
  * This keeps the access key server-side only
  */
 add_action('rest_api_init', function() {
-    register_rest_route('voicero/v1', '/connect', [
-        'methods'  => 'GET',
-        'callback' => 'voicero_connect_proxy',
-        'permission_callback' => '__return_true'
-    ]);
+register_rest_route(
+  'voicero/v1',
+  '/connect',
+  [
+    'methods'             => WP_REST_Server::READABLE,    // GET
+    'callback'            => 'voicero_connect_proxy',
+    'permission_callback' => '__return_true',            // <-- allows public
+  ]
+);
 
     // New session endpoint proxy that handles both GET and POST
     register_rest_route('voicero/v1', '/session', [
@@ -1700,13 +1164,13 @@ add_action('rest_api_init', function() {
 
 function voicero_connect_proxy() {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+        return new WP_REST_Response(['error' => esc_html__('No access key configured', 'voiceroai')], 403);
     }
     
     // Make the API request with the key (server-side)
-    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -1719,7 +1183,11 @@ function voicero_connect_proxy() {
     if (is_wp_error($response)) {
         // Remove error log
         return new WP_REST_Response([
-            'error' => 'Connection failed: ' . $response->get_error_message()
+            'error' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voiceroai'),
+                esc_html($response->get_error_message())
+            )
         ], 500);
     }
     
@@ -1736,14 +1204,14 @@ function voicero_connect_proxy() {
  */
 function voicero_session_proxy($request) {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
-        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+        return new WP_REST_Response(['error' => esc_html__('No access key configured', 'voiceroai')], 403);
     }
     
     // Determine if it's a GET or POST request
     $method = $request->get_method();
-    $endpoint = AI_WEBSITE_API_URL . '/session';
+    $endpoint = VOICERO_API_URL . '/session';
     
     // Handle GET request
     if ($method === 'GET') {
@@ -1753,20 +1221,15 @@ function voicero_session_proxy($request) {
         if (isset($params['sessionId']) && !empty($params['sessionId'])) {
             $session_id = $params['sessionId'];
             $endpoint .= '/' . urlencode($session_id);
-            
-            // Remove error log
         } 
         else if (isset($params['websiteId']) && !empty($params['websiteId'])) {
             $website_id = $params['websiteId'];
             
             // For GET with websiteId we need to use a different endpoint structure
-            $endpoint = AI_WEBSITE_API_URL . '/session?websiteId=' . urlencode($website_id);
-            
-            // Remove error log
+            $endpoint = VOICERO_API_URL . '/session?websiteId=' . urlencode($website_id);
         } 
         else {
-            // Remove error log
-            return new WP_REST_Response(['error' => 'Either websiteId or sessionId is required'], 400);
+            return new WP_REST_Response(['error' => esc_html__('Either websiteId or sessionId is required', 'voiceroai')], 400);
         }
         
         $response = wp_remote_get($endpoint, [
@@ -1825,7 +1288,7 @@ function voicero_window_state_proxy($request) {
     // Debug incoming request removed
     
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
         return new WP_REST_Response(['error' => 'No access key configured'], 403);
     }
@@ -1851,7 +1314,7 @@ function voicero_window_state_proxy($request) {
     // Debug processing session ID removed
     
     // Construct the API endpoint
-    $endpoint = AI_WEBSITE_API_URL . '/session/windows';
+    $endpoint = VOICERO_API_URL . '/session/windows';
     // Debug request URL removed
     
     // Make the POST request with the key (server-side)
@@ -1883,30 +1346,13 @@ function voicero_window_state_proxy($request) {
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }
 
-/**
- * 2A) /wp-json/my-plugin/v1/test
- *     Quick test that returns {status: "ok"}
- */
-add_action('rest_api_init', function() {
-    register_rest_route('my-plugin/v1', '/test', [
-        'methods'  => 'GET',
-        'callback' => function() {
-            return new WP_REST_Response([
-                'status'  => 'ok',
-                'message' => 'REST API is working'
-            ], 200);
-        },
-        'permission_callback' => '__return_true'
-    ]);
-});
-
 
 /**
  * 2F) /wp-json/my-plugin/v1/all-content
  *     Returns all content types in one request
  */
 add_action('rest_api_init', function() {
-    register_rest_route('my-plugin/v1', '/all-content', [
+    register_rest_route('voicero-ai/v1', '/all-content', [
         'methods'  => ['GET', 'POST', 'OPTIONS'],
         'callback' => function($request) {
             $response = [
@@ -2167,17 +1613,48 @@ add_action('rest_api_init', function() {
 add_action('init', function() {
     if (isset($_SERVER['HTTP_ORIGIN'])) {
         $origin = esc_url_raw(wp_unslash($_SERVER['HTTP_ORIGIN']));
-        // Add allowed origins here if needed, otherwise '*' might be okay for development
-        $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3000']; // Add frontend dev server if different
-        if (in_array($origin, $allowed_origins) || $origin === get_site_url()) { // Allow own origin
+        
+        // Add allowed origins here for production use
+        $allowed_origins = [
+            'https://www.voicero.ai', 
+            'http://localhost:5173', 
+            'https://app.voicero.ai',
+            get_site_url()
+        ];
+        
+        // Validate origin against whitelist
+        $origin_is_valid = false;
+        
+        // First validate URL structure
+        if (wp_http_validate_url($origin)) {
+            // Then check against the whitelist
+            if (in_array($origin, $allowed_origins)) {
+                $origin_is_valid = true;
+            }
+        }
+        
+        if ($origin_is_valid) {
             header("Access-Control-Allow-Origin: " . esc_url_raw($origin));
             header('Access-Control-Allow-Credentials: true');
         } else {
-            // Potentially restrict to known origins in production
-            header("Access-Control-Allow-Origin: *"); // More permissive for dev
+            // In production, you might want to restrict this to your own origin only
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                // More permissive for development
+                header("Access-Control-Allow-Origin: *");
+            } else {
+                // More restrictive for production
+                header("Access-Control-Allow-Origin: " . esc_url_raw(get_site_url()));
+            }
         }
     } else {
-        header("Access-Control-Allow-Origin: *"); // Fallback
+        // Default fallback
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            // More permissive for development
+            header("Access-Control-Allow-Origin: *");
+        } else {
+            // More restrictive for production
+            header("Access-Control-Allow-Origin: " . esc_url_raw(get_site_url()));
+        }
     }
     
     header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE"); // Allow common methods
@@ -2196,15 +1673,48 @@ add_action('rest_api_init', function() {
     add_filter('rest_pre_serve_request', function($value) {
         if (isset($_SERVER['HTTP_ORIGIN'])) {
             $origin = esc_url_raw(wp_unslash($_SERVER['HTTP_ORIGIN']));
-            $allowed_origins = ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3000']; 
-            if (in_array($origin, $allowed_origins) || $origin === get_site_url()) {
+            
+            // Add allowed origins here for production use
+            $allowed_origins = [
+                'https://www.voicero.ai', 
+                'http://localhost:5173', 
+                'https://app.voicero.ai',
+                get_site_url()
+            ];
+            
+            // Validate origin against whitelist
+            $origin_is_valid = false;
+            
+            // First validate URL structure
+            if (wp_http_validate_url($origin)) {
+                // Then check against the whitelist
+                if (in_array($origin, $allowed_origins)) {
+                    $origin_is_valid = true;
+                }
+            }
+            
+            if ($origin_is_valid) {
                 header("Access-Control-Allow-Origin: " . esc_url_raw($origin));
                 header('Access-Control-Allow-Credentials: true');
             } else {
-                header("Access-Control-Allow-Origin: *"); 
+                // In production, you might want to restrict this to your own origin only
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    // More permissive for development
+                    header("Access-Control-Allow-Origin: *");
+                } else {
+                    // More restrictive for production
+                    header("Access-Control-Allow-Origin: " . esc_url_raw(get_site_url()));
+                }
             }
         } else {
-            header("Access-Control-Allow-Origin: *");
+            // Default fallback
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                // More permissive for development
+                header("Access-Control-Allow-Origin: *");
+            } else {
+                // More restrictive for production
+                header("Access-Control-Allow-Origin: " . esc_url_raw(get_site_url()));
+            }
         }
         
         header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
@@ -2218,11 +1728,11 @@ add_action('rest_api_init', function() {
 /* ------------------------------------------------------------------------
    5. ADD FRONT-END INTERFACES TO <body>
 ------------------------------------------------------------------------ */
-function my_first_plugin_add_toggle_button() {
+function voicero_add_toggle_button() {
     $hook = current_filter(); // Get the current hook being used
     
     // Only add the button if the website is active AND synced
-    $saved_key = get_option('ai_website_access_key', '');
+    $saved_key = voicero_get_access_key();
     $is_active = false; // Default
     $is_synced = false; // Default
 
@@ -2243,17 +1753,17 @@ function my_first_plugin_add_toggle_button() {
     <?php
 }
 
-// Add to both wp_body_open and wp_footer for maximum compatibility
-add_action('wp_body_open', 'my_first_plugin_add_toggle_button');
-add_action('wp_footer', 'my_first_plugin_add_toggle_button', 999);
+// Hook into WordPress to add the button
+add_action('wp_body_open', 'voicero_add_toggle_button');
+add_action('wp_footer', 'voicero_add_toggle_button', 999);
 
 // Add this near the top of the file after the header
-function ai_website_get_access_key() {
-    return get_option('ai_website_access_key', '');
+function voicero_get_access_key() {
+    return get_option('voicero_access_key', '');
 }
 
 // Add this to make the access key and API URL available to frontend scripts
-function ai_website_enqueue_scripts() {
+function voicero_enqueue_scripts() {
     // Removed debug log
     
     // Only enqueue on the frontend, not in admin
@@ -2261,7 +1771,7 @@ function ai_website_enqueue_scripts() {
         // First enqueue the core script
         wp_enqueue_script(
             'voicero-core-js',
-            plugin_dir_url(__FILE__) . 'assets/voicero-core.js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-core.js',
             ['jquery'],
             '1.1',
             true
@@ -2270,7 +1780,7 @@ function ai_website_enqueue_scripts() {
         // Then enqueue the text script with core as dependency
         wp_enqueue_script(
             'voicero-text-js',
-            plugin_dir_url(__FILE__) . 'assets/voicero-text.js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-text.js',
             ['voicero-core-js', 'jquery'],
             '1.1',
             true
@@ -2279,33 +1789,33 @@ function ai_website_enqueue_scripts() {
         // Then enqueue the voice script with core as dependency
         wp_enqueue_script(
             'voicero-voice-js',
-            plugin_dir_url(__FILE__) . 'assets/voicero-voice.js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-voice.js',
             ['voicero-core-js', 'jquery'],
             '1.1',
             true
         );
 
         // Get access key
-        $access_key = get_option('ai_website_access_key', '');
+        $access_key = voicero_get_access_key();
         // Removed debug log
 
         // Pass data to the frontend script
-        wp_localize_script('voicero-core-js', 'aiWebsiteConfig', [
+        wp_localize_script('voicero-core-js', 'voiceroConfig', [
             // Removed accessKey for security - now using server-side proxy
-            'apiUrl' => AI_WEBSITE_API_URL,
+            'apiUrl' => VOICERO_API_URL,
             'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('ai_website_frontend_nonce'),
+            'nonce' => wp_create_nonce('voicero_frontend_nonce'),
             'pluginUrl' => plugin_dir_url(__FILE__),
-            'debug' => defined('WP_DEBUG') && WP_DEBUG ? true : false
+            'debug' => defined('WP_DEBUG') && WP_DEBUG ? true : false,
         ]);
 
-        // Also create window.voiceroConfig for backwards compatibility
-        wp_add_inline_script('voicero-core-js', 'window.voiceroConfig = window.aiWebsiteConfig;', 'before');
+        // For backwards compatibility
+        wp_add_inline_script('voicero-core-js', 'window.voiceroConfig = window.voiceroConfig;', 'before');
 
         // Enqueue the stylesheet
         wp_enqueue_style(
             'ai-website-style', 
-            plugin_dir_url(__FILE__) . 'assets/style.css', 
+            plugin_dir_url(__FILE__) . 'assets/css/style.css', 
             [], 
             '1.1'
         );
@@ -2313,48 +1823,47 @@ function ai_website_enqueue_scripts() {
         voicero_debug_log('Voicero AI scripts enqueued successfully');
     }
 }
-add_action('wp_enqueue_scripts', 'ai_website_enqueue_scripts');
+add_action('wp_enqueue_scripts', 'voicero_enqueue_scripts');
 
 // Add AJAX handler for frontend access AND admin access
-add_action('wp_ajax_nopriv_ai_website_get_info', 'ai_website_get_info'); // For logged-out users (frontend)
-add_action('wp_ajax_ai_website_get_info', 'ai_website_get_info'); // For logged-in users (admin and frontend)
+add_action('wp_ajax_nopriv_voicero_get_info', 'voicero_get_info'); // For logged-out users (frontend)
+add_action('wp_ajax_voicero_get_info', 'voicero_get_info'); // For logged-in users (admin and frontend)
 
-function ai_website_get_info() {
-    // Determine if it's an admin or frontend request and check appropriate nonce
-    $nonce_to_check = '';
-    $action = '';
-
-    if (defined('DOING_AJAX') && DOING_AJAX) {
-        $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
-        $nonce_value = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
-
-        if (is_admin()) { // Check if context is admin area
-            $nonce_to_check = 'ai_website_ajax_nonce'; // Admin nonce
-             if (!check_ajax_referer($nonce_to_check, 'nonce', false)) {
-                 wp_send_json_error(['message' => 'Invalid admin nonce']);
-                 return;
-             }
-        } else { // Assume frontend context
-             $nonce_to_check = 'ai_website_frontend_nonce'; // Frontend nonce
-             if (!check_ajax_referer($nonce_to_check, 'nonce', false)) {
-                 wp_send_json_error(['message' => 'Invalid frontend nonce']);
-                 return;
-             }
-        }
-    } else {
-        // Not an AJAX request? Should not happen for this endpoint.
-        wp_send_json_error(['message' => 'Invalid request type']);
+function voicero_get_info() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voiceroai')], 400);
         return;
     }
+
+    // 2) Grab & verify nonce _before_ trusting any inputs
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
     
-    $access_key = get_option('ai_website_access_key', '');
-    if (empty($access_key)) {
-        // Send different errors depending on context maybe?
-        // For now, same error.
-        wp_send_json_error(['message' => 'No access key configured for this site.']);
+    // Determine which nonce to check based on the context
+    $is_admin = is_admin();
+    $nonce_action = $is_admin ? 'voicero_ajax_nonce' : 'voicero_frontend_nonce';
+    
+    if (!check_ajax_referer($nonce_action, 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voiceroai')], 403);
+        return;
     }
 
-    $response = wp_remote_get(AI_WEBSITE_API_URL . '/connect', [
+    // 3) Check capability for admin-specific data if in admin context
+    if ($is_admin && !current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voiceroai')], 403);
+        return;
+    }
+
+    // 4) Now that nonce & permissions are good, you can safely use action param
+    $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
+    
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured for this site.', 'voiceroai')]);
+        return;
+    }
+
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -2365,30 +1874,38 @@ function ai_website_get_info() {
     ]);
 
     if (is_wp_error($response)) {
-        //  error_log('AI Website Get Info Error (WP_Error): ' . $response->get_error_message());
         wp_send_json_error([
-            'message' => 'Connection failed: ' . $response->get_error_message()
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voiceroai'),
+                esc_html($response->get_error_message())
+            )
         ]);
+        return;
     }
 
     $response_code = wp_remote_retrieve_response_code($response);
     $body = wp_remote_retrieve_body($response);
 
     if ($response_code !== 200) {
-        // error_log('AI Website Get Info Error (API): Code ' . $response_code . ' Body: ' . $body);
         wp_send_json_error([
-            'message' => 'Server returned error: ' . $response_code,
-            'body' => $body // Avoid sending full body to frontend in prod
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voiceroai'),
+                intval($response_code)
+            ),
+            'body' => wp_kses_post($body) // Sanitize the body content
         ]);
+        return;
     }
 
     $data = json_decode($body, true);
     // The /connect endpoint returns { website: {...} }
     if (!$data || !isset($data['website'])) {
-        // Remove error log
-        return new WP_REST_Response([
-            'message' => 'Invalid response structure from server.'
+        wp_send_json_error([
+            'message' => esc_html__('Invalid response structure from server.', 'voiceroai')
         ]);
+        return;
     }
 
     // Override the queryLimit to 200 for free plan users
@@ -2400,48 +1917,17 @@ function ai_website_get_info() {
     wp_send_json_success($data['website']);
 }
 
-function ai_website_clear_connection() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+function voicero_clear_connection() {
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
     if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied']);
+        wp_send_json_error(['message' => esc_html__('Permission denied', 'voiceroai')]);
         return;
     }
-    delete_option('ai_website_access_key');
+    delete_option('voicero_access_key');
     // Optionally: delete other related options or transients
-    wp_send_json_success(['message' => 'Connection cleared successfully']);
+    wp_send_json_success(['message' => esc_html__('Connection cleared successfully', 'voiceroai')]);
 }
 
-// Function to add inline debugging script
-function voicero_add_inline_debug_script() {
-    // Only run in extreme debug mode - not in regular WP_DEBUG mode
-    if (defined('VOICERO_EXTREME_DEBUG') && VOICERO_EXTREME_DEBUG) {
-        ?>
-        <script>
-        (function() {
-            
-            // Wait for DOM to be fully loaded
-            window.addEventListener('DOMContentLoaded', function() {
-                // Check if container exists
-                const container = document.getElementById('voicero-app-container');
-                if (container) {
-                }
-                
-                // Check if scripts are loaded
-                
-                // Check for config
-                
-                // Run a test after a short delay
-                setTimeout(function() {
-                    if (window.VoiceroCore) {
-                    }
-                }, 2000);
-            });
-        })();
-        </script>
-        <?php
-    }
-}
-add_action('wp_footer', 'voicero_add_inline_debug_script', 9999);
 
 /**
  * Proxy for the /session/clear endpoint
@@ -2449,7 +1935,7 @@ add_action('wp_footer', 'voicero_add_inline_debug_script', 9999);
  */
 function voicero_session_clear_proxy($request) {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
         return new WP_REST_Response(['error' => 'No access key configured'], 403);
     }
@@ -2464,7 +1950,7 @@ function voicero_session_clear_proxy($request) {
     }
     
     // Construct the API endpoint
-    $endpoint = AI_WEBSITE_API_URL . '/session/clear';
+    $endpoint = VOICERO_API_URL . '/session/clear';
     
     // Make the POST request with the key (server-side)
     $response = wp_remote_request($endpoint, [
@@ -2498,7 +1984,7 @@ function voicero_session_clear_proxy($request) {
  */
 function voicero_chat_proxy($request) {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = voicero_get_access_key();
     if (empty($access_key)) {
         return new WP_REST_Response(['error' => 'No access key configured'], 403);
     }
@@ -2534,7 +2020,7 @@ function voicero_chat_proxy($request) {
     $body = json_encode($decoded_body);
     
     // Construct the API endpoint - Updated to use /wordpress/chat instead of /chat
-    $endpoint = AI_WEBSITE_API_URL . '/wordpress/chat';
+    $endpoint = VOICERO_API_URL . '/wordpress/chat';
     
     // Make the POST request with the key (server-side)
     $response = wp_remote_post($endpoint, [
@@ -2566,26 +2052,22 @@ function voicero_chat_proxy($request) {
  */
 function voicero_tts_proxy($request) {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = get_option('voicero_access_key', '');
     if (empty($access_key)) {
-        // error_log(message: 'TTS proxy: No access key configured');
         return new WP_REST_Response(['error' => 'No access key configured'], 403);
     }
-    
-    // error_log(message: 'TTS proxy: Received request');
     
     // Get JSON body
     $json_body = $request->get_body();
     $body_params = json_decode($json_body, true);
     
-    // Validate request
+    // request
     if (empty($body_params['text'])) {
-        // error_log('TTS proxy: No text provided');
         return new WP_REST_Response(['error' => 'No text provided'], 400);
     }
     
     // Forward request to local API
-    $response = wp_remote_post('http://localhost:3000/api/tts', [
+    $response = wp_remote_post('https://www.voicero.ai/api/tts', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -2599,7 +2081,6 @@ function voicero_tts_proxy($request) {
     
     // Check for errors
     if (is_wp_error($response)) {
-        // //error_log('TTS proxy error: ' . $response->get_error_message());
         return new WP_REST_Response(
             ['error' => 'Failed to connect to TTS API: ' . $response->get_error_message()], 
             500
@@ -2612,7 +2093,6 @@ function voicero_tts_proxy($request) {
     // If not successful, return error
     if ($status_code < 200 || $status_code >= 300) {
         $error_body = wp_remote_retrieve_body($response);
-        //error_log('TTS API error response: ' . $error_body);
         
         // Clean up the error response to ensure it's valid JSON
         $sanitized_error = $error_body;
@@ -2642,12 +2122,9 @@ function voicero_tts_proxy($request) {
     
     // Special check: see if data might be JSON-encoded
     if (substr($audio_data, 0, 1) === '"' && substr($audio_data, -1) === '"') {
-        //error_log('TTS API returned JSON-encoded string instead of raw binary data');
-        
         // Try to decode the JSON string to get raw binary data
         $decoded_data = json_decode($audio_data);
         if (json_last_error() === JSON_ERROR_NONE && is_string($decoded_data)) {
-            //error_log('Successfully decoded JSON string to raw data');
             // Replace the audio_data with the decoded binary content
             $audio_data = $decoded_data;
         }
@@ -2661,7 +2138,6 @@ function voicero_tts_proxy($request) {
     if (strpos($audio_data, '{') === 0 || 
         strpos($audio_data, '<') === 0 || 
         strpos($audio_data, 'error') !== false) {
-        //error_log('TTS API returned non-audio data: ' . substr($audio_data, 0, 100));
         
         return new WP_REST_Response(
             ['error' => 'TTS API returned non-audio data', 'details' => $audio_data],
@@ -2674,15 +2150,11 @@ function voicero_tts_proxy($request) {
     $mpeg_frame_sync = (ord($first_bytes[0]) === 0xFF && (ord($first_bytes[1]) & 0xE0) === 0xE0);
     
     if (!$id3_header && !$mpeg_frame_sync) {
-        //error_log('TTS API returned invalid audio format. First bytes: ' . bin2hex($first_bytes));
-        
         return new WP_REST_Response(
             ['error' => 'TTS API returned invalid audio format', 'details' => bin2hex(substr($audio_data, 0, 20))],
             500
         );
     }
-    
-    //error_log('TTS API valid audio format detected. Size: ' . strlen($audio_data) . ' bytes');
     
     // Create response with audio content type
     $response_obj = new WP_REST_Response($audio_data, 200);
@@ -2703,6 +2175,7 @@ function voicero_tts_proxy($request) {
         $server->send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         
         // Send the raw binary data directly
+        // DO NOT ESCAPE: Binary audio data must not be escaped as it would corrupt the audio file
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Binary audio data should not be escaped
         echo $audio_data;
         return true;
@@ -2716,7 +2189,7 @@ function voicero_tts_proxy($request) {
  */
 function voicero_whisper_proxy($request) {
     // Get the access key from options (server-side only)
-    $access_key = get_option('ai_website_access_key', '');
+    $access_key = get_option('voicero_access_key', '');
     if (empty($access_key)) {
         //error_log('Whisper proxy: No access key configured');
         return new WP_REST_Response(['error' => 'No access key configured'], 403);
@@ -2765,7 +2238,7 @@ function voicero_whisper_proxy($request) {
     $body .= "--$boundary--\r\n";
     
     // Send request to local API
-    $response = wp_remote_post('http://localhost:3000/api/whisper', [
+    $response = wp_remote_post('https://www.voicero.ai/api/whisper', [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
@@ -2823,72 +2296,88 @@ function voicero_whisper_proxy($request) {
     return new WP_REST_Response(json_decode($body, true), $status_code);
 }
 
-// Register REST API endpoints
 add_action('rest_api_init', function() {
-    if (!function_exists('register_rest_route')) {
-        // Remove error log
-        return;
-    }
-    
-    // Remove error log
-    //error_log('Registering Voicero REST API endpoints');
-    
-    // Register the window_state endpoint
-    register_rest_route('voicero/v1', '/window_state', [
-        'methods'  => ['POST'],
-        'callback' => 'voicero_window_state_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the connect endpoint
-    register_rest_route('voicero/v1', '/connect', [
-        'methods'  => 'GET',
-        'callback' => 'voicero_connect_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the session endpoint
-    register_rest_route('voicero/v1', '/session', [
-        'methods'  => ['GET', 'POST'],
-        'callback' => 'voicero_session_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the session_clear endpoint
-    register_rest_route('voicero/v1', '/session_clear', [
-        'methods'  => ['POST'],
-        'callback' => 'voicero_session_clear_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the chat endpoint
-    register_rest_route('voicero/v1', '/chat', [
-        'methods'  => ['POST'],
-        'callback' => 'voicero_chat_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the TTS endpoint
-    register_rest_route('voicero/v1', '/tts', [
-        'methods'  => ['POST'],
-        'callback' => 'voicero_tts_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Register the Whisper endpoint
-    register_rest_route('voicero/v1', '/whisper', [
-        'methods'  => 'POST',
-        'callback' => 'voicero_whisper_proxy',
-        'permission_callback' => '__return_true'
-    ]);
-    
-    // Remove error log
-    //error_log('Voicero REST API endpoints registered successfully');
+    // 1) Admin-only: return site info & plan
+    register_rest_route(
+        'voicero/v1',
+        '/connect',
+        [
+            'methods'             => 'GET',
+            'callback'            => 'voicero_connect_proxy',
+           'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 2) Public session endpoints for frontend chat
+    register_rest_route(
+        'voicero/v1',
+        '/session',
+        [
+            'methods'             => ['GET', 'POST'],
+            'callback'            => 'voicero_session_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 3) Public endpoint: update window state (front-end UI)
+    register_rest_route(
+        'voicero/v1',
+        '/window_state',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_window_state_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 4) Public endpoint: clear/reset session
+    register_rest_route(
+        'voicero/v1',
+        '/session_clear',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_session_clear_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 5) Public chat proxy for WordPress-flavored messages
+    register_rest_route(
+        'voicero/v1',
+        '/wordpress/chat',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_chat_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 6) Public TTS (text-to-speech) proxy
+    register_rest_route(
+        'voicero/v1',
+        '/tts',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_tts_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
+
+    // 7) Public Whisper (speech-to-text) proxy
+    register_rest_route(
+        'voicero/v1',
+        '/whisper',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_whisper_proxy',
+            'permission_callback' => '__return_true',
+        ]
+    );
 });
 
 // Add a new function to track training status
 function voicero_get_training_status() {
-    check_ajax_referer('ai_website_ajax_nonce', 'nonce');
+    check_ajax_referer('voicero_ajax_nonce', 'nonce');
     
     // Get the training status from options
     $training_data = get_option('voicero_training_status', [
@@ -2926,3 +2415,55 @@ function voicero_update_training_status($key, $value) {
     update_option('voicero_training_status', $training_data);
     return $training_data;
 }
+
+/**
+ * Enqueue admin scripts & styles for Voicero.AI page.
+ */
+function voicero_admin_enqueue_assets($hook_suffix) {
+    // Only load on our plugin's admin page
+    if ($hook_suffix !== 'toplevel_page_voicero-ai-admin') {
+        return;
+    }
+
+    // CSS
+    wp_register_style(
+        'voicero-admin-style',
+        plugin_dir_url(__FILE__) . 'assets/css/admin-style.css',
+        [],      // no dependencies
+        '1.0.0'
+    );
+    wp_enqueue_style('voicero-admin-style');
+
+    // JS
+    wp_register_script(
+        'voicero-admin-js',
+        plugin_dir_url(__FILE__) . 'assets/js/admin.js',
+        ['jquery'],  // jQuery dependency
+        '1.0.0',
+        true         // load in footer
+    );
+    wp_enqueue_script('voicero-admin-js');
+
+    // Get access key for JS
+    $access_key = get_option('voicero_access_key', '');
+
+    // If you still need any inline settings or nonce, attach them here:
+    wp_localize_script(
+        'voicero-admin-js',
+        'voiceroAdminConfig',
+        [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('voicero_ajax_nonce'),
+            'accessKey' => $access_key,
+            'apiUrl' => defined('VOICERO_API_URL') ? VOICERO_API_URL : 'https://www.voicero.ai/api'
+        ]
+    );
+    
+    // Also create window.voiceroConfig for backwards compatibility
+    wp_add_inline_script(
+        'voicero-admin-js',
+        'window.voiceroConfig = window.voiceroAdminConfig;',
+        'before'
+    );
+}
+add_action('admin_enqueue_scripts', 'voicero_admin_enqueue_assets');

@@ -443,14 +443,14 @@ const VoiceroText = {
   // Fetch website data from /api/connect endpoint
   fetchWebsiteData: function () {
     // SECURITY: Direct API access removed - now using server-side proxy through WordPress AJAX
-    if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
+    if (!window.voiceroConfig || !window.voiceroConfig.ajaxUrl) {
       this.createFallbackPopupQuestions();
       return;
     }
 
     // Use WordPress AJAX endpoint instead of direct API access
-    const ajaxUrl = window.aiWebsiteConfig.ajaxUrl;
-    const nonce = window.aiWebsiteConfig.nonce || "";
+    const ajaxUrl = window.voiceroConfig.ajaxUrl;
+    const nonce = window.voiceroConfig.nonce || "";
 
     fetch(ajaxUrl, {
       method: "POST",
@@ -458,7 +458,7 @@ const VoiceroText = {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        action: "ai_website_get_info",
+        action: "voicero_get_info",
         nonce: nonce,
       }),
     })
@@ -1860,7 +1860,7 @@ const VoiceroText = {
   // Send chat message to API
   sendChatToApi: function (messageText, threadId) {
     // SECURITY: Direct API access removed - now using WordPress proxy
-    if (!window.aiWebsiteConfig || !window.aiWebsiteConfig.ajaxUrl) {
+    if (!window.voiceroConfig || !window.voiceroConfig.ajaxUrl) {
       return Promise.reject("WordPress configuration not available");
     }
 
@@ -2006,7 +2006,7 @@ const VoiceroText = {
     }
 
     // Use WordPress proxy endpoint instead of direct API call
-    return fetch("/wp-json/voicero/v1/chat", {
+    return fetch("/wp-json/voicero/v1/wordpress/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
