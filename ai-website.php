@@ -605,12 +605,22 @@ function voicero_batch_train() {
         // Fire off the request
         wp_remote_post($api_url, $args);
         
-        // Schedule a status check for this item (staggered timing)
+        // IMPORTANT: Update completed items directly after sending the request
+        // This bypasses the WP-Cron dependency and fixes the progress bar
+        voicero_update_training_status('completed_items', $index + 1);
+        
+        // We'll keep the scheduled check for good measure, but progress will update immediately
         $item_request_id = $batch_id . '_' . $index;
         $check_delay = ($type === 'general') ? 30 : max(5, min(5 * ($index + 1), 30)); // Stagger checks from 5-30 seconds
         wp_schedule_single_event(time() + $check_delay, 'voicero_check_batch_item_status', [$type, $item_request_id]);
     }
     
+    // If we've processed everything, mark training as complete
+    if (count($batch_data) > 0) {
+        // Short delay to ensure the last completed_items update is saved
+        wp_schedule_single_event(time() + 2, 'voicero_finalize_training');
+    }
+
     // Also schedule periodic checks for the overall batch (once per minute for 10 minutes)
     for ($i = 1; $i <= 10; $i++) {
         wp_schedule_single_event(time() + ($i * 60), 'voicero_check_batch_status', [$batch_id, $i]);
@@ -664,6 +674,24 @@ function voicero_check_batch_status($batch_id, $check_num) {
     }
 }
 add_action('voicero_check_batch_status', 'voicero_check_batch_status', 10, 2);
+
+// Function to finalize training after all items have been processed
+function voicero_finalize_training() {
+    $training_data = get_option('voicero_training_status', []);
+    
+    // Only proceed if we're still in progress
+    if (!isset($training_data['in_progress']) || !$training_data['in_progress']) {
+        return;
+    }
+    
+    // Mark training as complete
+    voicero_update_training_status('in_progress', false);
+    voicero_update_training_status('status', 'completed');
+    
+    // Record the completion time
+    update_option('voicero_last_training_date', current_time('mysql'));
+}
+add_action('voicero_finalize_training', 'voicero_finalize_training');
 
 // Register the new AJAX action
 add_action('wp_ajax_voicero_batch_train', 'voicero_batch_train');

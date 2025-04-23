@@ -242,98 +242,41 @@ jQuery(document).ready(function ($) {
             })
               .done(function (response) {
                 if (response.success) {
-                  const data = response.data;
+                  const { in_progress, total_items, completed_items, status } =
+                    response.data;
+                  // compute percentage 0–100
+                  const pct = total_items
+                    ? Math.round((completed_items / total_items) * 100)
+                    : 100;
 
-                  // Check if we have the batch status details
-                  if (data && data.batch) {
-                    const batch = data.batch;
-                    const complete = batch.complete;
-                    const progress = batch.progress || 0;
-                    const status = batch.status;
+                  // update the progress bar
+                  $("#training-progress-bar").css("width", pct + "%");
+                  $("#training-progress-text").text(pct + "%");
+                  $("#training-status span").text(
+                    status === "completed" ? "Completed" : "Processing..."
+                  );
 
-                    // Update progress bar with most recent batch progress
-                    const progressPercent = progress * 100; // Convert to percentage
-                    const totalPercent = 60 + progressPercent * 0.4; // Scale to 60-100% range
+                  // update the overall sync progress (scale 60→100%)
+                  const overall = 60 + pct * 0.4;
+                  updateProgress(
+                    overall,
+                    `⏳ Training: ${status || "Processing..."}`
+                  );
 
-                    // Update the training progress indicators
-                    $("#training-progress-bar").css(
-                      "width",
-                      progressPercent + "%"
-                    );
-                    $("#training-progress-text").text(
-                      Math.round(progressPercent) + "%"
-                    );
-                    $("#training-status span").text(status || "Processing...");
+                  // when done...
+                  if (!in_progress || status === "completed") {
+                    clearInterval(pollingInterval);
+                    updateProgress(100, "✅ Training completed successfully!");
+                    syncButton.prop("disabled", false);
 
-                    // Update overall progress
-                    updateProgress(
-                      totalPercent,
-                      `⏳ Training: ${status || "Processing..."}`
-                    );
+                    // Update notification
+                    $("#sync-warning").html(`
+                      <p><strong>✅ Training Complete:</strong> Your website content has been successfully trained. 
+                      The AI assistant now has up-to-date knowledge about your website content.</p>
+                    `);
 
-                    // If complete, finish up
-                    if (complete) {
-                      // Update progress indicators to 100%
-                      updateProgress(
-                        100,
-                        "✅ Training completed successfully!"
-                      );
-                      $("#training-progress-bar").css("width", "100%");
-                      $("#training-progress-text").text("100%");
-                      $("#training-status span").text("Completed");
-
-                      // Clear polling interval
-                      clearInterval(pollingInterval);
-
-                      // Re-enable button
-                      syncButton.prop("disabled", false);
-
-                      // Update notification
-                      $("#sync-warning").html(`
-                                        <p><strong>✅ Training Complete:</strong> Your website content has been successfully trained. 
-                                        The AI assistant now has up-to-date knowledge about your website content.</p>
-                                    `);
-
-                      // Update website info after training completes
-                      setTimeout(loadWebsiteInfo, 1500);
-                    } else if (data) {
-                      // Calculate progress percentage for older status format
-                      let progressPercent = 0;
-                      if (data.total_items > 0) {
-                        progressPercent = Math.round(
-                          (data.completed_items / data.total_items) * 100
-                        );
-                      }
-
-                      // Update progress display
-                      $("#training-progress-bar").css(
-                        "width",
-                        progressPercent + "%"
-                      );
-                      $("#training-progress-text").text(progressPercent + "%");
-
-                      // Show status text
-                      let statusText = "Processing...";
-                      if (data.status === "completed") {
-                        statusText =
-                          '<span style="color: green;">Completed ✓</span>';
-                        clearInterval(pollingInterval); // Stop polling if completed
-                        updateProgress(100, "✅ Training Completed!");
-
-                        // Update website info after slight delay
-                        setTimeout(loadWebsiteInfo, 1500);
-                      } else if (data.status === "stalled") {
-                        statusText =
-                          '<span style="color: orange;">Stalled - Some items may not have completed</span>';
-                      }
-
-                      $("#training-status span").html(statusText);
-
-                      // If completed, stop polling
-                      if (!data.in_progress || data.status === "completed") {
-                        clearInterval(pollingInterval);
-                      }
-                    }
+                    // Update website info after training completes
+                    setTimeout(loadWebsiteInfo, 1500);
                   }
                 }
               })
