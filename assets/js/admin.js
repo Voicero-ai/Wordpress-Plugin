@@ -443,7 +443,7 @@ jQuery(document).ready(function ($) {
                     </table>
 
                     <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="http://localhost:3000/app/websites/website?id=${
+                        <a href="https://www.voicero.ai/app/websites/website?id=${
                           data.id || ""
                         }" target="_blank" class="button button-primary">
                             Open Dashboard
@@ -574,7 +574,7 @@ jQuery(document).ready(function ($) {
     // Disable button during request
     $button.prop("disabled", true);
 
-    const apiUrl = voiceroConfig.apiUrl || "http://localhost:3000/api";
+    const apiUrl = voiceroConfig.apiUrl || "https://www.voicero.ai/api";
 
     fetch(apiUrl + "/websites/toggle-status", {
       method: "POST",
