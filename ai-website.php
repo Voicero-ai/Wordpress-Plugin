@@ -1823,6 +1823,15 @@ function voicero_enqueue_scripts() {
             true
         );
 
+            // First enqueue the core script
+        wp_enqueue_script(
+            'voicero-action-handler-js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-action-handler.js',
+            ['jquery'],
+            '1.1',
+            true
+        );
+
         // Get access key
         $access_key = voicero_get_access_key();
         // Removed debug log

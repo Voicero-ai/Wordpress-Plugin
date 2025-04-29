@@ -2222,6 +2222,10 @@ const VoiceroText = {
               url = data.url;
             }
           }
+          // Fall back to direct 'response' string
+          else if (data && data.response && typeof data.response === "string") {
+            message = data.response;
+          }
           // Default fallback
           else {
             message = "I'm sorry, I couldn't process that request.";
@@ -2272,6 +2276,10 @@ const VoiceroText = {
                 }
               }
             }
+          }
+
+          if (data.response && window.VoiceroActionHandler) {
+            window.VoiceroActionHandler.handle(data.response);
           }
 
           // Handle redirect if needed
