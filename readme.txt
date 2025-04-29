@@ -120,8 +120,8 @@ This plugin relies on the Voicero.ai external API to power all of its AI feature
 
 1. **Site Connection & Status**  
    - **Endpoint:**  
-     - `http://localhost:3000/api/connect` — validate and retrieve your website record.  
-     - `http://localhost:3000/api/toggle-status` — activate or deactivate your site’s chat assistant.  
+     - `https://voicero.ai/api/connect` — validate and retrieve your website record.  
+     - `https://voicero.ai/api/toggle-status` — activate or deactivate your site’s chat assistant.  
    - **Data Sent:** your Voicero access key, and on toggle-status calls your `websiteId`.  
    - **When:**  
      - On admin “Save & Connect” to link the plugin to your Voicero account.  
@@ -129,12 +129,12 @@ This plugin relies on the Voicero.ai external API to power all of its AI feature
 
 2. **Content Sync & Training**  
    - **Endpoints:**  
-     - `http://localhost:3000/api/wordpress/sync` — send your site’s content payload (posts, pages, products, metadata) for indexing.  
-     - `http://localhost:3000/api/wordpress/vectorize` — request vector embeddings for that content.  
-     - `http://localhost:3000/api/wordpress/assistant` — set up your AI assistant after content is vectorized.  
-     - `http://localhost:3000/api/wordpress/train/page`  
-     - `http://localhost:3000/api/wordpress/train/post`  
-     - `http://localhost:3000/api/wordpress/train/product`  
+     - `https://voicero.ai/api/wordpress/sync` — send your site’s content payload (posts, pages, products, metadata) for indexing.  
+     - `https://voicero.ai/api/wordpress/vectorize` — request vector embeddings for that content.  
+     - `https://voicero.ai/api/wordpress/assistant` — set up your AI assistant after content is vectorized.  
+     - `https://voicero.ai/api/wordpress/train/page`  
+     - `https://voicero.ai/api/wordpress/train/post`  
+     - `https://voicero.ai/api/wordpress/train/product`  
        (each `/train/...` sends a single content item’s `wpId` plus `websiteId` to train on that entity)  
    - **Data Sent:**  
      - **Sync:** your entire site content (title, body, excerpts, taxonomy, custom fields).  
@@ -144,9 +144,9 @@ This plugin relies on the Voicero.ai external API to power all of its AI feature
 
 3. **Front-end Chat & Speech**  
    - **Endpoints:**  
-     - `http://localhost:3000/api/wordpress/chat` — send visitor messages plus `pageData` (URL, full text, buttons, forms, images) to generate responses.  
-     - `http://localhost:3000/api/whisper` — send an uploaded audio file for speech-to-text transcription.  
-     - `http://localhost:3000/api/tts` — sends answer response from chat to turn into a voice response   
+     - `https://voicero.ai/api/wordpress/chat` — send visitor messages plus `pageData` (URL, full text, buttons, forms, images) to generate responses.  
+     - `https://voicero.ai/api/whisper` — send an uploaded audio file for speech-to-text transcription.  
+     - `https://voicero.ai/api/tts` — sends answer response from chat to turn into a voice response   
    - **Data Sent:**  
      - Chat: user’s text message and contextual page data.  
      - Whisper: raw audio blob recorded by the visitor.  
@@ -156,6 +156,6 @@ This plugin relies on the Voicero.ai external API to power all of its AI feature
 
 4. **Service Provider**  
    - **Name:** Voicero.ai  
-   - **Terms of Service:** http://localhost:3000/terms  
-   - **Privacy Policy:**  http://localhost:3000/privacy
+   - **Terms of Service:** https://voicero.ai/terms  
+   - **Privacy Policy:**  https://voicero.ai/privacy
 

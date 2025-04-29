@@ -1617,6 +1617,19 @@ const VoiceroVoice = {
                     // Play the audio response AFTER displaying the text
                     await this.playAudioResponse(audioBlob);
 
+                    // --- ACTION HANDLER AFTER SPEECH -----------------------------------
+                    if (window.VoiceroActionHandler) {
+                      try {
+                        // new-format: chatData.response  – fallback: whole object
+                        window.VoiceroActionHandler.handle(
+                          chatData.response ?? chatData
+                        );
+                      } catch (err) {
+                        console.error("VoiceroActionHandler error:", err);
+                      }
+                    }
+                    // -------------------------------------------------------------------
+
                     // After audio playback completes, handle redirect action or URL
                     if (actionType === "redirect" && actionUrl) {
                       // No extra delay - redirect immediately after audio completes
@@ -1629,6 +1642,18 @@ const VoiceroVoice = {
                     }
                   } catch (audioError) {
                     // Continue with the conversation flow even if audio fails
+
+                    // --- ACTION HANDLER EVEN IF AUDIO FAILED ---------------------------
+                    if (window.VoiceroActionHandler) {
+                      try {
+                        window.VoiceroActionHandler.handle(
+                          chatData.response ?? chatData
+                        );
+                      } catch (err) {
+                        console.error("VoiceroActionHandler error:", err);
+                      }
+                    }
+                    // -------------------------------------------------------------------
 
                     // Still do the redirect even if audio failed
                     if (actionType === "redirect" && actionUrl) {
