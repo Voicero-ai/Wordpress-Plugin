@@ -680,7 +680,8 @@
         return;
       }
 
-      const proxyUrl = `/wp-json/voicero/v1/session?websiteId=${this.websiteId}`;
+      // Ask our REST proxy for this specific sessionId
+      const proxyUrl = `/wp-json/voicero/v1/session?sessionId=${sessionId}`;
 
       fetch(proxyUrl, {
         method: "GET",
