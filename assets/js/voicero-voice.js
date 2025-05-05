@@ -1483,7 +1483,6 @@ const VoiceroVoice = {
 
                 try {
                   // Request audio generation using TTS endpoint via WordPress proxy
-
                   const ttsResponse = await fetch("/wp-json/voicero/v1/tts", {
                     method: "POST",
                     headers: {
@@ -1495,106 +1494,25 @@ const VoiceroVoice = {
                   });
 
                   if (!ttsResponse.ok) {
-                    let errorText;
+                    let details;
                     try {
-                      const errorData = await ttsResponse.json();
-                      errorText = JSON.stringify(errorData);
-                    } catch (e) {
-                      // If JSON parsing fails, get text response instead
-                      errorText = await ttsResponse.text();
+                      details = JSON.stringify(await ttsResponse.json());
+                    } catch {
+                      details = await ttsResponse.text();
                     }
-
                     throw new Error(
-                      `TTS API request failed with status ${ttsResponse.status}`
+                      `TTS proxy failed (${
+                        ttsResponse.status
+                      }): ${details.substring(0, 200)}`
                     );
                   }
 
-                  // Convert response to audio blob
-                  const audioData = await ttsResponse.arrayBuffer();
+                  // Parse the JSON payload
+                  const { success, url } = await ttsResponse.json();
 
-                  // Check if we actually received audio data
-                  if (!audioData || audioData.byteLength === 0) {
-                    throw new Error("Empty audio data received from TTS API");
+                  if (!success || !url) {
+                    throw new Error("Malformed TTS proxy response (no URL)");
                   }
-
-                  // Simple check to see if the response might be JSON/text instead of audio
-                  // This is a common issue with ElevenLabs returning errors but keeping the audio/mpeg content type
-                  const firstBytes = new Uint8Array(
-                    audioData.slice(0, Math.min(20, audioData.byteLength))
-                  );
-                  const possibleText = String.fromCharCode.apply(
-                    null,
-                    firstBytes
-                  );
-
-                  if (
-                    possibleText.includes("{") ||
-                    possibleText.includes("<html") ||
-                    possibleText.includes("error") ||
-                    possibleText.includes("Error")
-                  ) {
-                    // This is likely a JSON error or HTML, not audio data
-
-                    // Try to read the full response as text to log the error
-                    try {
-                      const textDecoder = new TextDecoder();
-                      const responseText = textDecoder.decode(audioData);
-                    } catch (textError) {}
-
-                    throw new Error(
-                      "Received error response from TTS API instead of audio"
-                    );
-                  }
-
-                  // Get the content type from the response headers if available
-                  const contentType =
-                    ttsResponse.headers.get("content-type") || "audio/mpeg";
-
-                  // Check for common audio format signatures
-                  const dataView = new DataView(audioData);
-                  let detectedType = contentType;
-
-                  // Check for MP3 header (ID3 or MPEG frame sync)
-                  if (audioData.byteLength > 2) {
-                    // Check for ID3 header
-                    if (
-                      dataView.getUint8(0) === 0x49 &&
-                      dataView.getUint8(1) === 0x44 &&
-                      dataView.getUint8(2) === 0x33
-                    ) {
-                      detectedType = "audio/mpeg";
-                    }
-                    // Check for MP3 frame sync (0xFF 0xE0)
-                    else if (
-                      dataView.getUint8(0) === 0xff &&
-                      (dataView.getUint8(1) & 0xe0) === 0xe0
-                    ) {
-                      detectedType = "audio/mpeg";
-                    }
-                    // Check for WAV header "RIFF"
-                    else if (
-                      dataView.getUint8(0) === 0x52 &&
-                      dataView.getUint8(1) === 0x49 &&
-                      dataView.getUint8(2) === 0x46 &&
-                      dataView.getUint8(3) === 0x46
-                    ) {
-                      detectedType = "audio/wav";
-                    }
-                    // Check for OGG header "OggS"
-                    else if (
-                      dataView.getUint8(0) === 0x4f &&
-                      dataView.getUint8(1) === 0x67 &&
-                      dataView.getUint8(2) === 0x67 &&
-                      dataView.getUint8(3) === 0x53
-                    ) {
-                      detectedType = "audio/ogg";
-                    }
-                  }
-
-                  // Create a blob with the detected or provided MIME type
-                  const audioBlob = new Blob([audioData], {
-                    type: detectedType,
-                  });
 
                   // Remove typing indicator before adding the real response
                   this.removeTypingIndicator();
@@ -1612,61 +1530,28 @@ const VoiceroVoice = {
                     VoiceroCore.saveState();
                   }
 
-                  // Try to play the audio response, but don't block the flow if it fails
-                  try {
-                    // Play the audio response AFTER displaying the text
-                    await this.playAudioResponse(audioBlob);
+                  // Play the audio response
+                  const audio = new Audio(url);
+                  await audio.play();
 
-                    // --- ACTION HANDLER AFTER SPEECH -----------------------------------
-                    if (window.VoiceroActionHandler) {
-                      try {
-                        // new-format: chatData.response  – fallback: whole object
-                        window.VoiceroActionHandler.handle(
-                          chatData.response ?? chatData
-                        );
-                      } catch (err) {
-                        console.error("VoiceroActionHandler error:", err);
-                      }
+                  // Handle actions AFTER audio playback
+                  if (window.VoiceroActionHandler) {
+                    try {
+                      window.VoiceroActionHandler.handle(
+                        chatData.response ?? chatData
+                      );
+                    } catch (err) {
+                      // console.error("VoiceroActionHandler error:", err);
                     }
-                    // -------------------------------------------------------------------
+                  }
 
-                    // After audio playback completes, handle redirect action or URL
-                    if (actionType === "redirect" && actionUrl) {
-                      // No extra delay - redirect immediately after audio completes
-                      this.redirectToUrl(actionUrl);
-                    }
-                    // If no action but we have extracted URLs, use the first one
-                    else if (extractedUrls.length > 0) {
-                      // No extra delay - redirect immediately after audio completes
-                      this.redirectToUrl(extractedUrls[0]);
-                    }
-                  } catch (audioError) {
-                    // Continue with the conversation flow even if audio fails
-
-                    // --- ACTION HANDLER EVEN IF AUDIO FAILED ---------------------------
-                    if (window.VoiceroActionHandler) {
-                      try {
-                        window.VoiceroActionHandler.handle(
-                          chatData.response ?? chatData
-                        );
-                      } catch (err) {
-                        console.error("VoiceroActionHandler error:", err);
-                      }
-                    }
-                    // -------------------------------------------------------------------
-
-                    // Still do the redirect even if audio failed
-                    if (actionType === "redirect" && actionUrl) {
-                      setTimeout(() => {
-                        this.redirectToUrl(actionUrl);
-                      }, 1000);
-                    }
-                    // If no action but we have extracted URLs, use the first one
-                    else if (extractedUrls.length > 0) {
-                      setTimeout(() => {
-                        this.redirectToUrl(extractedUrls[0]);
-                      }, 1000);
-                    }
+                  // After audio playback completes, handle redirect action or URL
+                  if (actionType === "redirect" && actionUrl) {
+                    this.redirectToUrl(actionUrl);
+                  }
+                  // If no action but we have extracted URLs, use the first one
+                  else if (extractedUrls.length > 0) {
+                    this.redirectToUrl(extractedUrls[0]);
                   }
                 } catch (audioError) {
                   // Remove typing indicator before adding the error message
@@ -2649,7 +2534,7 @@ const VoiceroVoice = {
           }
         })
         .catch((error) => {
-          console.error("Failed to clear chat history:", error);
+          // console.error("Failed to clear chat history:", error);
         });
     }
 

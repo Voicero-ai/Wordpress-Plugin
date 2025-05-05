@@ -1,5 +1,5 @@
 === Voicero.AI ===
-Contributors: voiceroai
+Contributors: voicero-ai
 Tags: ai, chatbot, assistant, ecommerce, conversion
 Requires at least: 6.0
 Tested up to: 6.8
@@ -16,7 +16,7 @@ Voicero.AI connects your site to a fully autonomous AI Salesman. It answers cust
 
 
 == Installation ==
-1. Upload the plugin files to the `/wp-content/plugins/voiceroai` directory, or install it directly through the WordPress plugin repository.
+1. Upload the plugin files to the `/wp-content/plugins/voicero-ai` directory, or install it directly through the WordPress plugin repository.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
 3. Open the **Voicero.AI** admin menu in the dashboard.
 4. Connect your account using your 64-character access key or by clicking the one-click connect button.
@@ -54,7 +54,7 @@ Yes. Customization is handled in your Voicero.AI dashboard after connection.
 This is the first public version of Voicero.AI — connect, sync, and start boosting your conversions today.
 
 === Voicero.AI ===
-Contributors: voiceroai
+Contributors: voicero-ai
 Tags: ai, chatbot, assistant, ecommerce, sales, conversion, automation
 Requires at least: 6.0
 Tested up to: 6.7
@@ -67,7 +67,7 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Voicero.AI connects your site to a fully autonomous AI Salesman. It answers customer questions, builds trust, handles objections, and guides users to purchase, all automatically. Boost conversions and make your site feel alive.
 
 == Installation ==
-1. Upload the plugin files to the `/wp-content/plugins/voiceroai` directory, or install it directly through the WordPress plugin repository.
+1. Upload the plugin files to the `/wp-content/plugins/voicero-ai` directory, or install it directly through the WordPress plugin repository.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
 3. Open the **Voicero.AI** admin menu in the dashboard.
 4. Connect your account using your 64-character access key or by clicking the one-click connect button.

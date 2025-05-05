@@ -300,7 +300,7 @@ jQuery(document).ready(function ($) {
           const message = error.message || "An unknown error occurred";
           updateProgress(0, `❌ Error: ${message}`, true);
           syncButton.prop("disabled", false);
-          console.error("Sync error:", error);
+          //   // console.error("Sync error:", error);
         });
     } catch (e) {
       updateProgress(
@@ -309,7 +309,7 @@ jQuery(document).ready(function ($) {
         true
       );
       syncButton.prop("disabled", false);
-      console.error("Sync error:", e);
+      //  // console.error("Sync error:", e);
     }
   });
 

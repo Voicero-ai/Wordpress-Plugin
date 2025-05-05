@@ -1802,7 +1802,7 @@ const VoiceroText = {
           }
         })
         .catch((error) => {
-          console.error("Failed to clear chat history:", error);
+          // console.error("Failed to clear chat history:", error);
         });
     }
 
