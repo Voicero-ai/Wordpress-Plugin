@@ -1615,9 +1615,29 @@ const VoiceroVoice = {
 
                   // Play the audio response
                   const audio = new Audio(url);
+
+                  // Create a promise to handle audio completion
+                  const audioPlaybackPromise = new Promise((resolve) => {
+                    audio.addEventListener("ended", () => {
+                      resolve();
+                    });
+
+                    // Also handle errors in playback by resolving
+                    audio.addEventListener("error", () => {
+                      console.warn(
+                        "Audio playback error - continuing with actions anyway"
+                      );
+                      resolve();
+                    });
+                  });
+
+                  // Start audio playback
                   await audio.play();
 
-                  // Handle actions AFTER audio playback
+                  // Wait for audio to complete playing before proceeding
+                  await audioPlaybackPromise;
+
+                  // Handle actions ONLY AFTER audio playback completes
                   if (window.VoiceroActionHandler) {
                     try {
                       window.VoiceroActionHandler.handle(
@@ -1651,10 +1671,10 @@ const VoiceroVoice = {
                     VoiceroCore.saveState();
                   }
 
-                  // Handle redirect even if audio failed
+                  // Handle redirect even if audio failed, but with a longer delay to allow reading the message
                   if (actionType === "redirect" && actionUrl) {
-                    // Use a standard delay for error cases
-                    const redirectDelay = 2000; // 2 second default for errors
+                    // Use a longer delay for error cases to allow reading the message
+                    const redirectDelay = 5000; // 5 seconds to read message
 
                     // Add a delay before redirecting
                     setTimeout(() => {
@@ -1663,8 +1683,8 @@ const VoiceroVoice = {
                   }
                   // If no action but we have extracted URLs, use the first one
                   else if (extractedUrls.length > 0) {
-                    // Use a standard delay for error cases
-                    const redirectDelay = 2000; // 2 second default for errors
+                    // Use a longer delay for error cases
+                    const redirectDelay = 5000; // 5 seconds to read message
 
                     // Add a delay before redirecting
                     setTimeout(() => {
