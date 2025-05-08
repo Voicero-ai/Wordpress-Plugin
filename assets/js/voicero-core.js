@@ -25,6 +25,12 @@
       // Set up global reference
       window.VoiceroCore = this;
 
+      // Set initializing flag to prevent button flickering during startup
+      this.isInitializing = true;
+
+      // Create global property to track button visibility timeouts
+      this.buttonVisibilityTimeouts = [];
+
       // Track website active status - default to false until verified by API
       this.isWebsiteActive = false;
 
@@ -48,6 +54,11 @@
       // only after we know the website color
 
       this.checkApiConnection();
+
+      // Clear initializing flag after a delay
+      setTimeout(() => {
+        this.isInitializing = false;
+      }, 2000);
 
       // Don't force the button to show here anymore - wait for API
       // setTimeout(() => {
@@ -590,31 +601,62 @@
         });
     },
 
-    // Hide main button when website not active
+    // Hide the main website button
     hideMainButton: function () {
-      // Find the button
+      // Cancel any pending visibility calls that might conflict
+      if (this.buttonVisibilityTimeouts) {
+        this.buttonVisibilityTimeouts.forEach((timeoutId) =>
+          clearTimeout(timeoutId)
+        );
+      }
+      this.buttonVisibilityTimeouts = [];
+
+      // Hide toggle container with comprehensive styles
+      const toggleContainer = document.getElementById("voice-toggle-container");
+      if (toggleContainer) {
+        toggleContainer.style.cssText = `
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          z-index: -1 !important;
+          height: 0 !important;
+          width: 0 !important;
+          overflow: hidden !important;
+          position: absolute !important;
+        `;
+      }
+
+      // Hide main button with comprehensive styles
       const mainButton = document.getElementById("chat-website-button");
       if (mainButton) {
-        mainButton.style.display = "none";
-        mainButton.style.visibility = "hidden";
-        mainButton.style.opacity = "0";
+        mainButton.style.cssText = `
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          z-index: -1 !important;
+          height: 0 !important;
+          width: 0 !important;
+          overflow: hidden !important;
+          position: absolute !important;
+        `;
       }
 
-      // Also hide the container
-      const buttonContainer = document.getElementById("voice-toggle-container");
-      if (buttonContainer) {
-        buttonContainer.style.display = "none";
-        buttonContainer.style.visibility = "hidden";
-        buttonContainer.style.opacity = "0";
-      }
-
-      // Also hide any chooser
+      // Hide the chooser as well if it exists
       const chooser = document.getElementById("interaction-chooser");
       if (chooser) {
-        chooser.style.display = "none";
-        chooser.style.visibility = "hidden";
-        chooser.style.opacity = "0";
+        chooser.style.cssText = `
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          z-index: -1 !important;
+        `;
       }
+
+      // Set a flag in the object to remember button is hidden
+      this._buttonHidden = true;
     },
 
     // Initialize session - check localStorage first or create new session
@@ -763,10 +805,66 @@
     restoreInterfaceState: function () {
       if (!this.session) return;
 
-      // Always ensure the main button is visible regardless of session state
-      this.ensureMainButtonVisible();
+      // Create a flag to track if we need to hide the button
+      const shouldHideButton =
+        this.session.textOpen === true || this.session.voiceOpen === true;
 
-      // Log the welcome message state
+      // Hide the button first if needed, before any interface operations
+      if (shouldHideButton) {
+        // Hide button immediately to prevent flickering
+        this.hideMainButton();
+
+        // Set a flag to indicate we're currently restoring an interface
+        this.isRestoringInterface = true;
+
+        // Cancel any pending button visibility calls
+        if (this.buttonVisibilityTimeouts) {
+          this.buttonVisibilityTimeouts.forEach((timeoutId) =>
+            clearTimeout(timeoutId)
+          );
+        }
+        this.buttonVisibilityTimeouts = [];
+
+        // Add more aggressive button hiding with multiple timers
+        setTimeout(() => this.hideMainButton(), 100);
+        setTimeout(() => this.hideMainButton(), 500);
+        setTimeout(() => this.hideMainButton(), 1000);
+        setTimeout(() => this.hideMainButton(), 2000);
+      } else {
+        // No interfaces open, ensure button is visible
+        this.ensureMainButtonVisible();
+
+        // Clear initialization flag after we've determined no interfaces need to be opened
+        this.isInitializing = false;
+        return;
+      }
+
+      // One-time function to ensure button stays hidden
+      const ensureButtonHidden = () => {
+        const toggleContainer = document.getElementById(
+          "voice-toggle-container"
+        );
+        if (toggleContainer) {
+          toggleContainer.style.cssText = `
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            z-index: -1 !important;
+          `;
+        }
+
+        const mainButton = document.getElementById("chat-website-button");
+        if (mainButton) {
+          mainButton.style.cssText = `
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            z-index: -1 !important;
+          `;
+        }
+      };
 
       // Check if text interface should be open
       if (this.session.textOpen === true) {
@@ -784,9 +882,16 @@
               }
             }, 100); // Small delay
           }
+
+          // Multiple timeouts to ensure button stays hidden
+          this.buttonVisibilityTimeouts = [
+            setTimeout(() => ensureButtonHidden(), 300),
+            setTimeout(() => ensureButtonHidden(), 800),
+            setTimeout(() => ensureButtonHidden(), 1500),
+            setTimeout(() => ensureButtonHidden(), 3000),
+          ];
         }
       }
-
       // Check if voice interface should be open
       else if (this.session.voiceOpen === true) {
         // Make sure VoiceroVoice is initialized
@@ -797,19 +902,46 @@
           // Check if it should be minimized
           if (this.session.voiceOpenWindowUp === false) {
             setTimeout(() => {
-              window.VoiceroVoice.minimizeVoiceChat();
+              if (
+                window.VoiceroVoice &&
+                window.VoiceroVoice.minimizeVoiceChat
+              ) {
+                window.VoiceroVoice.minimizeVoiceChat();
+              }
             }, 500); // Short delay to ensure interface is fully open first
-          } else {
           }
 
           // Check if auto mic should be activated
           if (this.session.autoMic === true) {
             setTimeout(() => {
-              window.VoiceroVoice.toggleMic();
+              if (window.VoiceroVoice && window.VoiceroVoice.toggleMic) {
+                window.VoiceroVoice.toggleMic();
+              }
             }, 1000); // Longer delay for mic activation
           }
+
+          // Multiple timeouts to ensure button stays hidden
+          this.buttonVisibilityTimeouts = [
+            setTimeout(() => ensureButtonHidden(), 300),
+            setTimeout(() => ensureButtonHidden(), 800),
+            setTimeout(() => ensureButtonHidden(), 1500),
+            setTimeout(() => ensureButtonHidden(), 3000),
+          ];
         }
       }
+
+      // Clear restoration flag after a short delay
+      setTimeout(() => {
+        this.isRestoringInterface = false;
+
+        // Also clear initialization flag after interface restoration is complete
+        this.isInitializing = false;
+
+        // One final check to make sure button stays hidden if interfaces are open
+        if (this.session.textOpen === true || this.session.voiceOpen === true) {
+          this.hideMainButton();
+        }
+      }, 2000);
     },
 
     // Create a new session specifically called from getSession
@@ -1009,6 +1141,41 @@
 
     // Ensure the main button is always visible
     ensureMainButtonVisible: function () {
+      // Don't show button if we're currently restoring an interface that should have it hidden
+      if (this.isRestoringInterface || this.isInitializing) {
+        return;
+      }
+
+      // Do a more thorough check of session state
+      if (this.session) {
+        if (this.session.textOpen === true || this.session.voiceOpen === true) {
+          // Don't show button if text or voice interfaces are open
+          this.hideMainButton();
+          return;
+        }
+      }
+
+      // Also check if any interfaces are currently visible in the DOM
+      const textInterface = document.getElementById(
+        "voicero-text-chat-container"
+      );
+      if (
+        textInterface &&
+        window.getComputedStyle(textInterface).display === "block"
+      ) {
+        this.hideMainButton();
+        return;
+      }
+
+      const voiceInterface = document.getElementById("voice-chat-interface");
+      if (
+        voiceInterface &&
+        window.getComputedStyle(voiceInterface).display === "block"
+      ) {
+        this.hideMainButton();
+        return;
+      }
+
       // Make sure the container is visible
       const container = document.getElementById("voicero-app-container");
       if (container) {
@@ -1615,6 +1782,23 @@
       if (chooser && chooser.parentNode) {
         chooser.parentNode.removeChild(chooser);
       }
+    },
+
+    // Create the UI
+    initializeUI: function () {
+      // Set initializing flag to prevent multiple operations
+      this.isInitializing = true;
+
+      // Create global property to track button visibility timeouts
+      this.buttonVisibilityTimeouts = [];
+
+      // Create main container
+      // ... existing code ...
+
+      // After initialization, clear the flag with a short delay
+      setTimeout(() => {
+        this.isInitializing = false;
+      }, 1000);
     },
   };
 

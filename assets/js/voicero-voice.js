@@ -802,15 +802,40 @@ const VoiceroVoice = {
     // First make sure we have created the interface
     this.createVoiceChatInterface();
 
-    // Hide the toggle container when opening on mobile
-    // if (window.innerWidth <= 768) {
-    //   const toggleContainer = document.getElementById("voice-toggle-container");
-    //   if (toggleContainer) {
-    //     toggleContainer.style.display = "none";
-    //     toggleContainer.style.visibility = "hidden";
-    //     toggleContainer.style.opacity = "0";
-    //   }
-    // }
+    // Hide the toggle container when opening the voice interface
+    const toggleContainer = document.getElementById("voice-toggle-container");
+    if (toggleContainer) {
+      toggleContainer.style.display = "none";
+      toggleContainer.style.visibility = "hidden";
+      toggleContainer.style.opacity = "0";
+      toggleContainer.style.pointerEvents = "none"; // Prevent any clicks
+    }
+
+    // Also hide the main button explicitly with !important-equivalent styles
+    const mainButton = document.getElementById("chat-website-button");
+    if (mainButton) {
+      mainButton.style.display = "none";
+      mainButton.style.visibility = "hidden";
+      mainButton.style.opacity = "0";
+      mainButton.style.pointerEvents = "none"; // Prevent any clicks
+      mainButton.style.zIndex = "-1"; // Push it behind other content
+    }
+
+    // Use a timeout to ensure button remains hidden after any race conditions
+    setTimeout(() => {
+      // Double-check that the button is still hidden
+      if (toggleContainer) {
+        toggleContainer.style.display = "none";
+        toggleContainer.style.visibility = "hidden";
+        toggleContainer.style.opacity = "0";
+      }
+
+      if (mainButton) {
+        mainButton.style.display = "none";
+        mainButton.style.visibility = "hidden";
+        mainButton.style.opacity = "0";
+      }
+    }, 100);
 
     // Hide the chooser popup
     const chooser = document.getElementById("interaction-chooser");
@@ -1000,22 +1025,80 @@ const VoiceroVoice = {
         toggleContainer.style.display = "block";
         toggleContainer.style.visibility = "visible";
         toggleContainer.style.opacity = "1";
+        toggleContainer.style.pointerEvents = "auto";
+
+        // Apply critical positioning styles to ensure proper placement
+        toggleContainer.style.position = "fixed";
+        toggleContainer.style.bottom = "20px";
+        toggleContainer.style.right = "20px";
+        toggleContainer.style.zIndex = "2147483647";
       }
 
-      // Make sure main button is visible
+      // Make sure main button is visible with comprehensive styles
       const chatButton = document.getElementById("chat-website-button");
       if (chatButton) {
         chatButton.style.display = "flex";
         chatButton.style.visibility = "visible";
         chatButton.style.opacity = "1";
+        chatButton.style.pointerEvents = "auto";
+        chatButton.style.zIndex = "2147483647";
+
+        // Use website color for the button if available
+        if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
+          chatButton.style.backgroundColor = window.VoiceroCore.websiteColor;
+        }
+
+        // Apply comprehensive styles
+        chatButton.style.width = "50px";
+        chatButton.style.height = "50px";
+        chatButton.style.borderRadius = "50%";
+        chatButton.style.justifyContent = "center";
+        chatButton.style.alignItems = "center";
+        chatButton.style.color = "white";
+        chatButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.2)";
+        chatButton.style.cursor = "pointer";
       }
 
-      // Show the chooser for good measure
-      if (window.VoiceroCore && window.VoiceroCore.showChooser) {
+      // Use VoiceroCore method if available to ensure visibility
+      if (window.VoiceroCore && window.VoiceroCore.ensureMainButtonVisible) {
         setTimeout(() => {
-          window.VoiceroCore.showChooser();
+          window.VoiceroCore.ensureMainButtonVisible();
         }, 100);
       }
+
+      // Add a second timeout with a longer delay as an extra safety measure
+      setTimeout(() => {
+        // Double-check that the main button is visible
+        const buttonCheck = document.getElementById("chat-website-button");
+        const containerCheck = document.getElementById(
+          "voice-toggle-container"
+        );
+
+        if (buttonCheck) {
+          buttonCheck.style.display = "flex";
+          buttonCheck.style.visibility = "visible";
+          buttonCheck.style.opacity = "1";
+          buttonCheck.style.pointerEvents = "auto";
+          buttonCheck.style.zIndex = "2147483647";
+        }
+
+        if (containerCheck) {
+          containerCheck.style.display = "block";
+          containerCheck.style.visibility = "visible";
+          containerCheck.style.opacity = "1";
+          containerCheck.style.pointerEvents = "auto";
+        }
+
+        // Call the main visibility method one more time if available
+        if (window.VoiceroCore && window.VoiceroCore.ensureMainButtonVisible) {
+          window.VoiceroCore.ensureMainButtonVisible();
+        }
+
+        // Show the chooser for good measure
+        if (window.VoiceroCore && window.VoiceroCore.showChooser) {
+          window.VoiceroCore.showChooser();
+        }
+      }, 500);
     }
   },
 

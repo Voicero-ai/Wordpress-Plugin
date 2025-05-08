@@ -188,15 +188,21 @@ const VoiceroText = {
       }
     }
 
-    // Hide the toggle container when opening on mobile
-    // if (window.innerWidth <= 768) {
-    //   const toggleContainer = document.getElementById("voice-toggle-container");
-    //   if (toggleContainer) {
-    //     toggleContainer.style.display = "none";
-    //     toggleContainer.style.visibility = "hidden";
-    //     toggleContainer.style.opacity = "0";
-    //   }
-    // }
+    // Hide the toggle container when opening the chat interface
+    const toggleContainer = document.getElementById("voice-toggle-container");
+    if (toggleContainer) {
+      toggleContainer.style.display = "none";
+      toggleContainer.style.visibility = "hidden";
+      toggleContainer.style.opacity = "0";
+    }
+
+    // Also hide the main button explicitly
+    const mainButton = document.getElementById("chat-website-button");
+    if (mainButton) {
+      mainButton.style.display = "none";
+      mainButton.style.visibility = "hidden";
+      mainButton.style.opacity = "0";
+    }
 
     // Hide the chooser popup
     const chooser = document.getElementById("interaction-chooser");
@@ -1515,7 +1521,7 @@ const VoiceroText = {
         </div>
 
         <div id="chat-messages" style="
-          background: white !important;
+          background: #f2f2f7 !important;
           border-radius: 0 !important;
           padding: 0 !important;
           margin: 0 !important;
@@ -2397,12 +2403,56 @@ const VoiceroText = {
       shadowHost.style.display = "none";
     }
 
-    // Show the microphone button when closing
+    // Make sure the main container is visible
+    const container = document.getElementById("voicero-app-container");
+    if (container) {
+      container.style.display = "block";
+      container.style.visibility = "visible";
+      container.style.opacity = "1";
+    }
+
+    // Show the toggle container when closing
     const toggleContainer = document.getElementById("voice-toggle-container");
     if (toggleContainer) {
       toggleContainer.style.display = "block";
       toggleContainer.style.visibility = "visible";
       toggleContainer.style.opacity = "1";
+
+      // Apply critical positioning styles to ensure proper placement
+      toggleContainer.style.position = "fixed";
+      toggleContainer.style.bottom = "20px";
+      toggleContainer.style.right = "20px";
+      toggleContainer.style.zIndex = "2147483647";
+    }
+
+    // Explicitly show the main button with important styles
+    const mainButton = document.getElementById("chat-website-button");
+    if (mainButton) {
+      mainButton.style.display = "flex";
+      mainButton.style.visibility = "visible";
+      mainButton.style.opacity = "1";
+
+      // Use website color for the button
+      const themeColor = this.websiteColor || "#882be6";
+      mainButton.style.backgroundColor = themeColor;
+
+      // Apply comprehensive styles to ensure button appears correctly
+      mainButton.style.width = "50px";
+      mainButton.style.height = "50px";
+      mainButton.style.borderRadius = "50%";
+      mainButton.style.justifyContent = "center";
+      mainButton.style.alignItems = "center";
+      mainButton.style.color = "white";
+      mainButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.2)";
+      mainButton.style.cursor = "pointer";
+      mainButton.style.zIndex = "2147483647";
+    }
+
+    // Use VoiceroCore method if available to ensure visibility
+    if (window.VoiceroCore && window.VoiceroCore.ensureMainButtonVisible) {
+      setTimeout(() => {
+        window.VoiceroCore.ensureMainButtonVisible();
+      }, 100);
     }
   },
 
