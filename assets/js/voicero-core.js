@@ -1006,7 +1006,9 @@
     showChooser: function () {
       const chooser = document.getElementById("interaction-chooser");
       if (!chooser) return;
-
+      
+      console.log("[DEBUG] showChooser called");
+      
       // First check if we should show the chooser at all
       if (!this.shouldShowChooser()) {
         // Explicitly hide the chooser
@@ -1015,7 +1017,11 @@
         chooser.style.opacity = "0";
         return;
       }
-
+      
+      console.log("[DEBUG] Before setting styles:", 
+                 "display=", getComputedStyle(chooser).display, 
+                 "flexDirection=", getComputedStyle(chooser).flexDirection);
+      
       // Apply clean, consistent styles without complex overrides
       chooser.style.display = "flex";
       chooser.style.flexDirection = "column"; // Keep buttons in a vertical stack
@@ -1051,6 +1057,14 @@
         textButton.style.justifyContent = "center";
         textButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
       }
+      
+      console.log("[DEBUG] After all style changes:", 
+                 "chooser flexDirection=", chooser.style.flexDirection,
+                 "computed flexDirection=", getComputedStyle(chooser).flexDirection,
+                 "voiceButton marginBottom=", voiceButton ? voiceButton.style.marginBottom : "N/A",
+                 "textButton marginBottom=", textButton ? textButton.style.marginBottom : "N/A");
+                 
+      chooser.setAttribute("style", "display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; visibility: visible !important; opacity: 1 !important; padding: 8px !important;");
     },
 
     // Ensure the main button is always visible
