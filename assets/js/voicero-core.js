@@ -1034,22 +1034,22 @@
       const voiceButton = document.getElementById("voice-chooser-button");
       const textButton = document.getElementById("text-chooser-button");
 
-      // Apply consistent button styles for side-by-side layout
+      // Apply consistent button styles for vertical layout
       if (voiceButton) {
-        voiceButton.style.marginBottom = "0"; // Remove any bottom margin
-        voiceButton.style.marginRight = "10px"; // Add right margin for spacing
+        voiceButton.style.marginBottom = "10px"; // Add bottom margin for vertical spacing
+        voiceButton.style.marginRight = "0"; // Remove right margin for vertical layout
         voiceButton.style.display = "flex";
         voiceButton.style.alignItems = "center";
         voiceButton.style.justifyContent = "center";
-        voiceButton.style.flexDirection = "row"; // Ensure icon and text are side by side
+        voiceButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
       }
 
       if (textButton) {
-        textButton.style.marginBottom = "0"; // Remove any bottom margin
+        textButton.style.marginBottom = "0"; // No bottom margin for last element
         textButton.style.display = "flex";
         textButton.style.alignItems = "center";
         textButton.style.justifyContent = "center";
-        textButton.style.flexDirection = "row"; // Ensure icon and text are side by side
+        textButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
       }
     },
 
