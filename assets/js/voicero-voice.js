@@ -5,6 +5,16 @@
 
 // Voice interface variables
 const VoiceroVoice = {
+  // IMPORTANT: Division of responsibilities
+  // VoiceroVoice should ONLY handle the voice interface itself.
+  // It should NOT manipulate:
+  // 1. The interaction chooser (#interaction-chooser)
+  // 2. The toggle container (#voice-toggle-container)
+  // 3. The main chat button (#chat-website-button)
+  //
+  // These elements are managed EXCLUSIVELY by VoiceroCore.js
+  // Any manipulation of these elements should happen only in VoiceroCore.js
+
   isRecording: false,
   audioContext: null,
   analyser: null,
@@ -778,9 +788,6 @@ const VoiceroVoice = {
       shouldShowWelcome = window.VoiceroCore.session.voiceWelcome;
     }
 
-    // IMPORTANT: Always open in maximized state first
-    let shouldBeMaximized = true;
-
     // Update window state - Always open maximized, minimize only after fully loaded if needed
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       console.log(
@@ -811,39 +818,7 @@ const VoiceroVoice = {
     // First make sure we have created the interface
     this.createVoiceChatInterface();
 
-    // Hide the toggle container when opening the voice interface
-    const toggleContainer = document.getElementById("voice-toggle-container");
-    if (toggleContainer) {
-      console.log("VoiceroVoice: Hiding toggle container");
-      toggleContainer.style.cssText = `
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        z-index: -1 !important;
-      `;
-    }
-
-    // Also hide the main button explicitly with !important-equivalent styles
-    const mainButton = document.getElementById("chat-website-button");
-    if (mainButton) {
-      console.log("VoiceroVoice: Hiding main button");
-      mainButton.style.cssText = `
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        z-index: -1 !important;
-      `;
-    }
-
-    // Hide the chooser popup
-    const chooser = document.getElementById("interaction-chooser");
-    if (chooser) {
-      chooser.style.display = "none";
-      chooser.style.visibility = "hidden";
-      chooser.style.opacity = "0";
-    }
+    // Let VoiceroCore handle hiding buttons and chooser - we don't touch them at all
 
     // Show the voice interface
     const voiceInterface = document.getElementById("voice-chat-interface");
@@ -900,40 +875,6 @@ const VoiceroVoice = {
       });
     }
 
-    // Set multiple timeouts to make sure the interface remains visible
-    // This helps prevent race conditions that cause it to disappear
-    const ensureInterfaceVisible = () => {
-      const voiceInterface = document.getElementById("voice-chat-interface");
-      if (voiceInterface && !this.isClosingVoiceChat) {
-        console.log("VoiceroVoice: Ensuring interface remains visible");
-        voiceInterface.style.display = "block";
-        voiceInterface.style.visibility = "visible";
-        voiceInterface.style.opacity = "1";
-
-        // Double-check the toggle container and main button are hidden
-        const toggleContainer = document.getElementById(
-          "voice-toggle-container"
-        );
-        if (toggleContainer) {
-          toggleContainer.style.display = "none";
-          toggleContainer.style.visibility = "hidden";
-          toggleContainer.style.opacity = "0";
-        }
-
-        const mainButton = document.getElementById("chat-website-button");
-        if (mainButton) {
-          mainButton.style.display = "none";
-          mainButton.style.visibility = "hidden";
-          mainButton.style.opacity = "0";
-        }
-      }
-    };
-
-    // Multiple timeouts to ensure the interface stays visible
-    setTimeout(ensureInterfaceVisible, 100);
-    setTimeout(ensureInterfaceVisible, 500);
-    setTimeout(ensureInterfaceVisible, 1000);
-
     // After the interface is fully loaded and visible, check if it should be minimized
     // based on the previous session state (delayed to prevent race conditions)
     setTimeout(() => {
@@ -953,7 +894,6 @@ const VoiceroVoice = {
       } else {
         console.log("VoiceroVoice: Resetting opening flag");
         this.isOpeningVoiceChat = false;
-        ensureInterfaceVisible(); // One final visibility check
       }
     }, 1500);
   },
@@ -1088,7 +1028,7 @@ const VoiceroVoice = {
     console.log("VoiceroVoice: Maximization complete");
   },
 
-  // Close voice chat and reopen chooser interface
+  // Close voice chat interface only - don't show anything else
   closeVoiceChat: function () {
     console.log("VoiceroVoice: Closing voice chat");
 
@@ -1118,128 +1058,35 @@ const VoiceroVoice = {
 
     // First create reliable references to the elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
-    const toggleContainer = document.getElementById("voice-toggle-container");
-    const chatButton = document.getElementById("chat-website-button");
-    const coreContainer = document.getElementById("voicero-app-container");
 
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         voiceOpen: false,
         voiceOpenWindowUp: false,
-        coreOpen: true,
+        coreOpen: false, // Changed from true to false to prevent chooser from showing
         textOpen: false,
         autoMic: false,
         textOpenWindowUp: false,
       });
     }
 
+    // Hide voice interface
     if (voiceInterface && !this.isOpeningVoiceChat) {
       voiceInterface.style.display = "none";
     }
 
-    // Force a sync display update
-    if (coreContainer) {
-      coreContainer.style.cssText = `
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-      `;
-    }
-
-    // Show and position the toggle container with robust inline styling
-    if (toggleContainer) {
-      // Apply comprehensive styling directly
-      toggleContainer.style.cssText = `
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        z-index: 2147483647 !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        transform: none !important;
-        top: auto !important;
-        left: auto !important;
-        pointer-events: auto !important;
-        width: auto !important;
-        height: auto !important;
-      `;
-    }
-
-    // Style the main button with robust inline styling
-    if (chatButton) {
-      const themeColor = this.websiteColor || "#882be6";
-      chatButton.style.cssText = `
-        position: relative !important;
-        background-color: ${themeColor} !important;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: 50px !important;
-        height: 50px !important;
-        border-radius: 50% !important;
-        justify-content: center !important;
-        align-items: center !important;
-        color: white !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-        border: none !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        z-index: 2147483647 !important;
-        pointer-events: auto !important;
-      `;
-    }
-
-    // Ensure icon is visible inside main button
-    const botIcon = chatButton ? chatButton.querySelector(".bot-icon") : null;
-    if (botIcon) {
-      botIcon.style.cssText = `
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-      `;
-    }
-
-    // Set multiple delayed checks to ensure visibility
-    for (let delay of [0, 50, 100, 300]) {
-      setTimeout(() => {
-        if (toggleContainer) {
-          toggleContainer.style.display = "block";
-          toggleContainer.style.visibility = "visible";
-          toggleContainer.style.opacity = "1";
-          toggleContainer.style.pointerEvents = "auto";
-        }
-
-        if (chatButton) {
-          chatButton.style.display = "flex";
-          chatButton.style.visibility = "visible";
-          chatButton.style.opacity = "1";
-          chatButton.style.pointerEvents = "auto";
-        }
-      }, delay);
-    }
-
+    // Let VoiceroCore handle the button visibility - but DON'T show chooser
     if (window.VoiceroCore) {
-      // 1) Prevent any auto-hide during this transition
-      window.VoiceroCore.setKeepMiniButtonVisible(true);
-
-      // 2) Clear any pending hide timers
-      window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
-      window.VoiceroCore.buttonVisibilityTimeouts = [];
-
-      // 3) Force-show the button right now
+      // Tell VoiceroCore to handle button visibility only
       window.VoiceroCore.ensureMainButtonVisible();
-
-      // 4) After a tick (or two), re-enable normal hide logic
-      setTimeout(() => {
-        window.VoiceroCore.setKeepMiniButtonVisible(false);
-      }, 50);
+      // DO NOT call window.VoiceroCore.showChooser() - we don't want the chooser to automatically appear
     }
+
+    // Reset closing flag after slight delay
+    setTimeout(() => {
+      this.isClosingVoiceChat = false;
+    }, 500);
   },
 
   /**
@@ -2603,8 +2450,6 @@ const VoiceroVoice = {
     const headerContainer = document.getElementById("voice-controls-header");
     const inputWrapper = document.getElementById("voice-input-wrapper");
     const maximizeButton = document.getElementById("maximize-voice-chat");
-    const toggleContainer = document.getElementById("voice-toggle-container");
-    const chatButton = document.getElementById("chat-website-button");
 
     // Update window state first - critical for proper state management
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
@@ -2713,55 +2558,7 @@ const VoiceroVoice = {
         overflow: hidden !important;
         border-radius: 12px 12px 0 0 !important;
       `;
-
-      // Hide the main button when voice interface is open
-      if (toggleContainer) {
-        toggleContainer.style.cssText = `
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-        `;
-      }
-
-      if (chatButton) {
-        chatButton.style.cssText = `
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-        `;
-      }
-
-      // Force a redraw
-      setTimeout(() => {
-        voiceInterface.style.display = "block";
-      }, 10);
-
-      // Ensure proper button visibility management through VoiceroCore
-      if (window.VoiceroCore) {
-        window.VoiceroCore.setKeepMiniButtonVisible(false);
-
-        // Clear any pending hide timers to prevent conflicts
-        window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
-        window.VoiceroCore.buttonVisibilityTimeouts = [];
-      }
     }
-
-    // Set multiple timeouts to ensure the interface remains visible
-    const ensureInterfaceVisible = () => {
-      const voiceInterface = document.getElementById("voice-chat-interface");
-      if (voiceInterface) {
-        console.log(
-          "VoiceroVoice: Ensuring reopened interface remains visible"
-        );
-        voiceInterface.style.display = "block";
-        voiceInterface.style.visibility = "visible";
-        voiceInterface.style.opacity = "1";
-      }
-    };
-
-    // Use multiple timeouts for redundancy
-    setTimeout(ensureInterfaceVisible, 100);
-    setTimeout(ensureInterfaceVisible, 500);
 
     // Reset opening flag with delay
     setTimeout(() => {
