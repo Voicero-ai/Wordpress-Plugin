@@ -741,8 +741,13 @@ const VoiceroVoice = {
     }, 100);
   },
 
+  isOpeningVoiceChat: false,
+  
   // Open voice chat interface
   openVoiceChat: function () {
+    // Set flag to prevent closing the interface too quickly
+    this.isOpeningVoiceChat = true;
+    
     // Check if we have existing messages
     const hasMessages =
       VoiceroCore &&
@@ -896,6 +901,11 @@ const VoiceroVoice = {
       `);
     } else {
     }
+    
+    // Reset the opening flag after a delay to allow the interface to fully render
+    setTimeout(() => {
+      this.isOpeningVoiceChat = false;
+    }, 1000);
   },
 
   // Minimize voice chat interface
@@ -995,6 +1005,15 @@ const VoiceroVoice = {
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    // Check if we're in the process of opening the voice chat
+    if (this.isOpeningVoiceChat) {
+      // Set a timeout to reset the flag after a delay
+      setTimeout(() => {
+        this.isOpeningVoiceChat = false;
+      }, 1000);
+      return; // Don't proceed with closing
+    }
+    
     // First create reliable references to the elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
     const toggleContainer = document.getElementById("voice-toggle-container");
