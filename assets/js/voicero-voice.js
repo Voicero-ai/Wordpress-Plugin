@@ -1025,6 +1025,33 @@ const VoiceroVoice = {
     }
 
     this.reopenVoiceChat();
+
+    // Remove any welcome messages, voice prompts, placeholders, typing indicators, or empty message bubbles
+    const messagesContainer = document.getElementById("voice-messages");
+    if (messagesContainer) {
+      // Remove system/placeholder elements
+      messagesContainer
+        .querySelectorAll(
+          ".welcome-message, .voice-prompt, .placeholder, .typing-indicator"
+        )
+        .forEach((el) => el.remove());
+      // Remove empty message bubbles
+      messagesContainer
+        .querySelectorAll(".ai-message, .user-message")
+        .forEach((msg) => {
+          const textEl = msg.querySelector(".message-content");
+          if (!textEl || !textEl.textContent.trim()) {
+            msg.remove();
+          }
+        });
+      // First immediate scroll
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      // Then scroll again after a short delay to ensure it works after any animations
+      setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }, 300);
+    }
+
     console.log("VoiceroVoice: Maximization complete");
   },
 
@@ -1043,7 +1070,7 @@ const VoiceroVoice = {
       window.VoiceroCore.updateWindowState({
         voiceOpen: false,
         voiceOpenWindowUp: false,
-        coreOpen: false,
+        coreOpen: true, // Set coreOpen to true when closing voice chat
         textOpen: false,
         autoMic: false,
         textOpenWindowUp: false,
@@ -1095,7 +1122,6 @@ const VoiceroVoice = {
             autoMic: false,
           });
         }
-      } else {
       }
 
       // Update UI - remove siri animation
@@ -1120,14 +1146,30 @@ const VoiceroVoice = {
         )
         .forEach((el) => el.remove());
 
-      // Remove any empty AI message bubbles
-      document.querySelectorAll(".ai-message").forEach((msg) => {
-        const textEl = msg.querySelector(".message-content");
-        // If there's no text at all, remove the entire AI message bubble
-        if (textEl && !textEl.textContent.trim()) {
-          msg.remove();
-        }
-      });
+      // Force maximize the chat window when stopping recording
+      // First update the window state to ensure it's marked as maximized
+      if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+        window.VoiceroCore.updateWindowState({
+          voiceOpen: true,
+          voiceOpenWindowUp: true,
+          isVoiceMinimized: false,
+        });
+      }
+
+      // Then force maximize
+      this.maximizeVoiceChat();
+
+      // Ensure we scroll to the bottom after maximizing
+      const messagesContainer = document.getElementById("voice-messages");
+      if (messagesContainer) {
+        // First immediate scroll
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        // Then scroll again after a short delay to ensure it works after any animations
+        setTimeout(() => {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 300);
+      }
 
       // Rest of the existing stop listening logic
       if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {

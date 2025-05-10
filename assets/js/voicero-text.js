@@ -846,19 +846,38 @@ const VoiceroText = {
 
         /* Hide scrollbar for different browsers */
         #chat-messages {
-          scrollbar-width: none; /* Firefox */
-          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: thin !important; /* Firefox */
+          -ms-overflow-style: auto !important; /* IE and Edge */
           padding: 15px !important; 
-          padding-top: 10px !important; // Changed from 0px
+          padding-top: 10px !important;
           margin: 0 !important;
-          background-color: #f2f2f7 !important; /* iOS light gray background */
-          border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
-          transition: max-height 0.25s ease, opacity 0.25s ease !important; /* Smoother transitions */
-          overflow: hidden !important;
+          background-color: #f2f2f7 !important;
+          border-radius: 12px 12px 0 0 !important;
+          transition: max-height 0.25s ease, opacity 0.25s ease !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          max-height: 35vh !important;
+          height: auto !important;
+          position: relative !important;
         }
         
         #chat-messages::-webkit-scrollbar {
-          display: none; /* Chrome, Safari and Opera */
+          width: 6px !important;
+          display: block !important;
+        }
+        
+        #chat-messages::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.05) !important;
+          border-radius: 3px !important;
+        }
+        
+        #chat-messages::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.2) !important;
+          border-radius: 3px !important;
+        }
+        
+        #chat-messages::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.3) !important;
         }
         
         #chat-controls-header {
@@ -1240,19 +1259,38 @@ const VoiceroText = {
 
           /* Hide scrollbar for different browsers */
           #chat-messages {
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: thin !important; /* Firefox */
+            -ms-overflow-style: auto !important; /* IE and Edge */
             padding: 15px !important; 
-            padding-top: 10px !important; // Changed from 0px
+            padding-top: 10px !important;
             margin: 0 !important;
-            background-color: #f2f2f7 !important; /* iOS light gray background */
-            border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
-            transition: max-height 0.25s ease, opacity 0.25s ease !important; /* Smoother transitions */
-            overflow: hidden !important;
+            background-color: #f2f2f7 !important;
+            border-radius: 12px 12px 0 0 !important;
+            transition: max-height 0.25s ease, opacity 0.25s ease !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            max-height: 35vh !important;
+            height: auto !important;
+            position: relative !important;
           }
           
           #chat-messages::-webkit-scrollbar {
-            display: none; /* Chrome, Safari and Opera */
+            width: 6px !important;
+            display: block !important;
+          }
+          
+          #chat-messages::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05) !important;
+            border-radius: 3px !important;
+          }
+          
+          #chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2) !important;
+            border-radius: 3px !important;
+          }
+          
+          #chat-messages::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3) !important;
           }
           
           #chat-controls-header {
@@ -2381,6 +2419,9 @@ const VoiceroText = {
       return;
     }
 
+    // Force maximize the chat window
+    this.maximizeChat();
+
     // Add user message to UI
     this.addMessage(text, "user");
 
@@ -2412,11 +2453,11 @@ const VoiceroText = {
       window.VoiceroCore.updateWindowState({
         textOpen: false,
         textOpenWindowUp: false,
-        coreOpen: false,
+        coreOpen: true, // Always set coreOpen to true when closing
         voiceOpen: false,
         autoMic: false,
         voiceOpenWindowUp: false,
-        suppressChooser: true,
+        suppressChooser: true, // Allow chooser to show
       });
     }
 
@@ -2561,44 +2602,13 @@ const VoiceroText = {
     const inputWrapper = shadowRoot.getElementById("chat-input-wrapper");
     const maximizeBtn = shadowRoot.getElementById("maximize-chat");
 
-    // Check if we need to add welcome message based on session state
-    let shouldShowWelcome = false;
-    if (this.session && typeof this.session.textWelcome !== "undefined") {
-      shouldShowWelcome = this.session.textWelcome;
-    }
-
-    // Check if we have any messages already visible in the container
-    const existingMessages = messagesContainer.querySelectorAll(
-      ".ai-message:not(.typing-wrapper), .user-message"
-    );
-    const hasVisibleMessages = existingMessages.length > 0;
-
-    // If welcome should be shown and no messages are visible, add it
-    if (shouldShowWelcome && !hasVisibleMessages) {
-      // Force global welcome styles BEFORE adding the welcome message
-      this.forceGlobalWelcomeStyles();
-
-      this.addMessage(
-        `
-        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-          <div class="welcome-title">Aura, your website concierge</div>
-          <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
-          <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
-        </div>
-        `,
-        "ai",
-        false,
-        true
-      );
-    }
-
     // Hide maximize button first
     if (maximizeBtn) {
       maximizeBtn.style.display = "none";
     }
 
     if (messagesContainer) {
-      // Just restore opacity and max-height without changing DOM visibility properties
+      // Restore proper scrolling functionality
       messagesContainer.style.maxHeight = "35vh";
       messagesContainer.style.minHeight = "auto";
       messagesContainer.style.height = "auto";
@@ -2606,6 +2616,7 @@ const VoiceroText = {
       messagesContainer.style.paddingTop = "0";
       messagesContainer.style.margin = "0";
       messagesContainer.style.overflow = "auto";
+      messagesContainer.style.overflowY = "scroll";
       messagesContainer.style.border = "";
       messagesContainer.style.opacity = "1";
 
@@ -2627,24 +2638,16 @@ const VoiceroText = {
         msg.style.display = "flex";
       });
 
-      // Check if initial suggestions should be shown
-      if (shouldShowWelcome) {
-        const suggestions = messagesContainer.querySelector(
-          "#initial-suggestions"
-        );
-        if (suggestions) {
-          suggestions.style.display = "block";
-          suggestions.style.opacity = "1";
-          // Update suggestions
-          this.updatePopupQuestions();
-        }
-      }
+      // Scroll to bottom after maximizing
+      setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }, 100);
     }
 
     // Show the header
     if (headerContainer) {
       headerContainer.style.display = "flex";
-      headerContainer.style.zIndex = "9999999"; // Ensure high z-index when shown
+      headerContainer.style.zIndex = "9999999";
     }
 
     // Restore input wrapper styling
@@ -2653,7 +2656,7 @@ const VoiceroText = {
       inputWrapper.style.marginTop = "0";
     }
 
-    // Ensure welcome message colors are applied without redraw
+    // Ensure welcome message colors are applied
     this.forceWelcomeMessageColors();
   },
 
