@@ -20,9 +20,13 @@ const VoiceroVoice = {
   isShuttingDown: false,
   manuallyStoppedRecording: false, // New flag to track if user manually stopped recording
   websiteColor: "#882be6", // Default color
+  isOpeningVoiceChat: false,
+  isClosingVoiceChat: false, // New flag to track close operation
+  lastOpenTime: 0, // New: Track when the interface was last opened
 
   // Initialize the voice module
   init: function () {
+    console.log("VoiceroVoice: Initializing voice module");
     // Get website color from Core if available
     if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
       this.websiteColor = window.VoiceroCore.websiteColor;
@@ -742,12 +746,18 @@ const VoiceroVoice = {
   },
 
   isOpeningVoiceChat: false,
-  
+
   // Open voice chat interface
   openVoiceChat: function () {
+    console.log("VoiceroVoice: Opening voice chat interface");
+
+    // Set current time to prevent reopening too quickly
+    this.lastOpenTime = Date.now();
+
     // Set flag to prevent closing the interface too quickly
     this.isOpeningVoiceChat = true;
-    
+    this.isClosingVoiceChat = false; // Reset closing flag
+
     // Check if we have existing messages
     const hasMessages =
       VoiceroCore &&
@@ -768,24 +778,18 @@ const VoiceroVoice = {
       shouldShowWelcome = window.VoiceroCore.session.voiceWelcome;
     }
 
-    // Get current state of voiceOpenWindowUp if available
+    // IMPORTANT: Always open in maximized state first
     let shouldBeMaximized = true;
 
-    // Check if there's already a session with voiceOpenWindowUp defined
-    if (
-      window.VoiceroCore &&
-      window.VoiceroCore.session &&
-      typeof window.VoiceroCore.session.voiceOpenWindowUp !== "undefined"
-    ) {
-      shouldBeMaximized = window.VoiceroCore.session.voiceOpenWindowUp;
-    }
-
-    // Update window state
+    // Update window state - Always open maximized, minimize only after fully loaded if needed
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      console.log(
+        "VoiceroVoice: Updating window state - voice open (maximized)"
+      );
       window.VoiceroCore.updateWindowState({
         voiceOpen: true,
-        voiceOpenWindowUp: shouldBeMaximized, // Respect existing state
-        voiceWelcome: shouldShowWelcome, // Respect existing welcome state
+        voiceOpenWindowUp: true, // Always start maximized
+        voiceWelcome: shouldShowWelcome,
         coreOpen: false,
         textOpen: false,
         textOpenWindowUp: false,
@@ -810,37 +814,28 @@ const VoiceroVoice = {
     // Hide the toggle container when opening the voice interface
     const toggleContainer = document.getElementById("voice-toggle-container");
     if (toggleContainer) {
-      toggleContainer.style.display = "none";
-      toggleContainer.style.visibility = "hidden";
-      toggleContainer.style.opacity = "0";
-      toggleContainer.style.pointerEvents = "none"; // Prevent any clicks
+      console.log("VoiceroVoice: Hiding toggle container");
+      toggleContainer.style.cssText = `
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
+      `;
     }
 
     // Also hide the main button explicitly with !important-equivalent styles
     const mainButton = document.getElementById("chat-website-button");
     if (mainButton) {
-      mainButton.style.display = "none";
-      mainButton.style.visibility = "hidden";
-      mainButton.style.opacity = "0";
-      mainButton.style.pointerEvents = "none"; // Prevent any clicks
-      mainButton.style.zIndex = "-1"; // Push it behind other content
+      console.log("VoiceroVoice: Hiding main button");
+      mainButton.style.cssText = `
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
+      `;
     }
-
-    // Use a timeout to ensure button remains hidden after any race conditions
-    setTimeout(() => {
-      // Double-check that the button is still hidden
-      if (toggleContainer) {
-        toggleContainer.style.display = "none";
-        toggleContainer.style.visibility = "hidden";
-        toggleContainer.style.opacity = "0";
-      }
-
-      if (mainButton) {
-        mainButton.style.display = "none";
-        mainButton.style.visibility = "hidden";
-        mainButton.style.opacity = "0";
-      }
-    }, 100);
 
     // Hide the chooser popup
     const chooser = document.getElementById("interaction-chooser");
@@ -853,19 +848,24 @@ const VoiceroVoice = {
     // Show the voice interface
     const voiceInterface = document.getElementById("voice-chat-interface");
     if (voiceInterface) {
+      console.log("VoiceroVoice: Displaying voice interface");
       // Position in lower middle of screen
-      voiceInterface.style.position = "fixed";
-      voiceInterface.style.left = "50%";
-      voiceInterface.style.bottom = "20px";
-      voiceInterface.style.transform = "translateX(-50%)";
-      voiceInterface.style.display = "block";
-      voiceInterface.style.zIndex = "999999";
-      voiceInterface.style.width = "85%";
-      voiceInterface.style.maxWidth = "480px";
-      voiceInterface.style.minWidth = "280px";
-      voiceInterface.style.boxSizing = "border-box";
-      voiceInterface.style.overflow = "hidden";
-      voiceInterface.style.borderRadius = "12px 12px 0 0";
+      voiceInterface.style.cssText = `
+        position: fixed !important;
+        left: 50% !important;
+        bottom: 20px !important;
+        transform: translateX(-50%) !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 999999 !important;
+        width: 85% !important;
+        max-width: 480px !important;
+        min-width: 280px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        border-radius: 12px 12px 0 0 !important;
+      `;
     }
 
     // Load message history from session before deciding whether to show welcome message
@@ -878,12 +878,6 @@ const VoiceroVoice = {
           ".user-message .message-content, .ai-message .message-content"
         )
       : [];
-
-    // If window should be minimized, apply minimized state immediately
-    if (!shouldBeMaximized) {
-      this.minimizeVoiceChat();
-      return;
-    }
 
     // Show welcome message if needed and no messages were loaded from session
     if (
@@ -900,21 +894,89 @@ const VoiceroVoice = {
         </div>
       `);
     } else {
+      console.log("VoiceroVoice: No welcome message needed", {
+        shouldShowWelcome,
+        existingMessagesLength: existingMessages.length,
+      });
     }
-    
-    // Reset the opening flag after a delay to allow the interface to fully render
+
+    // Set multiple timeouts to make sure the interface remains visible
+    // This helps prevent race conditions that cause it to disappear
+    const ensureInterfaceVisible = () => {
+      const voiceInterface = document.getElementById("voice-chat-interface");
+      if (voiceInterface && !this.isClosingVoiceChat) {
+        console.log("VoiceroVoice: Ensuring interface remains visible");
+        voiceInterface.style.display = "block";
+        voiceInterface.style.visibility = "visible";
+        voiceInterface.style.opacity = "1";
+
+        // Double-check the toggle container and main button are hidden
+        const toggleContainer = document.getElementById(
+          "voice-toggle-container"
+        );
+        if (toggleContainer) {
+          toggleContainer.style.display = "none";
+          toggleContainer.style.visibility = "hidden";
+          toggleContainer.style.opacity = "0";
+        }
+
+        const mainButton = document.getElementById("chat-website-button");
+        if (mainButton) {
+          mainButton.style.display = "none";
+          mainButton.style.visibility = "hidden";
+          mainButton.style.opacity = "0";
+        }
+      }
+    };
+
+    // Multiple timeouts to ensure the interface stays visible
+    setTimeout(ensureInterfaceVisible, 100);
+    setTimeout(ensureInterfaceVisible, 500);
+    setTimeout(ensureInterfaceVisible, 1000);
+
+    // After the interface is fully loaded and visible, check if it should be minimized
+    // based on the previous session state (delayed to prevent race conditions)
     setTimeout(() => {
-      this.isOpeningVoiceChat = false;
-    }, 1000);
+      // Now check if we should be minimized according to session preferences
+      // We only check this AFTER ensuring the interface is visible
+      if (
+        window.VoiceroCore &&
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.voiceOpenWindowUp === false &&
+        !this.isClosingVoiceChat
+      ) {
+        console.log(
+          "VoiceroVoice: Session preference is minimized - minimizing after UI is ready"
+        );
+        this.isOpeningVoiceChat = false; // Clear flag to allow minimizing
+        this.minimizeVoiceChat();
+      } else {
+        console.log("VoiceroVoice: Resetting opening flag");
+        this.isOpeningVoiceChat = false;
+        ensureInterfaceVisible(); // One final visibility check
+      }
+    }, 1500);
   },
 
   // Minimize voice chat interface
   minimizeVoiceChat: function () {
+    console.log("VoiceroVoice: Minimizing voice chat");
+
     // Check if we're in the process of opening the voice chat
     if (this.isOpeningVoiceChat) {
+      console.log("VoiceroVoice: Cannot minimize - currently opening");
+
+      // Schedule another minimize attempt after opening completes
+      setTimeout(() => {
+        if (!this.isOpeningVoiceChat && !this.isClosingVoiceChat) {
+          console.log("VoiceroVoice: Delayed minimize attempt");
+          this.minimizeVoiceChat();
+        }
+      }, 2000);
+
       return; // Don't proceed with minimizing
     }
-    
+
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -981,7 +1043,7 @@ const VoiceroVoice = {
       voiceInterface.style.display = "block";
       voiceInterface.style.visibility = "visible";
       voiceInterface.style.opacity = "1";
-      
+
       // Position the button properly
       if (maximizeButton && inputWrapper) {
         maximizeButton.style.position = "absolute";
@@ -990,10 +1052,27 @@ const VoiceroVoice = {
         maximizeButton.style.transform = "translateX(-50%)";
       }
     }
+
+    console.log("VoiceroVoice: Minimization complete");
   },
 
   // Maximize voice chat interface
   maximizeVoiceChat: function () {
+    console.log("VoiceroVoice: Maximizing voice chat");
+
+    // Check if we're in the process of opening or closing
+    if (this.isOpeningVoiceChat || this.isClosingVoiceChat) {
+      console.log(
+        "VoiceroVoice: Cannot maximize - interface busy (opening or closing)"
+      );
+      setTimeout(() => {
+        if (!this.isOpeningVoiceChat && !this.isClosingVoiceChat) {
+          this.maximizeVoiceChat();
+        }
+      }, 1000);
+      return;
+    }
+
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -1006,19 +1085,37 @@ const VoiceroVoice = {
     }
 
     this.reopenVoiceChat();
+    console.log("VoiceroVoice: Maximization complete");
   },
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    console.log("VoiceroVoice: Closing voice chat");
+
+    // Set closing flag and check timing
+    this.isClosingVoiceChat = true;
+
     // Check if we're in the process of opening the voice chat
     if (this.isOpeningVoiceChat) {
+      console.log("VoiceroVoice: Cannot close - currently opening");
       // Set a timeout to reset the flag after a delay
       setTimeout(() => {
         this.isOpeningVoiceChat = false;
+        this.isClosingVoiceChat = false;
       }, 1000);
       return; // Don't proceed with closing
     }
-    
+
+    // Prevent rapid open-close cycles (debounce)
+    const now = Date.now();
+    if (now - this.lastOpenTime < 500) {
+      console.log("VoiceroVoice: Blocking close - too soon after opening");
+      setTimeout(() => {
+        this.isClosingVoiceChat = false;
+      }, 1000);
+      return;
+    }
+
     // First create reliable references to the elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
     const toggleContainer = document.getElementById("voice-toggle-container");
@@ -2493,6 +2590,13 @@ const VoiceroVoice = {
 
   // Reopen the voice chat from minimized state
   reopenVoiceChat: function () {
+    console.log("VoiceroVoice: Reopening voice chat from minimized state");
+
+    // Set temporary flags to manage state
+    const wasOpeningBefore = this.isOpeningVoiceChat;
+    this.isOpeningVoiceChat = true;
+    this.isClosingVoiceChat = false;
+
     // First create reliable references to all elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
     const messagesContainer = document.getElementById("voice-messages");
@@ -2501,7 +2605,7 @@ const VoiceroVoice = {
     const maximizeButton = document.getElementById("maximize-voice-chat");
     const toggleContainer = document.getElementById("voice-toggle-container");
     const chatButton = document.getElementById("chat-website-button");
-    
+
     // Update window state first - critical for proper state management
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -2594,9 +2698,19 @@ const VoiceroVoice = {
 
       // Update main interface with robust inline styling
       voiceInterface.style.cssText = `
+        position: fixed !important;
+        left: 50% !important;
+        bottom: 20px !important;
+        transform: translateX(-50%) !important;
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        z-index: 999999 !important;
+        width: 85% !important;
+        max-width: 480px !important;
+        min-width: 280px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
         border-radius: 12px 12px 0 0 !important;
       `;
 
@@ -2621,16 +2735,43 @@ const VoiceroVoice = {
       setTimeout(() => {
         voiceInterface.style.display = "block";
       }, 10);
-      
+
       // Ensure proper button visibility management through VoiceroCore
       if (window.VoiceroCore) {
         window.VoiceroCore.setKeepMiniButtonVisible(false);
-        
+
         // Clear any pending hide timers to prevent conflicts
         window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
         window.VoiceroCore.buttonVisibilityTimeouts = [];
       }
     }
+
+    // Set multiple timeouts to ensure the interface remains visible
+    const ensureInterfaceVisible = () => {
+      const voiceInterface = document.getElementById("voice-chat-interface");
+      if (voiceInterface) {
+        console.log(
+          "VoiceroVoice: Ensuring reopened interface remains visible"
+        );
+        voiceInterface.style.display = "block";
+        voiceInterface.style.visibility = "visible";
+        voiceInterface.style.opacity = "1";
+      }
+    };
+
+    // Use multiple timeouts for redundancy
+    setTimeout(ensureInterfaceVisible, 100);
+    setTimeout(ensureInterfaceVisible, 500);
+
+    // Reset opening flag with delay
+    setTimeout(() => {
+      // Restore original opening flag state or reset to false
+      this.isOpeningVoiceChat = wasOpeningBefore || false;
+      console.log(
+        "VoiceroVoice: Reopening complete, isOpeningVoiceChat =",
+        this.isOpeningVoiceChat
+      );
+    }, 1000);
   },
 
   // Speak welcome message using TTS
@@ -3115,6 +3256,69 @@ const VoiceroVoice = {
 
 // Expose global functions
 window.VoiceroVoice = VoiceroVoice;
+
+// Add debugging helper function
+VoiceroVoice.debugInterface = function () {
+  console.log("---------- VOICE INTERFACE DEBUG ----------");
+
+  // Check flags
+  console.log("Flags:", {
+    isRecording: this.isRecording,
+    isOpeningVoiceChat: this.isOpeningVoiceChat,
+    isClosingVoiceChat: this.isClosingVoiceChat,
+    lastOpenTime: this.lastOpenTime,
+    timeSinceOpen: Date.now() - this.lastOpenTime + "ms",
+  });
+
+  // Check elements
+  const voiceInterface = document.getElementById("voice-chat-interface");
+  const toggleContainer = document.getElementById("voice-toggle-container");
+  const mainButton = document.getElementById("chat-website-button");
+  const messagesContainer = document.getElementById("voice-messages");
+
+  console.log("Elements:", {
+    voiceInterface: voiceInterface ? "exists" : "missing",
+    toggleContainer: toggleContainer ? "exists" : "missing",
+    mainButton: mainButton ? "exists" : "missing",
+    messagesContainer: messagesContainer ? "exists" : "missing",
+  });
+
+  // Check visibility
+  if (voiceInterface) {
+    const style = window.getComputedStyle(voiceInterface);
+    console.log("Voice Interface Visibility:", {
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      zIndex: style.zIndex,
+    });
+  }
+
+  if (mainButton) {
+    const style = window.getComputedStyle(mainButton);
+    console.log("Main Button Visibility:", {
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      zIndex: style.zIndex,
+    });
+  }
+
+  // Check VoiceroCore state
+  if (window.VoiceroCore && window.VoiceroCore.session) {
+    console.log("VoiceroCore Session:", {
+      voiceOpen: window.VoiceroCore.session.voiceOpen,
+      voiceOpenWindowUp: window.VoiceroCore.session.voiceOpenWindowUp,
+      textOpen: window.VoiceroCore.session.textOpen,
+    });
+  } else {
+    console.log("VoiceroCore Session: Not available");
+  }
+
+  console.log("------------------------------------------");
+
+  return "Debug info logged to console";
+};
 
 // Add autoMic activation function
 VoiceroVoice.activateAutoMic = function () {

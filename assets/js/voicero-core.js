@@ -366,6 +366,8 @@
               e.preventDefault();
               e.stopPropagation();
 
+              console.log("VoiceroCore: Voice button clicked");
+
               // Hide the chooser
               if (chooser) {
                 chooser.style.display = "none";
@@ -373,27 +375,68 @@
                 chooser.style.opacity = "0";
               }
 
-              // Update window state first (set voice open flags)
-              // REMOVED: Let openVoiceChat handle its own state update
-              // this.updateWindowState({
-              //   voiceOpen: true,
-              //   voiceOpenWindowUp: true,
-              //   textOpen: false,
-              //   textOpenWindowUp: false,
-              // });
+              // First check if voice interface is already created
+              let voiceInterface = document.getElementById(
+                "voice-chat-interface"
+              );
+              if (!voiceInterface) {
+                console.log("VoiceroCore: Creating voice interface");
+                container.insertAdjacentHTML(
+                  "beforeend",
+                  `<div id="voice-chat-interface" style="display: none;"></div>`
+                );
+                voiceInterface = document.getElementById(
+                  "voice-chat-interface"
+                );
+              }
+
+              // Prevent duplicate clicks by checking if interface is already visible
+              if (
+                voiceInterface &&
+                (voiceInterface.style.display === "block" ||
+                  window.getComputedStyle(voiceInterface).display === "block")
+              ) {
+                console.log("VoiceroCore: Voice interface already open");
+                return;
+              }
+
+              // Ensure main button is hidden - hiding first prevents flickering
+              this.hideMainButton();
 
               // Open the voice interface
               if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
+                console.log("VoiceroCore: Calling openVoiceChat");
                 window.VoiceroVoice.openVoiceChat();
-                // Force maximize after opening
-                setTimeout(() => {
-                  if (
-                    window.VoiceroVoice &&
-                    window.VoiceroVoice.maximizeVoiceChat
-                  ) {
-                    window.VoiceroVoice.maximizeVoiceChat();
-                  }
-                }, 100);
+
+                // Force maximize after opening with multiple retries to ensure it works
+                const maximizeAttempts = [100, 500, 1000];
+                maximizeAttempts.forEach((delay) => {
+                  setTimeout(() => {
+                    if (
+                      window.VoiceroVoice &&
+                      window.VoiceroVoice.maximizeVoiceChat
+                    ) {
+                      console.log(
+                        `VoiceroCore: Calling maximizeVoiceChat after ${delay}ms`
+                      );
+                      window.VoiceroVoice.maximizeVoiceChat();
+
+                      // Also ensure the interface is visible
+                      const voiceInterface = document.getElementById(
+                        "voice-chat-interface"
+                      );
+                      if (voiceInterface) {
+                        voiceInterface.style.display = "block";
+                        voiceInterface.style.visibility = "visible";
+                        voiceInterface.style.opacity = "1";
+                      }
+                    }
+                  }, delay);
+                });
+
+                // Make sure button stays hidden
+                setTimeout(() => this.hideMainButton(), 200);
+                setTimeout(() => this.hideMainButton(), 1000);
               }
             });
           }
@@ -1294,8 +1337,13 @@
 
     // Update window state via API
     updateWindowState: function (windowState) {
+      console.log("VoiceroCore: Updating window state", windowState);
+
       // Check if session initialization is in progress
       if (this.isInitializingSession) {
+        console.log(
+          "VoiceroCore: Session initializing, queuing window state update"
+        );
         this.pendingWindowStateUpdates.push(windowState);
         return;
       }
@@ -1303,6 +1351,9 @@
       // Check if we have a session ID
       if (!this.sessionId) {
         // Add to pending updates queue
+        console.log(
+          "VoiceroCore: No session ID yet, queuing window state update"
+        );
         this.pendingWindowStateUpdates.push(windowState);
 
         // If session is not initialized yet, trigger initialization
@@ -1313,6 +1364,10 @@
         // Immediately update local session values even without sessionId
         if (this.session) {
           // Update our local session with new values
+          console.log(
+            "VoiceroCore: Immediately updating local session",
+            windowState
+          );
           Object.assign(this.session, windowState);
 
           // Propagate the immediate updates to other modules
@@ -1331,6 +1386,7 @@
       // Immediately update local session values for instant access
       if (this.session) {
         // Update our local session with new values
+        console.log("VoiceroCore: Updating local session with", windowState);
         Object.assign(this.session, windowState);
 
         // Propagate the immediate updates to other modules
@@ -1340,6 +1396,18 @@
 
         if (window.VoiceroVoice) {
           window.VoiceroVoice.session = this.session;
+        }
+
+        // If we're opening voice interface, make sure to keep button hidden
+        if (windowState.voiceOpen === true) {
+          console.log(
+            "VoiceroCore: Voice interface opening, hiding main button"
+          );
+          this.hideMainButton();
+
+          // Additional forced button hiding with multiple timeouts
+          setTimeout(() => this.hideMainButton(), 100);
+          setTimeout(() => this.hideMainButton(), 500);
         }
       }
 
@@ -1355,6 +1423,7 @@
           typeof sessionIdForApi !== "string" ||
           sessionIdForApi.trim() === ""
         ) {
+          console.warn("VoiceroCore: Invalid session ID for API call");
           return;
         }
 
@@ -1367,6 +1436,11 @@
           windowState: windowStateForApi,
         };
 
+        console.log(
+          "VoiceroCore: Sending window state update to API",
+          requestBody
+        );
+
         fetch(proxyUrl, {
           method: "POST",
           headers: {
@@ -1377,11 +1451,15 @@
         })
           .then((response) => {
             if (!response.ok) {
+              console.error(
+                `VoiceroCore: Window state update failed: ${response.status}`
+              );
               throw new Error(`Window state update failed: ${response.status}`);
             }
             return response.json();
           })
           .then((data) => {
+            console.log("VoiceroCore: Window state update successful", data);
             // Update our local session data with the full server response
             if (data.session) {
               // Need to update the global VoiceroCore session
@@ -1399,7 +1477,9 @@
               }
             }
           })
-          .catch((error) => {});
+          .catch((error) => {
+            console.error("VoiceroCore: Error updating window state:", error);
+          });
       }, 0);
     },
 
