@@ -1032,62 +1032,37 @@ const VoiceroVoice = {
   closeVoiceChat: function () {
     console.log("VoiceroVoice: Closing voice chat");
 
-    // Set closing flag and check timing
+    // Set closing flag
     this.isClosingVoiceChat = true;
-
-    // Check if we're in the process of opening the voice chat
-    if (this.isOpeningVoiceChat) {
-      console.log("VoiceroVoice: Cannot close - currently opening");
-      // Set a timeout to reset the flag after a delay
-      setTimeout(() => {
-        this.isOpeningVoiceChat = false;
-        this.isClosingVoiceChat = false;
-      }, 1000);
-      return; // Don't proceed with closing
-    }
-
-    // Prevent rapid open-close cycles (debounce)
-    const now = Date.now();
-    if (now - this.lastOpenTime < 500) {
-      console.log("VoiceroVoice: Blocking close - too soon after opening");
-      setTimeout(() => {
-        this.isClosingVoiceChat = false;
-      }, 1000);
-      return;
-    }
 
     // First create reliable references to the elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
 
-    // Update window state
+    // Update window state first - this is critical
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         voiceOpen: false,
         voiceOpenWindowUp: false,
-        coreOpen: false, // Changed from true to false to prevent chooser from showing
+        coreOpen: false,
         textOpen: false,
         autoMic: false,
         textOpenWindowUp: false,
-        suppressChooser: true, // <--- add this
+        suppressChooser: true,
       });
     }
 
     // Hide voice interface
-    if (voiceInterface && !this.isOpeningVoiceChat) {
+    if (voiceInterface) {
       voiceInterface.style.display = "none";
     }
 
-    // Let VoiceroCore handle the button visibility - but DON'T show chooser
+    // Let VoiceroCore handle the button visibility
     if (window.VoiceroCore) {
-      // Tell VoiceroCore to handle button visibility only
       window.VoiceroCore.ensureMainButtonVisible();
-      // DO NOT call window.VoiceroCore.showChooser() - we don't want the chooser to automatically appear
     }
 
-    // Reset closing flag after slight delay
-    setTimeout(() => {
-      this.isClosingVoiceChat = false;
-    }, 500);
+    // Reset closing flag
+    this.isClosingVoiceChat = false;
   },
 
   /**

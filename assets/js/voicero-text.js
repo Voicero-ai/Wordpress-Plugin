@@ -2398,116 +2398,43 @@ const VoiceroText = {
 
   // Close the text chat interface
   closeTextChat: function () {
-    // First create reliable references to the elements we need
-    const shadowHost = document.getElementById("voicero-text-chat-container");
-    const toggleContainer = document.getElementById("voice-toggle-container");
-    const mainButton = document.getElementById("chat-website-button");
-    const container = document.getElementById("voicero-app-container");
+    console.log("VoiceroText: Closing text chat");
 
-    // Update window state first (set text closed, core open)
+    // Set closing flag
+    this.isClosingTextChat = true;
+
+    // First create reliable references to the elements we need
+    const textInterface = document.getElementById("text-chat-interface");
+    const shadowHost = document.getElementById("voicero-text-chat-container");
+
+    // Update window state first - this is critical
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         textOpen: false,
         textOpenWindowUp: false,
-        coreOpen: true,
+        coreOpen: false,
         voiceOpen: false,
+        autoMic: false,
         voiceOpenWindowUp: false,
-        suppressChooser: true, // Prevent chooser from showing automatically
+        suppressChooser: true,
       });
-      // Removed direct call to createChooser
     }
 
-    // Hide the shadow host (which contains the chat interface)
+    // Hide both the interface and shadow host
+    if (textInterface) {
+      textInterface.style.display = "none";
+    }
     if (shadowHost) {
       shadowHost.style.display = "none";
     }
 
-    // Force a sync display update for the main container
-    if (container) {
-      container.style.cssText = `
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-      `;
-    }
-
-    if (toggleContainer) {
-      // Apply comprehensive styling directly
-      toggleContainer.style.cssText = `
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        z-index: 2147483647 !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        transform: none !important;
-        top: auto !important;
-        left: auto !important;
-        pointer-events: auto !important;
-        width: auto !important;
-        height: auto !important;
-      `;
-    }
-
-    if (mainButton) {
-      const themeColor = this.websiteColor || "#882be6";
-      mainButton.style.cssText = `
-        position: relative !important;
-        background-color: ${themeColor} !important;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: 50px !important;
-        height: 50px !important;
-        border-radius: 50% !important;
-        justify-content: center !important;
-        align-items: center !important;
-        color: white !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-        border: none !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        z-index: 2147483647 !important;
-        pointer-events: auto !important;
-      `;
-    }
-
-    // Set multiple delayed checks to ensure visibility
-    for (let delay of [0, 50, 100, 300]) {
-      setTimeout(() => {
-        if (toggleContainer) {
-          toggleContainer.style.display = "block";
-          toggleContainer.style.visibility = "visible";
-          toggleContainer.style.opacity = "1";
-          toggleContainer.style.pointerEvents = "auto";
-        }
-
-        if (mainButton) {
-          mainButton.style.display = "flex";
-          mainButton.style.visibility = "visible";
-          mainButton.style.opacity = "1";
-          mainButton.style.pointerEvents = "auto";
-        }
-      }, delay);
-    }
-
+    // Let VoiceroCore handle the button visibility
     if (window.VoiceroCore) {
-      window.VoiceroCore.setKeepMiniButtonVisible(true);
-
-      window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
-      window.VoiceroCore.buttonVisibilityTimeouts = [];
-
       window.VoiceroCore.ensureMainButtonVisible();
-
-      setTimeout(() => {
-        window.VoiceroCore.setKeepMiniButtonVisible(false);
-      }, 50);
     }
+
+    // Reset closing flag
+    this.isClosingTextChat = false;
   },
 
   // Minimize the chat interface
