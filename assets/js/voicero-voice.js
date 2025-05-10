@@ -2470,14 +2470,27 @@ const VoiceroVoice = {
 
   // Reopen the voice chat from minimized state
   reopenVoiceChat: function () {
+    // First create reliable references to all elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
-    if (voiceInterface) {
-      // Get all necessary elements
-      const messagesContainer = document.getElementById("voice-messages");
-      const headerContainer = document.getElementById("voice-controls-header");
-      const inputWrapper = document.getElementById("voice-input-wrapper");
-      const maximizeButton = document.getElementById("maximize-voice-chat");
+    const messagesContainer = document.getElementById("voice-messages");
+    const headerContainer = document.getElementById("voice-controls-header");
+    const inputWrapper = document.getElementById("voice-input-wrapper");
+    const maximizeButton = document.getElementById("maximize-voice-chat");
+    const toggleContainer = document.getElementById("voice-toggle-container");
+    const chatButton = document.getElementById("chat-website-button");
+    
+    // Update window state first - critical for proper state management
+    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      window.VoiceroCore.updateWindowState({
+        voiceOpen: true,
+        voiceOpenWindowUp: true,
+        coreOpen: false,
+        textOpen: false,
+        textOpenWindowUp: false,
+      });
+    }
 
+    if (voiceInterface) {
       // Restore messages container
       if (messagesContainer) {
         // Show all messages
@@ -2488,17 +2501,19 @@ const VoiceroVoice = {
           msg.style.display = "flex";
         });
 
-        // Restore container styles
-        messagesContainer.style.maxHeight = "35vh";
-        messagesContainer.style.minHeight = "auto";
-        messagesContainer.style.height = "auto";
-        messagesContainer.style.opacity = "1";
-        messagesContainer.style.padding = "15px";
-        messagesContainer.style.paddingTop = "0";
-        messagesContainer.style.overflow = "auto";
-        messagesContainer.style.border = "none";
-        messagesContainer.style.display = "block";
-        messagesContainer.style.visibility = "visible";
+        // Restore container styles with robust inline styling
+        messagesContainer.style.cssText = `
+          max-height: 35vh !important;
+          min-height: auto !important;
+          height: auto !important;
+          opacity: 1 !important;
+          padding: 15px !important;
+          padding-top: 0 !important;
+          overflow: auto !important;
+          border: none !important;
+          display: block !important;
+          visibility: visible !important;
+        `;
 
         // Check if we should show a welcome message
         const existingMessages = messagesContainer.querySelectorAll(
@@ -2529,20 +2544,24 @@ const VoiceroVoice = {
         }
       }
 
-      // Restore header
+      // Restore header with robust inline styling
       if (headerContainer) {
-        headerContainer.style.display = "flex";
-        headerContainer.style.visibility = "visible";
-        headerContainer.style.opacity = "1";
-        headerContainer.style.zIndex = "9999999"; // Ensure high z-index
+        headerContainer.style.cssText = `
+          display: flex !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          z-index: 9999999 !important;
+        `;
       }
 
-      // Restore input wrapper
+      // Restore input wrapper with robust inline styling
       if (inputWrapper) {
-        inputWrapper.style.borderRadius = "0 0 12px 12px";
-        inputWrapper.style.marginTop = "0";
-        inputWrapper.style.display = "block";
-        inputWrapper.style.visibility = "visible";
+        inputWrapper.style.cssText = `
+          border-radius: 0 0 12px 12px !important;
+          margin-top: 0 !important;
+          display: block !important;
+          visibility: visible !important;
+        `;
       }
 
       // Hide maximize button
@@ -2550,17 +2569,44 @@ const VoiceroVoice = {
         maximizeButton.style.display = "none";
       }
 
-      // Update main interface
-      voiceInterface.style.display = "block";
-      voiceInterface.style.visibility = "visible";
-      voiceInterface.style.opacity = "1";
-      voiceInterface.style.borderRadius = "12px 12px 0 0";
+      // Update main interface with robust inline styling
+      voiceInterface.style.cssText = `
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        border-radius: 12px 12px 0 0 !important;
+      `;
+
+      // Hide the main button when voice interface is open
+      if (toggleContainer) {
+        toggleContainer.style.cssText = `
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+        `;
+      }
+
+      if (chatButton) {
+        chatButton.style.cssText = `
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+        `;
+      }
 
       // Force a redraw
-      voiceInterface.style.display = "none";
       setTimeout(() => {
         voiceInterface.style.display = "block";
       }, 10);
+      
+      // Ensure proper button visibility management through VoiceroCore
+      if (window.VoiceroCore) {
+        window.VoiceroCore.setKeepMiniButtonVisible(false);
+        
+        // Clear any pending hide timers to prevent conflicts
+        window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
+        window.VoiceroCore.buttonVisibilityTimeouts = [];
+      }
     }
   },
 
