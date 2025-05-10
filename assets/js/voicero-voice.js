@@ -2520,20 +2520,61 @@ const VoiceroVoice = {
       // Restore header with robust inline styling
       if (headerContainer) {
         headerContainer.style.cssText = `
-          display: flex !important;
-          visibility: visible !important;
-          opacity: 1 !important;
+          position: sticky !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          height: 40px !important;
+          background-color: #f2f2f7 !important;
           z-index: 9999999 !important;
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          padding: 10px 15px !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+          border-radius: 0 !important;
+          margin: 0 !important;
+          margin-bottom: 15px !important;
+          width: 100% !important;
+          box-shadow: none !important;
+          box-sizing: border-box !important;
+          margin-left: 0 !important; 
+          margin-right: 0 !important;
         `;
       }
 
       // Restore input wrapper with robust inline styling
       if (inputWrapper) {
         inputWrapper.style.cssText = `
-          border-radius: 0 0 12px 12px !important;
-          margin-top: 0 !important;
-          display: block !important;
-          visibility: visible !important;
+          position: relative;
+          padding: 2px;
+          background: linear-gradient(90deg, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              -0.4
+            )}, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              -0.2
+            )}, 
+            var(--voicero-theme-color, ${this.websiteColor || "#882be6"}),
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              0.2
+            )}, 
+            ${this.adjustColor(
+              `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
+              0.4
+            )}
+          );
+          background-size: 500% 100%;
+          border-radius: 0 0 12px 12px;
+          animation: gradientBorder 15s linear infinite;
+          transition: all 0.3s ease;
+          box-shadow: none;
+          width: 100%;
+          box-sizing: border-box;
+          margin: 0;
         `;
       }
 

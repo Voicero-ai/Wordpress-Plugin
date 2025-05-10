@@ -1056,6 +1056,7 @@ const VoiceroText = {
         backdropFilter: "none", // Remove any backdrop filter
         webkitBackdropFilter: "none", // Safari support
         opacity: "1", // Ensure full opacity
+        position: "relative", // <-- Make parent relative for absolute child
       });
       document.body.appendChild(shadowHost);
 
@@ -1406,11 +1407,10 @@ const VoiceroText = {
             text-align: center;
             padding: 0;
             margin: 0;
-            margin-top: 10px; /* Add top margin for spacing */
-            cursor: pointer;
-            transition: all 0.2s ease;
+            position: absolute;
+            bottom: 30px; /* Sit just above the input bar */
+            left: 0;
             z-index: 999999;
-            position: relative;
           }
           
           #maximize-chat button {
@@ -1427,9 +1427,9 @@ const VoiceroText = {
             align-items: center;
             justify-content: center;
             min-width: 160px;
-            margin-bottom: -2px; /* Increased negative margin to ensure overlap */
+            margin-bottom: 0;
             position: relative;
-            z-index: 1000000; /* Higher z-index to ensure button shows above input */
+            z-index: 1000000;
           }
         </style>
 
@@ -1437,7 +1437,7 @@ const VoiceroText = {
         <!-- This is critical so it won't be affected by the messages container collapse -->
         <div 
           id="maximize-chat"
-          style="display: none; margin-top: 10px;"
+          style="display: none; margin-top: 0; position: absolute; bottom: 60px; left: 0; width: 100%; z-index: 999999;"
         >
           <button>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
@@ -2547,9 +2547,13 @@ const VoiceroText = {
 
     // Make the maximize button visible first
     if (maximizeBtn) {
-      // Show the maximize button with absolute positioning and higher z-index
       maximizeBtn.style.display = "block";
-      maximizeBtn.style.marginTop = "10px"; // Add top margin
+      maximizeBtn.style.marginTop = "0";
+      maximizeBtn.style.position = "absolute";
+      maximizeBtn.style.bottom = "60px";
+      maximizeBtn.style.left = "0";
+      maximizeBtn.style.width = "100%";
+      maximizeBtn.style.zIndex = "999999";
     }
 
     if (messagesContainer) {
