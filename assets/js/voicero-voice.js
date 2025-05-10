@@ -2596,12 +2596,15 @@ const VoiceroVoice = {
     contentDiv.style.cssText = `      background: #e5e5ea;
       color: #333;
       border-radius: 18px;
-      padding: 12px 16px;
-      max-width: 80%;
+      padding: 12px 15px;
+      width: 90% !important;
+      max-width: 400px !important;
       word-wrap: break-word;
       font-size: 14px;
       line-height: 1.4;
       text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      margin: 12px auto;
     `;
 
     // Add content to message
