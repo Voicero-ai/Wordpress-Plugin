@@ -1006,7 +1006,9 @@
     showChooser: function () {
       const chooser = document.getElementById("interaction-chooser");
       if (!chooser) return;
-
+      
+      console.log("[DEBUG] showChooser called");
+      
       // First check if we should show the chooser at all
       if (!this.shouldShowChooser()) {
         // Explicitly hide the chooser
@@ -1015,10 +1017,14 @@
         chooser.style.opacity = "0";
         return;
       }
-
+      
+      console.log("[DEBUG] Before setting styles:", 
+                 "display=", getComputedStyle(chooser).display, 
+                 "flexDirection=", getComputedStyle(chooser).flexDirection);
+      
       // Apply clean, consistent styles without complex overrides
       chooser.style.display = "flex";
-      chooser.style.flexDirection = "row"; // Keep buttons in a horizontal row
+      chooser.style.flexDirection = "column"; // Keep buttons in a vertical stack
       chooser.style.justifyContent = "center"; // Center buttons horizontally
       chooser.style.alignItems = "center"; // Center buttons vertically
       chooser.style.visibility = "visible";
@@ -1034,23 +1040,31 @@
       const voiceButton = document.getElementById("voice-chooser-button");
       const textButton = document.getElementById("text-chooser-button");
 
-      // Apply consistent button styles for side-by-side layout
+      // Apply consistent button styles for vertical layout
       if (voiceButton) {
-        voiceButton.style.marginBottom = "0"; // Remove any bottom margin
-        voiceButton.style.marginRight = "10px"; // Add right margin for spacing
+        voiceButton.style.marginBottom = "10px"; // Add bottom margin for vertical spacing
+        voiceButton.style.marginRight = "0"; // Remove right margin for vertical layout
         voiceButton.style.display = "flex";
         voiceButton.style.alignItems = "center";
         voiceButton.style.justifyContent = "center";
-        voiceButton.style.flexDirection = "row"; // Ensure icon and text are side by side
+        voiceButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
       }
 
       if (textButton) {
-        textButton.style.marginBottom = "0"; // Remove any bottom margin
+        textButton.style.marginBottom = "0"; // No bottom margin for last element
         textButton.style.display = "flex";
         textButton.style.alignItems = "center";
         textButton.style.justifyContent = "center";
-        textButton.style.flexDirection = "row"; // Ensure icon and text are side by side
+        textButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
       }
+      
+      console.log("[DEBUG] After all style changes:", 
+                 "chooser flexDirection=", chooser.style.flexDirection,
+                 "computed flexDirection=", getComputedStyle(chooser).flexDirection,
+                 "voiceButton marginBottom=", voiceButton ? voiceButton.style.marginBottom : "N/A",
+                 "textButton marginBottom=", textButton ? textButton.style.marginBottom : "N/A");
+                 
+      chooser.setAttribute("style", "display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; visibility: visible !important; opacity: 1 !important; padding: 8px !important;");
     },
 
     // Ensure the main button is always visible
