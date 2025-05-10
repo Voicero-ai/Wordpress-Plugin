@@ -741,8 +741,13 @@ const VoiceroVoice = {
     }, 100);
   },
 
+  isOpeningVoiceChat: false,
+  
   // Open voice chat interface
   openVoiceChat: function () {
+    // Set flag to prevent closing the interface too quickly
+    this.isOpeningVoiceChat = true;
+    
     // Check if we have existing messages
     const hasMessages =
       VoiceroCore &&
@@ -896,10 +901,20 @@ const VoiceroVoice = {
       `);
     } else {
     }
+    
+    // Reset the opening flag after a delay to allow the interface to fully render
+    setTimeout(() => {
+      this.isOpeningVoiceChat = false;
+    }, 1000);
   },
 
   // Minimize voice chat interface
   minimizeVoiceChat: function () {
+    // Check if we're in the process of opening the voice chat
+    if (this.isOpeningVoiceChat) {
+      return; // Don't proceed with minimizing
+    }
+    
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -959,21 +974,21 @@ const VoiceroVoice = {
         : "100%";
     }
 
-    // Force a redraw to ensure button is visible
+    // Force a redraw to ensure button is visible WITHOUT hiding the interface
     const voiceInterface = document.getElementById("voice-chat-interface");
     if (voiceInterface) {
-      voiceInterface.style.display = "none";
-      setTimeout(() => {
-        voiceInterface.style.display = "block";
-
-        // Position the button properly
-        if (maximizeButton && inputWrapper) {
-          maximizeButton.style.position = "absolute";
-          maximizeButton.style.bottom = "100%";
-          maximizeButton.style.left = "50%";
-          maximizeButton.style.transform = "translateX(-50%)";
-        }
-      }, 10);
+      // Ensure the interface remains visible
+      voiceInterface.style.display = "block";
+      voiceInterface.style.visibility = "visible";
+      voiceInterface.style.opacity = "1";
+      
+      // Position the button properly
+      if (maximizeButton && inputWrapper) {
+        maximizeButton.style.position = "absolute";
+        maximizeButton.style.bottom = "100%";
+        maximizeButton.style.left = "50%";
+        maximizeButton.style.transform = "translateX(-50%)";
+      }
     }
   },
 
@@ -995,6 +1010,15 @@ const VoiceroVoice = {
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    // Check if we're in the process of opening the voice chat
+    if (this.isOpeningVoiceChat) {
+      // Set a timeout to reset the flag after a delay
+      setTimeout(() => {
+        this.isOpeningVoiceChat = false;
+      }, 1000);
+      return; // Don't proceed with closing
+    }
+    
     // First create reliable references to the elements we need
     const voiceInterface = document.getElementById("voice-chat-interface");
     const toggleContainer = document.getElementById("voice-toggle-container");
@@ -1013,8 +1037,7 @@ const VoiceroVoice = {
       });
     }
 
-    // Hide the voice interface
-    if (voiceInterface) {
+    if (voiceInterface && !this.isOpeningVoiceChat) {
       voiceInterface.style.display = "none";
     }
 

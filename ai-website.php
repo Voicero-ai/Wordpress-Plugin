@@ -2302,6 +2302,8 @@ function voicero_tts_proxy( WP_REST_Request $request ) {
 
     /* 4. Return the public URL (signed if desired) ----------------------- */
     $file_url = $saved['url'];  // already absolute, no need to esc_url() for JSON
+    // Ensure the URL uses HTTPS instead of HTTP to prevent mixed content warnings
+    $file_url = str_replace('http://', 'https://', $file_url);
 
     return new WP_REST_Response(
         [
