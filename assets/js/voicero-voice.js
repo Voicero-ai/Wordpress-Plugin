@@ -1068,6 +1068,7 @@ const VoiceroVoice = {
         textOpen: false,
         autoMic: false,
         textOpenWindowUp: false,
+        suppressChooser: true, // <--- add this
       });
     }
 

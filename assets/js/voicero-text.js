@@ -209,12 +209,12 @@ const VoiceroText = {
       mainButton.style.opacity = "0";
     }
 
-    // Hide the chooser popup
-    const chooser = document.getElementById("interaction-chooser");
-    if (chooser) {
-      chooser.style.display = "none";
-      chooser.style.visibility = "hidden";
-      chooser.style.opacity = "0";
+    // Hide the chooser popup (handled by VoiceroCore now)
+    if (
+      window.VoiceroCore &&
+      typeof window.VoiceroCore.hideMainButton === "function"
+    ) {
+      window.VoiceroCore.hideMainButton();
     }
 
     // Check if we already initialized
@@ -2412,7 +2412,9 @@ const VoiceroText = {
         coreOpen: true,
         voiceOpen: false,
         voiceOpenWindowUp: false,
+        suppressChooser: true, // Prevent chooser from showing automatically
       });
+      // Removed direct call to createChooser
     }
 
     // Hide the shadow host (which contains the chat interface)

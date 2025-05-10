@@ -145,50 +145,8 @@
       // Check if interaction chooser already exists
       let chooser = document.getElementById("interaction-chooser");
 
-      // Create the interaction chooser if it doesn't exist
-      if (!chooser && toggleContainer) {
-        // Create the interaction chooser
-        toggleContainer.insertAdjacentHTML(
-          "beforeend",
-          `
-          <div id="interaction-chooser">
-            <div id="voice-chooser-button" class="interaction-option">
-              <img src="${this.iconBaseUrl}/voice.svg" alt="Voice" style="width:24px;height:24px;margin-right:10px;"> Voice Conversation
-            </div>
-            <div id="text-chooser-button" class="interaction-option">
-              <img src="${this.iconBaseUrl}/text.svg" alt="Text" style="width:24px;height:24px;margin-right:10px;"> Message
-            </div>
-          </div>
-          `
-        );
-
-        chooser = document.getElementById("interaction-chooser");
-
-        // Style the interaction chooser with correct flex layout
-        if (chooser) {
-          // Default to hidden
-          chooser.style.cssText = `
-            position: fixed !important;
-            bottom: 80px !important;
-            right: 20px !important;
-            z-index: 10001 !important;
-            background-color: white !important;
-            border-radius: 12px !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
-            padding: 8px !important;
-            width: auto !important;
-            opacity: 0 !important;
-            transform: translateY(-20px) !important;
-            transition: all 0.3s ease !important;
-            pointer-events: auto !important;
-            display: none !important;
-            visibility: hidden !important;
-            flex-direction: row !important;
-            justify-content: center !important;
-            align-items: center !important;
-          `;
-        }
-      }
+      // Always recreate chooser with the unified function
+      this.createChooser();
 
       // Ensure the chooser is properly styled every time buttons are created
       if (chooser) {
@@ -966,16 +924,25 @@
 
     // Helper to determine if the chooser should be displayed
     shouldShowChooser: function () {
+      console.log("[DEBUG] shouldShowChooser called");
+      console.log("[DEBUG] Session exists:", !!this.session);
+      console.log("[DEBUG] Session state:", this.session);
+
       // Don't show if session doesn't exist
-      if (!this.session) return false;
+      if (!this.session) {
+        console.log("[DEBUG] No session, not showing chooser");
+        return false;
+      }
 
       // Don't show if any interfaces are open
       if (this.session.voiceOpen === true || this.session.textOpen === true) {
+        console.log("[DEBUG] Interface is open, not showing chooser");
         return false;
       }
 
       // Don't show unless coreOpen is explicitly true
       if (this.session.coreOpen !== true) {
+        console.log("[DEBUG] coreOpen is not true, not showing chooser");
         return false;
       }
 
@@ -987,6 +954,9 @@
         textInterface &&
         window.getComputedStyle(textInterface).display === "block"
       ) {
+        console.log(
+          "[DEBUG] Text interface is visible in DOM, not showing chooser"
+        );
         return false;
       }
 
@@ -995,20 +965,33 @@
         voiceInterface &&
         window.getComputedStyle(voiceInterface).display === "block"
       ) {
+        console.log(
+          "[DEBUG] Voice interface is visible in DOM, not showing chooser"
+        );
         return false;
       }
 
-      // Default to not showing the chooser unless explicitly requested
-      return false;
+      console.log("[DEBUG] All checks passed, should show chooser");
+      return true;
     },
 
     // Show the chooser interface when an active interface is closed
     showChooser: function () {
-      const chooser = document.getElementById("interaction-chooser");
-      if (!chooser) return;
-      
       console.log("[DEBUG] showChooser called");
-      
+      console.log("[DEBUG] Current session state:", this.session);
+      // Always recreate the chooser to ensure correct HTML and style
+      this.createChooser();
+      // Confirm only one chooser exists
+      const allChoosers = document.querySelectorAll("#interaction-chooser");
+      console.log(
+        "[DEBUG] Number of chooser elements in DOM:",
+        allChoosers.length
+      );
+      const chooser = document.getElementById("interaction-chooser");
+      if (!chooser) {
+        console.log("[DEBUG] Chooser element not found in DOM");
+        return;
+      }
       // First check if we should show the chooser at all
       if (!this.shouldShowChooser()) {
         // Explicitly hide the chooser
@@ -1017,54 +1000,50 @@
         chooser.style.opacity = "0";
         return;
       }
-      
-      console.log("[DEBUG] Before setting styles:", 
-                 "display=", getComputedStyle(chooser).display, 
-                 "flexDirection=", getComputedStyle(chooser).flexDirection);
-      
       // Apply clean, consistent styles without complex overrides
       chooser.style.display = "flex";
-      chooser.style.flexDirection = "column"; // Keep buttons in a vertical stack
-      chooser.style.justifyContent = "center"; // Center buttons horizontally
-      chooser.style.alignItems = "center"; // Center buttons vertically
+      chooser.style.flexDirection = "column";
+      chooser.style.justifyContent = "center";
+      chooser.style.alignItems = "center";
       chooser.style.visibility = "visible";
       chooser.style.opacity = "1";
-      chooser.style.padding = "8px"; // Even padding all around
-
-      // Ensure the chooser itself has a consistent fixed size
+      chooser.style.padding = "8px";
       chooser.style.width = "auto";
       chooser.style.height = "auto";
       chooser.style.boxSizing = "border-box";
-
       // Ensure buttons have proper spacing and layout
       const voiceButton = document.getElementById("voice-chooser-button");
       const textButton = document.getElementById("text-chooser-button");
-
-      // Apply consistent button styles for vertical layout
       if (voiceButton) {
-        voiceButton.style.marginBottom = "10px"; // Add bottom margin for vertical spacing
-        voiceButton.style.marginRight = "0"; // Remove right margin for vertical layout
+        voiceButton.style.marginBottom = "10px";
+        voiceButton.style.marginRight = "0";
         voiceButton.style.display = "flex";
         voiceButton.style.alignItems = "center";
         voiceButton.style.justifyContent = "center";
-        voiceButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
+        voiceButton.style.flexDirection = "row";
       }
-
       if (textButton) {
-        textButton.style.marginBottom = "0"; // No bottom margin for last element
+        textButton.style.marginBottom = "0";
         textButton.style.display = "flex";
         textButton.style.alignItems = "center";
         textButton.style.justifyContent = "center";
-        textButton.style.flexDirection = "row"; // Ensure icon and text are side by side within button
+        textButton.style.flexDirection = "row";
       }
-      
-      console.log("[DEBUG] After all style changes:", 
-                 "chooser flexDirection=", chooser.style.flexDirection,
-                 "computed flexDirection=", getComputedStyle(chooser).flexDirection,
-                 "voiceButton marginBottom=", voiceButton ? voiceButton.style.marginBottom : "N/A",
-                 "textButton marginBottom=", textButton ? textButton.style.marginBottom : "N/A");
-                 
-      chooser.setAttribute("style", "display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; visibility: visible !important; opacity: 1 !important; padding: 8px !important;");
+      console.log(
+        "[DEBUG] After all style changes:",
+        "chooser flexDirection=",
+        chooser.style.flexDirection,
+        "computed flexDirection=",
+        getComputedStyle(chooser).flexDirection,
+        "voiceButton marginBottom=",
+        voiceButton ? voiceButton.style.marginBottom : "N/A",
+        "textButton marginBottom=",
+        textButton ? textButton.style.marginBottom : "N/A"
+      );
+      chooser.setAttribute(
+        "style",
+        "display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; visibility: visible !important; opacity: 1 !important; padding: 8px !important;"
+      );
     },
 
     // Ensure the main button is always visible
@@ -1180,6 +1159,19 @@
     // Update window state via API
     updateWindowState: function (windowState) {
       console.log("VoiceroCore: Updating window state", windowState);
+
+      if (
+        (windowState.voiceOpen === false || windowState.textOpen === false) &&
+        !windowState.suppressChooser
+      ) {
+        windowState.coreOpen = true;
+        // Always recreate the chooser to ensure correct styling
+        this.createChooser();
+        // Then show it after a short delay
+        setTimeout(() => {
+          this.showChooser();
+        }, 100);
+      }
 
       // Check if session initialization is in progress
       if (this.isInitializingSession) {
@@ -1517,223 +1509,32 @@
     attachButtonClickHandler: function () {
       const mainButton = document.getElementById("chat-website-button");
       if (!mainButton) return;
-
       // Remove existing listeners to prevent duplicates
       const newButton = mainButton.cloneNode(true);
       if (mainButton.parentNode) {
         mainButton.parentNode.replaceChild(newButton, mainButton);
       }
-
       // Add the new bulletproof click handler
       newButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-
-        // Create chooser if it doesn't exist
-        let chooser = document.getElementById("interaction-chooser");
-        if (!chooser) {
-          const themeColor = this.websiteColor || "#882be6";
-          const buttonContainer = document.getElementById(
-            "voice-toggle-container"
-          );
-
-          if (buttonContainer) {
-            buttonContainer.insertAdjacentHTML(
-              "beforeend",
-              `<div
-                id="interaction-chooser"
-                style="
-                  position: fixed !important;
-                  bottom: 80px !important;
-                  right: 20px !important;
-                  z-index: 10001 !important;
-                  background-color: #c8c8c8 !important;
-                  border-radius: 12px !important;
-                  box-shadow: 6px 6px 0 ${themeColor} !important;
-                  padding: 15px !important;
-                  width: 280px !important;
-                  border: 1px solid rgb(0, 0, 0) !important;
-                  display: none !important;
-                  visibility: hidden !important;
-                  opacity: 0 !important;
-                  flex-direction: column !important;
-                  align-items: center !important;
-                  margin: 0 !important;
-                  transform: none !important;
-                "
-              >
-                <div
-                  id="voice-chooser-button"
-                  class="interaction-option voice"
-                  style="
-                    position: relative;
-                    display: flex;
-                    align-items: center;
-                    padding: 10px 10px;
-                    margin-bottom: 10px;
-                    margin-left: -30px;
-                    cursor: pointer;
-                    border-radius: 8px;
-                    background-color: white;
-                    border: 1px solid rgb(0, 0, 0);
-                    box-shadow: 4px 4px 0 rgb(0, 0, 0);
-                    transition: all 0.2s ease;
-                    width: 200px;
-                  "
-                >
-                  <span style="font-weight: 700; color: rgb(0, 0, 0); font-size: 18px; width: 100%; text-align: center;">
-                    Voice Conversation
-                  </span>
-                  <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" style="position: absolute; right: -50px; width: 35px; height: 35px;">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                    <path d="M12 19v4"/>
-                    <path d="M8 23h8"/>
-                  </svg>
-                </div>
-
-                <div
-                  id="text-chooser-button"
-                  class="interaction-option text"
-                  style="
-                    position: relative;
-                    display: flex;
-                    align-items: center;
-                    padding: 10px 10px;
-                    margin-left: -30px;
-                    cursor: pointer;
-                    border-radius: 8px;
-                    background-color: white;
-                    border: 1px solid rgb(0, 0, 0);
-                    box-shadow: 4px 4px 0 rgb(0, 0, 0);
-                    transition: all 0.2s ease;
-                    width: 200px;
-                  "
-                >
-                  <span style="font-weight: 700; color: rgb(0, 0, 0); font-size: 18px; width: 100%; text-align: center;">
-                    Message
-                  </span>
-                  <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" style="position: absolute; right: -50px; width: 35px; height: 35px;">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </div>
-              </div>`
-            );
-
-            chooser = document.getElementById("interaction-chooser");
-
-            // Add click handlers to the new options
-            const voiceButton = document.getElementById("voice-chooser-button");
-            if (voiceButton) {
-              voiceButton.addEventListener("click", () => {
-                if (chooser) {
-                  chooser.style.display = "none";
-                }
-
-                // Create voice interface if needed
-                let voiceInterface = document.getElementById(
-                  "voice-chat-interface"
-                );
-                if (!voiceInterface) {
-                  container.insertAdjacentHTML(
-                    "beforeend",
-                    `<div id="voice-chat-interface" style="display: none;"></div>`
-                  );
-                }
-
-                // Try to open voice interface
-                if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
-                  window.VoiceroVoice.openVoiceChat();
-                  // Force maximize after opening
-                  setTimeout(() => {
-                    if (
-                      window.VoiceroVoice &&
-                      window.VoiceroVoice.maximizeVoiceChat
-                    ) {
-                      window.VoiceroVoice.maximizeVoiceChat();
-                    }
-                  }, 100);
-                }
-              });
-            }
-
-            const textButton = document.getElementById("text-chooser-button");
-            if (textButton) {
-              textButton.addEventListener("click", () => {
-                if (chooser) {
-                  chooser.style.display = "none";
-                }
-
-                // Create text interface if needed
-                let textInterface = document.getElementById(
-                  "voicero-text-chat-container"
-                );
-                if (!textInterface) {
-                  container.insertAdjacentHTML(
-                    "beforeend",
-                    `<div id="voicero-text-chat-container" style="display: none;"></div>`
-                  );
-                }
-
-                // Try to open text interface
-                if (window.VoiceroText && window.VoiceroText.openTextChat) {
-                  window.VoiceroText.openTextChat();
-                  // Force maximize after opening
-                  setTimeout(() => {
-                    if (window.VoiceroText && window.VoiceroText.maximizeChat) {
-                      window.VoiceroText.maximizeChat();
-                    }
-                  }, 100);
-                }
-              });
-            }
-          }
-        }
-
+        // Always recreate chooser with the unified function
+        this.createChooser();
         // If chooser exists now, show it
-        chooser = document.getElementById("interaction-chooser");
+        let chooser = document.getElementById("interaction-chooser");
         if (chooser) {
-          // Check current visibility
           const computedStyle = window.getComputedStyle(chooser);
           const isVisible =
             computedStyle.display !== "none" &&
             computedStyle.visibility !== "hidden";
-
           if (isVisible) {
-            // Hide if already visible
             chooser.style.display = "none";
             chooser.style.visibility = "hidden";
             chooser.style.opacity = "0";
           } else {
-            // Show if hidden
             chooser.style.display = "flex";
             chooser.style.visibility = "visible";
             chooser.style.opacity = "1";
-          }
-        } else {
-          // Last resort - create direct interface
-          const voiceInterface = document.getElementById(
-            "voice-chat-interface"
-          );
-          if (voiceInterface) {
-            voiceInterface.innerHTML = `<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:400px;height:500px;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:999999;padding:20px;display:flex;flex-direction:column;border:1px solid #ccc;">
-              <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:10px;margin-bottom:15px;">
-                <h3 style="margin:0;font-size:18px;font-weight:600;">Voice Assistant</h3>
-                <button id="emergency-voice-close" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
-              </div>
-              <div style="flex:1;overflow-y:auto;padding:10px;">
-                <p>The voice module is loading. Please try again in a moment.</p>
-              </div>
-            </div>`;
-            voiceInterface.style.display = "block";
-
-            // Add close button handler
-            const closeBtn = document.getElementById("emergency-voice-close");
-            if (closeBtn) {
-              closeBtn.addEventListener("click", () => {
-                voiceInterface.style.display = "none";
-              });
-            }
           }
         }
       });
@@ -1775,6 +1576,149 @@
       setTimeout(() => {
         this.isInitializing = false;
       }, 1000);
+    },
+
+    // Create the interaction chooser with consistent HTML and styles
+    createChooser: function () {
+      // Remove any existing chooser
+      const oldChooser = document.getElementById("interaction-chooser");
+      if (oldChooser && oldChooser.parentNode) {
+        oldChooser.parentNode.removeChild(oldChooser);
+      }
+      const themeColor = this.websiteColor || "#882be6";
+      const buttonContainer = document.getElementById("voice-toggle-container");
+      if (!buttonContainer) return;
+      buttonContainer.insertAdjacentHTML(
+        "beforeend",
+        `<div
+          id="interaction-chooser"
+          style="
+            position: fixed !important;
+            bottom: 80px !important;
+            right: 20px !important;
+            z-index: 10001 !important;
+            background-color: #c8c8c8 !important;
+            border-radius: 12px !important;
+            box-shadow: 6px 6px 0 ${themeColor} !important;
+            padding: 15px !important;
+            width: 280px !important;
+            border: 1px solid rgb(0, 0, 0) !important;
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            margin: 0 !important;
+            transform: none !important;
+          "
+        >
+          <div
+            id="voice-chooser-button"
+            class="interaction-option voice"
+            style="
+              position: relative;
+              display: flex;
+              align-items: center;
+              padding: 10px 10px;
+              margin-bottom: 10px;
+              margin-left: -30px;
+              cursor: pointer;
+              border-radius: 8px;
+              background-color: white;
+              border: 1px solid rgb(0, 0, 0);
+              box-shadow: 4px 4px 0 rgb(0, 0, 0);
+              transition: all 0.2s ease;
+              width: 200px;
+            "
+          >
+            <span style="font-weight: 700; color: rgb(0, 0, 0); font-size: 18px; width: 100%; text-align: center;">
+              Voice Conversation
+            </span>
+            <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" style="position: absolute; right: -50px; width: 35px; height: 35px;">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <path d="M12 19v4"/>
+              <path d="M8 23h8"/>
+            </svg>
+          </div>
+
+          <div
+            id="text-chooser-button"
+            class="interaction-option text"
+            style="
+              position: relative;
+              display: flex;
+              align-items: center;
+              padding: 10px 10px;
+              margin-left: -30px;
+              cursor: pointer;
+              border-radius: 8px;
+              background-color: white;
+              border: 1px solid rgb(0, 0, 0);
+              box-shadow: 4px 4px 0 rgb(0, 0, 0);
+              transition: all 0.2s ease;
+              width: 200px;
+            "
+          >
+            <span style="font-weight: 700; color: rgb(0, 0, 0); font-size: 18px; width: 100%; text-align: center;">
+              Message
+            </span>
+            <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" style="position: absolute; right: -50px; width: 35px; height: 35px;">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+        </div>`
+      );
+      // Add click handlers to the new options
+      const chooser = document.getElementById("interaction-chooser");
+      const container = document.getElementById("voicero-app-container");
+      const voiceButton = document.getElementById("voice-chooser-button");
+      if (voiceButton) {
+        voiceButton.addEventListener("click", () => {
+          if (chooser) chooser.style.display = "none";
+          let voiceInterface = document.getElementById("voice-chat-interface");
+          if (!voiceInterface) {
+            container.insertAdjacentHTML(
+              "beforeend",
+              `<div id=\"voice-chat-interface\" style=\"display: none;\"></div>`
+            );
+          }
+          if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
+            window.VoiceroVoice.openVoiceChat();
+            setTimeout(() => {
+              if (
+                window.VoiceroVoice &&
+                window.VoiceroVoice.maximizeVoiceChat
+              ) {
+                window.VoiceroVoice.maximizeVoiceChat();
+              }
+            }, 100);
+          }
+        });
+      }
+      const textButton = document.getElementById("text-chooser-button");
+      if (textButton) {
+        textButton.addEventListener("click", () => {
+          if (chooser) chooser.style.display = "none";
+          let textInterface = document.getElementById(
+            "voicero-text-chat-container"
+          );
+          if (!textInterface) {
+            container.insertAdjacentHTML(
+              "beforeend",
+              `<div id=\"voicero-text-chat-container\" style=\"display: none;\"></div>`
+            );
+          }
+          if (window.VoiceroText && window.VoiceroText.openTextChat) {
+            window.VoiceroText.openTextChat();
+            setTimeout(() => {
+              if (window.VoiceroText && window.VoiceroText.maximizeChat) {
+                window.VoiceroText.maximizeChat();
+              }
+            }, 100);
+          }
+        });
+      }
     },
   };
 
