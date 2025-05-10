@@ -1018,7 +1018,7 @@
 
       // Apply clean, consistent styles without complex overrides
       chooser.style.display = "flex";
-      chooser.style.flexDirection = "row"; // Keep buttons in a horizontal row
+      chooser.style.flexDirection = "column"; // Keep buttons in a vertical stack
       chooser.style.justifyContent = "center"; // Center buttons horizontally
       chooser.style.alignItems = "center"; // Center buttons vertically
       chooser.style.visibility = "visible";
