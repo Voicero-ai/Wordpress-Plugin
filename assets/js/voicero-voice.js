@@ -902,6 +902,14 @@ const VoiceroVoice = {
   minimizeVoiceChat: function () {
     console.log("VoiceroVoice: Minimizing voice chat");
 
+    // Prevent minimize if a close is in progress
+    if (this.isClosingVoiceChat) {
+      console.log(
+        "VoiceroVoice: Skipping minimize because close is in progress"
+      );
+      return;
+    }
+
     // Check if we're in the process of opening the voice chat
     if (this.isOpeningVoiceChat) {
       console.log("VoiceroVoice: Cannot minimize - currently opening");

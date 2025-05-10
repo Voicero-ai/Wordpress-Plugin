@@ -174,13 +174,12 @@ const VoiceroText = {
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         textOpen: true,
-        textOpenWindowUp: shouldBeMaximized, // Respect existing window state if available
+        textOpenWindowUp: true, // Always start maximized
         textWelcome: shouldShowWelcome, // Keep the existing welcome message state
-        coreOpen: false,
+        coreOpen: false, // Always false when opening chat
         voiceOpen: false,
         voiceOpenWindowUp: false,
       });
-    } else {
     }
 
     // Close voice interface if it's open
@@ -275,6 +274,20 @@ const VoiceroText = {
     // Initialize visibility state
     this._isChatVisible = true;
     this._lastChatToggle = Date.now();
+
+    // After the interface is fully loaded and visible, check if it should be minimized
+    // based on the previous session state (delayed to prevent race conditions)
+    setTimeout(() => {
+      // Now check if we should be minimized according to session preferences
+      // We only check this AFTER ensuring the interface is visible
+      if (
+        window.VoiceroCore &&
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.textOpenWindowUp === false
+      ) {
+        this.minimizeChat();
+      }
+    }, 1500);
   },
 
   // Load existing messages from session and display them
@@ -846,8 +859,8 @@ const VoiceroText = {
 
         /* Hide scrollbar for different browsers */
         #chat-messages {
-          scrollbar-width: thin !important; /* Firefox */
-          -ms-overflow-style: auto !important; /* IE and Edge */
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE and Edge */
           padding: 15px !important; 
           padding-top: 10px !important;
           margin: 0 !important;
@@ -862,22 +875,7 @@ const VoiceroText = {
         }
         
         #chat-messages::-webkit-scrollbar {
-          width: 6px !important;
-          display: block !important;
-        }
-        
-        #chat-messages::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.05) !important;
-          border-radius: 3px !important;
-        }
-        
-        #chat-messages::-webkit-scrollbar-thumb {
-          background: rgba(0, 0, 0, 0.2) !important;
-          border-radius: 3px !important;
-        }
-        
-        #chat-messages::-webkit-scrollbar-thumb:hover {
-          background: rgba(0, 0, 0, 0.3) !important;
+          display: none !important; /* Chrome, Safari, Opera */
         }
         
         #chat-controls-header {
@@ -1259,8 +1257,8 @@ const VoiceroText = {
 
           /* Hide scrollbar for different browsers */
           #chat-messages {
-            scrollbar-width: thin !important; /* Firefox */
-            -ms-overflow-style: auto !important; /* IE and Edge */
+            scrollbar-width: none !important; /* Firefox */
+            -ms-overflow-style: none !important; /* IE and Edge */
             padding: 15px !important; 
             padding-top: 10px !important;
             margin: 0 !important;
@@ -1275,22 +1273,7 @@ const VoiceroText = {
           }
           
           #chat-messages::-webkit-scrollbar {
-            width: 6px !important;
-            display: block !important;
-          }
-          
-          #chat-messages::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.05) !important;
-            border-radius: 3px !important;
-          }
-          
-          #chat-messages::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2) !important;
-            border-radius: 3px !important;
-          }
-          
-          #chat-messages::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.3) !important;
+            display: none !important; /* Chrome, Safari, Opera */
           }
           
           #chat-controls-header {
@@ -2450,15 +2433,24 @@ const VoiceroText = {
 
     // Update window state first - this is critical
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      // First update to close text chat
       window.VoiceroCore.updateWindowState({
         textOpen: false,
         textOpenWindowUp: false,
-        coreOpen: true, // Always set coreOpen to true when closing
+        coreOpen: true,
         voiceOpen: false,
         autoMic: false,
         voiceOpenWindowUp: false,
-        suppressChooser: true, // Allow chooser to show
+        suppressChooser: true,
       });
+
+      // Small delay to ensure state updates are processed
+      setTimeout(() => {
+        // Then ensure core is visible
+        if (window.VoiceroCore) {
+          window.VoiceroCore.ensureMainButtonVisible();
+        }
+      }, 100);
     }
 
     // Hide both the interface and shadow host
@@ -2467,11 +2459,6 @@ const VoiceroText = {
     }
     if (shadowHost) {
       shadowHost.style.display = "none";
-    }
-
-    // Let VoiceroCore handle the button visibility
-    if (window.VoiceroCore) {
-      window.VoiceroCore.ensureMainButtonVisible();
     }
 
     // Reset closing flag

@@ -940,9 +940,14 @@
         return false;
       }
 
-      // Don't show unless coreOpen is explicitly true
-      if (this.session.coreOpen !== true) {
-        console.log("[DEBUG] coreOpen is not true, not showing chooser");
+      // Don't show unless coreOpen is explicitly true and chooser isn't suppressed
+      if (
+        this.session.coreOpen !== true ||
+        this.session.suppressChooser === true
+      ) {
+        console.log(
+          "[DEBUG] coreOpen is not true or chooser is suppressed, not showing chooser"
+        );
         return false;
       }
 
@@ -1160,10 +1165,11 @@
     updateWindowState: function (windowState) {
       console.log("VoiceroCore: Updating window state", windowState);
 
-      if (
-        (windowState.voiceOpen === false || windowState.textOpen === false) &&
-        !windowState.suppressChooser
-      ) {
+      // Set coreOpen to false if either text or voice interface is open
+      if (windowState.textOpen === true || windowState.voiceOpen === true) {
+        windowState.coreOpen = false;
+      } else if (!windowState.suppressChooser) {
+        // Only set coreOpen to true if both interfaces are closed and chooser isn't suppressed
         windowState.coreOpen = true;
         // Always recreate the chooser to ensure correct styling
         this.createChooser();
