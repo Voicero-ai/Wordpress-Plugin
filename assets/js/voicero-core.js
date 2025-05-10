@@ -9,6 +9,16 @@
     apiBaseUrl: null, // Store the working API URL
     apiConnected: false, // Track connection status
     session: null, // Store the current session
+    keepMiniButtonVisible: false,
+    setKeepMiniButtonVisible: function (val) {
+      this.keepMiniButtonVisible = !!val;
+    },
+    // track current button visibility
+    _isVisible: false,
+    // last time we toggled
+    _lastToggle: 0,
+    // minimum ms between toggles
+    MIN_TOGGLE_MS: 200,
     thread: null, // Store the current thread
     websiteColor: "#882be6", // Default color if not provided by API
     isInitializingSession: false, // Track if a session initialization is in progress
@@ -82,6 +92,11 @@
 
     // Create the main interface with the two option buttons
     createButton: function () {
+      // ─── NEW: don't even build/show the button if text or voice is open
+      if (this.session && (this.session.textOpen || this.session.voiceOpen)) {
+        this.hideMainButton();
+        return;
+      }
       // DON'T SKIP BUTTON CREATION - Even if API isn't connected, we need the main button
       // Just log a warning instead of completely skipping
       if (!this.apiConnected) {
@@ -157,7 +172,7 @@
           buttonContainer.innerHTML = `
           <button id="chat-website-button" class="visible" style="background-color: ${themeColor}">
             <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-              <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
+              <path fill="currentColor" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
         `;
@@ -603,6 +618,16 @@
 
     // Hide the main website button
     hideMainButton: function () {
+      if (this.keepMiniButtonVisible) return;
+
+      const now = Date.now();
+      // if already hidden or toggled too recently, skip
+      if (!this._isVisible || now - this._lastToggle < this.MIN_TOGGLE_MS)
+        return;
+
+      this._isVisible = false;
+      this._lastToggle = now;
+
       // Cancel any pending visibility calls that might conflict
       if (this.buttonVisibilityTimeouts) {
         this.buttonVisibilityTimeouts.forEach((timeoutId) =>
@@ -938,7 +963,10 @@
         this.isInitializing = false;
 
         // One final check to make sure button stays hidden if interfaces are open
-        if (this.session.textOpen === true || this.session.voiceOpen === true) {
+        if (
+          (this.session.textOpen === true || this.session.voiceOpen === true) &&
+          !this.keepMiniButtonVisible
+        ) {
           this.hideMainButton();
         }
       }, 2000);
@@ -1134,8 +1162,23 @@
       const chooser = document.getElementById("interaction-chooser");
       if (chooser) {
         chooser.style.display = "flex";
+        chooser.style.flexDirection = "column";
+        chooser.style.alignItems = "center";
         chooser.style.visibility = "visible";
         chooser.style.opacity = "1";
+
+        // Ensure buttons have proper spacing and layout
+        const voiceButton = document.getElementById("voice-chooser-button");
+        const textButton = document.getElementById("text-chooser-button");
+
+        if (voiceButton) {
+          voiceButton.style.marginBottom = "10px";
+          voiceButton.style.width = "90%";
+        }
+
+        if (textButton) {
+          textButton.style.width = "90%";
+        }
       }
     },
 
@@ -1147,12 +1190,12 @@
       }
 
       // Do a more thorough check of session state
-      if (this.session) {
-        if (this.session.textOpen === true || this.session.voiceOpen === true) {
-          // Don't show button if text or voice interfaces are open
-          this.hideMainButton();
-          return;
-        }
+      if (
+        this.session &&
+        (this.session.textOpen === true || this.session.voiceOpen === true)
+      ) {
+        if (!this.keepMiniButtonVisible) this.hideMainButton();
+        return;
       }
 
       // Also check if any interfaces are currently visible in the DOM
@@ -1163,7 +1206,7 @@
         textInterface &&
         window.getComputedStyle(textInterface).display === "block"
       ) {
-        this.hideMainButton();
+        if (!this.keepMiniButtonVisible) this.hideMainButton();
         return;
       }
 
@@ -1172,9 +1215,17 @@
         voiceInterface &&
         window.getComputedStyle(voiceInterface).display === "block"
       ) {
-        this.hideMainButton();
+        if (!this.keepMiniButtonVisible) this.hideMainButton();
         return;
       }
+
+      // Debounce check - if already visible or toggled too recently, skip
+      const now = Date.now();
+      if (this._isVisible || now - this._lastToggle < this.MIN_TOGGLE_MS)
+        return;
+
+      this._isVisible = true;
+      this._lastToggle = now;
 
       // Make sure the container is visible
       const container = document.getElementById("voicero-app-container");
@@ -1466,6 +1517,9 @@
 
     // Create a failsafe button if one doesn't exist
     createFailsafeButton: function () {
+      if (this.session && (this.session.textOpen || this.session.voiceOpen)) {
+        return;
+      }
       // CRITICAL: Only create button if website is active
       if (!this.isWebsiteActive) {
         // Actually hide the button if it exists and site is inactive
@@ -1516,7 +1570,7 @@
           "beforeend",
           `<button id="chat-website-button" class="visible" style="background-color:${themeColor};display:flex!important;visibility:visible!important;opacity:1!important;width:50px!important;height:50px!important;border-radius:50%!important;justify-content:center!important;align-items:center!important;color:white!important;box-shadow:0 4px 15px rgba(0,0,0,0.2)!important;border:none!important;cursor:pointer!important;transition:all 0.2s ease!important;padding:0!important;margin:0!important;position:relative!important;z-index:2147483647!important;">
             <svg class="bot-icon" viewBox="0 0 24 24" width="24" height="24">
-              <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
+              <path fill="currentColor" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>`
         );

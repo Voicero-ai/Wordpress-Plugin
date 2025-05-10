@@ -888,7 +888,7 @@ const VoiceroVoice = {
     ) {
       // Add welcome message with clear prompt
       this.addSystemMessage(`
-        <div class="welcome-message">
+        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
           <div class="welcome-title">Aura, your website concierge</div>
           <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
           <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
@@ -995,6 +995,12 @@ const VoiceroVoice = {
 
   // Close voice chat and reopen chooser interface
   closeVoiceChat: function () {
+    // First create reliable references to the elements we need
+    const voiceInterface = document.getElementById("voice-chat-interface");
+    const toggleContainer = document.getElementById("voice-toggle-container");
+    const chatButton = document.getElementById("chat-website-button");
+    const coreContainer = document.getElementById("voicero-app-container");
+
     // Update window state
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -1007,98 +1013,112 @@ const VoiceroVoice = {
       });
     }
 
-    const voiceInterface = document.getElementById("voice-chat-interface");
+    // Hide the voice interface
     if (voiceInterface) {
       voiceInterface.style.display = "none";
+    }
 
-      // Make sure the main core container is visible
-      const coreContainer = document.getElementById("voicero-app-container");
-      if (coreContainer) {
-        coreContainer.style.display = "block";
-        coreContainer.style.visibility = "visible";
-        coreContainer.style.opacity = "1";
-      }
+    // Force a sync display update
+    if (coreContainer) {
+      coreContainer.style.cssText = `
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      `;
+    }
 
-      // Show the main button when closing
-      const toggleContainer = document.getElementById("voice-toggle-container");
-      if (toggleContainer) {
-        toggleContainer.style.display = "block";
-        toggleContainer.style.visibility = "visible";
-        toggleContainer.style.opacity = "1";
-        toggleContainer.style.pointerEvents = "auto";
+    // Show and position the toggle container with robust inline styling
+    if (toggleContainer) {
+      // Apply comprehensive styling directly
+      toggleContainer.style.cssText = `
+        position: fixed !important;
+        bottom: 20px !important;
+        right: 20px !important;
+        z-index: 2147483647 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        transform: none !important;
+        top: auto !important;
+        left: auto !important;
+        pointer-events: auto !important;
+        width: auto !important;
+        height: auto !important;
+      `;
+    }
 
-        // Apply critical positioning styles to ensure proper placement
-        toggleContainer.style.position = "fixed";
-        toggleContainer.style.bottom = "20px";
-        toggleContainer.style.right = "20px";
-        toggleContainer.style.zIndex = "2147483647";
-      }
+    // Style the main button with robust inline styling
+    if (chatButton) {
+      const themeColor = this.websiteColor || "#882be6";
+      chatButton.style.cssText = `
+        position: relative !important;
+        background-color: ${themeColor} !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 50px !important;
+        height: 50px !important;
+        border-radius: 50% !important;
+        justify-content: center !important;
+        align-items: center !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+        border: none !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        z-index: 2147483647 !important;
+        pointer-events: auto !important;
+      `;
+    }
 
-      // Make sure main button is visible with comprehensive styles
-      const chatButton = document.getElementById("chat-website-button");
-      if (chatButton) {
-        chatButton.style.display = "flex";
-        chatButton.style.visibility = "visible";
-        chatButton.style.opacity = "1";
-        chatButton.style.pointerEvents = "auto";
-        chatButton.style.zIndex = "2147483647";
+    // Ensure icon is visible inside main button
+    const botIcon = chatButton ? chatButton.querySelector(".bot-icon") : null;
+    if (botIcon) {
+      botIcon.style.cssText = `
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      `;
+    }
 
-        // Use website color for the button if available
-        if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
-          chatButton.style.backgroundColor = window.VoiceroCore.websiteColor;
-        }
-
-        // Apply comprehensive styles
-        chatButton.style.width = "50px";
-        chatButton.style.height = "50px";
-        chatButton.style.borderRadius = "50%";
-        chatButton.style.justifyContent = "center";
-        chatButton.style.alignItems = "center";
-        chatButton.style.color = "white";
-        chatButton.style.boxShadow = "0 4px 15px rgba(0, 0, 0, 0.2)";
-        chatButton.style.cursor = "pointer";
-      }
-
-      // Use VoiceroCore method if available to ensure visibility
-      if (window.VoiceroCore && window.VoiceroCore.ensureMainButtonVisible) {
-        setTimeout(() => {
-          window.VoiceroCore.ensureMainButtonVisible();
-        }, 100);
-      }
-
-      // Add a second timeout with a longer delay as an extra safety measure
+    // Set multiple delayed checks to ensure visibility
+    for (let delay of [0, 50, 100, 300]) {
       setTimeout(() => {
-        // Double-check that the main button is visible
-        const buttonCheck = document.getElementById("chat-website-button");
-        const containerCheck = document.getElementById(
-          "voice-toggle-container"
-        );
-
-        if (buttonCheck) {
-          buttonCheck.style.display = "flex";
-          buttonCheck.style.visibility = "visible";
-          buttonCheck.style.opacity = "1";
-          buttonCheck.style.pointerEvents = "auto";
-          buttonCheck.style.zIndex = "2147483647";
+        if (toggleContainer) {
+          toggleContainer.style.display = "block";
+          toggleContainer.style.visibility = "visible";
+          toggleContainer.style.opacity = "1";
+          toggleContainer.style.pointerEvents = "auto";
         }
 
-        if (containerCheck) {
-          containerCheck.style.display = "block";
-          containerCheck.style.visibility = "visible";
-          containerCheck.style.opacity = "1";
-          containerCheck.style.pointerEvents = "auto";
+        if (chatButton) {
+          chatButton.style.display = "flex";
+          chatButton.style.visibility = "visible";
+          chatButton.style.opacity = "1";
+          chatButton.style.pointerEvents = "auto";
         }
+      }, delay);
+    }
 
-        // Call the main visibility method one more time if available
-        if (window.VoiceroCore && window.VoiceroCore.ensureMainButtonVisible) {
-          window.VoiceroCore.ensureMainButtonVisible();
-        }
+    if (window.VoiceroCore) {
+      // 1) Prevent any auto-hide during this transition
+      window.VoiceroCore.setKeepMiniButtonVisible(true);
 
-        // Show the chooser for good measure
-        if (window.VoiceroCore && window.VoiceroCore.showChooser) {
-          window.VoiceroCore.showChooser();
-        }
-      }, 500);
+      // 2) Clear any pending hide timers
+      window.VoiceroCore.buttonVisibilityTimeouts.forEach(clearTimeout);
+      window.VoiceroCore.buttonVisibilityTimeouts = [];
+
+      // 3) Force-show the button right now
+      window.VoiceroCore.ensureMainButtonVisible();
+
+      // 4) After a tick (or two), re-enable normal hide logic
+      setTimeout(() => {
+        window.VoiceroCore.setKeepMiniButtonVisible(false);
+      }, 50);
     }
   },
 
@@ -1199,7 +1219,7 @@ const VoiceroVoice = {
 
       // Add a temporary "initializing..." message instead of immediately showing "I'm listening..."
       this.addSystemMessage(`
-        <div id="listening-indicator-message" class="welcome-message" style="padding: 4px 10px; margin: 4px auto; width: 95%;">
+        <div id="listening-indicator-message" class="welcome-message" style="width: 90% !important; max-width: 400px !important; padding: 4px 10px; margin: 4px auto;">
           <div class="welcome-title" style="background: linear-gradient(90deg, var(--voicero-theme-color, ${
             this.websiteColor || "#882be6"
           }), ${this.adjustColor(
@@ -2500,7 +2520,7 @@ const VoiceroVoice = {
         if (shouldShowWelcome && existingMessages.length === 0) {
           // Add welcome message
           this.addSystemMessage(`
-            <div class="welcome-message">
+            <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
               <div class="welcome-title">Aura, your website concierge</div>
               <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
               <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
@@ -2666,7 +2686,7 @@ const VoiceroVoice = {
 
     // Add welcome message again with the exact same format as in openVoiceChat
     this.addSystemMessage(`
-      <div class="welcome-message">
+      <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
         <div class="welcome-title">Aura, your website concierge</div>
         <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
         <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>

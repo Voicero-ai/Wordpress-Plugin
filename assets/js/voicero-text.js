@@ -5,6 +5,11 @@
 
 // Text interface variables
 const VoiceroText = {
+  // debounce visibility toggles
+  _isChatVisible: false, // tracks whether messages+header+input are up
+  _lastChatToggle: 0, // timestamp of last minimize/maximize
+  CHAT_TOGGLE_DEBOUNCE_MS: 200, // minimum time between toggles
+
   isWaitingForResponse: false,
   typingTimeout: null,
   typingIndicator: null,
@@ -266,6 +271,10 @@ const VoiceroText = {
 
     // Load existing messages from session
     this.loadMessagesFromSession();
+
+    // Initialize visibility state
+    this._isChatVisible = true;
+    this._lastChatToggle = Date.now();
   },
 
   // Load existing messages from session and display them
@@ -844,6 +853,8 @@ const VoiceroText = {
           margin: 0 !important;
           background-color: #f2f2f7 !important; /* iOS light gray background */
           border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
+          transition: max-height 0.25s ease, opacity 0.25s ease !important; /* Smoother transitions */
+          overflow: hidden !important;
         }
         
         #chat-messages::-webkit-scrollbar {
@@ -1235,6 +1246,8 @@ const VoiceroText = {
             margin: 0 !important;
             background-color: #f2f2f7 !important; /* iOS light gray background */
             border-radius: 12px 12px 0 0 !important; /* Add border radius to top */
+            transition: max-height 0.25s ease, opacity 0.25s ease !important; /* Smoother transitions */
+            overflow: hidden !important;
           }
           
           #chat-messages::-webkit-scrollbar {
@@ -1844,7 +1857,7 @@ const VoiceroText = {
       // Add welcome message again
       this.addMessage(
         `
-        <div class="welcome-message">
+        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
           <div class="welcome-title">Aura, your website concierge</div>
           <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
           <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
@@ -2458,6 +2471,16 @@ const VoiceroText = {
 
   // Minimize the chat interface
   minimizeChat: function () {
+    const now = Date.now();
+    if (
+      !this._isChatVisible ||
+      now - this._lastChatToggle < this.CHAT_TOGGLE_DEBOUNCE_MS
+    ) {
+      return; // either already minimized or called too soon
+    }
+    this._lastChatToggle = now;
+    this._isChatVisible = false;
+
     // Update window state first (text open but window minimized)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -2497,7 +2520,7 @@ const VoiceroText = {
         msg.style.display = "none";
       });
 
-      // Completely hide the messages container
+      // Just adjust maxHeight and opacity without removing from DOM
       messagesContainer.style.maxHeight = "0";
       messagesContainer.style.minHeight = "0";
       messagesContainer.style.height = "0";
@@ -2505,11 +2528,7 @@ const VoiceroText = {
       messagesContainer.style.margin = "0";
       messagesContainer.style.overflow = "hidden";
       messagesContainer.style.border = "none";
-      messagesContainer.style.display = "none"; // Add display: none
-      messagesContainer.style.visibility = "hidden"; // Add visibility: hidden
       messagesContainer.style.opacity = "0"; // Make fully transparent
-      messagesContainer.style.position = "absolute"; // Take out of flow
-      messagesContainer.style.pointerEvents = "none"; // Prevent any interaction
 
       // Also hide padding container inside
       const paddingContainer = messagesContainer.querySelector(
@@ -2533,18 +2552,20 @@ const VoiceroText = {
       inputWrapper.style.borderRadius = "12px";
       inputWrapper.style.marginTop = "0";
     }
-
-    // REMOVE the forced redraw - this might be causing the visibility issue
-    // document.getElementById("voicero-text-chat-container").style.display =
-    //  "none";
-    // setTimeout(() => {
-    //   document.getElementById("voicero-text-chat-container").style.display =
-    //     "block";
-    // }, 0);
   },
 
   // Maximize the chat interface
   maximizeChat: function () {
+    const now = Date.now();
+    if (
+      this._isChatVisible ||
+      now - this._lastChatToggle < this.CHAT_TOGGLE_DEBOUNCE_MS
+    ) {
+      return; // either already maximized or called too soon
+    }
+    this._lastChatToggle = now;
+    this._isChatVisible = true;
+
     // Update window state first (text open with window up)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -2587,12 +2608,12 @@ const VoiceroText = {
 
       this.addMessage(
         `
-        <div class="welcome-message">
+        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
           <div class="welcome-title">Aura, your website concierge</div>
           <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
           <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
         </div>
-      `,
+        `,
         "ai",
         false,
         true
@@ -2605,12 +2626,16 @@ const VoiceroText = {
     }
 
     if (messagesContainer) {
-      // Restore visibility first
-      messagesContainer.style.display = "block";
-      messagesContainer.style.visibility = "visible";
+      // Just restore opacity and max-height without changing DOM visibility properties
+      messagesContainer.style.maxHeight = "35vh";
+      messagesContainer.style.minHeight = "auto";
+      messagesContainer.style.height = "auto";
+      messagesContainer.style.padding = "15px";
+      messagesContainer.style.paddingTop = "0";
+      messagesContainer.style.margin = "0";
+      messagesContainer.style.overflow = "auto";
+      messagesContainer.style.border = "";
       messagesContainer.style.opacity = "1";
-      messagesContainer.style.position = "relative";
-      messagesContainer.style.pointerEvents = "auto";
 
       // Show padding container
       const paddingContainer = messagesContainer.querySelector(
@@ -2642,16 +2667,6 @@ const VoiceroText = {
           this.updatePopupQuestions();
         }
       }
-
-      // Restore the messages container height and padding
-      messagesContainer.style.maxHeight = "35vh";
-      messagesContainer.style.minHeight = "auto";
-      messagesContainer.style.height = "auto";
-      messagesContainer.style.padding = "15px";
-      messagesContainer.style.paddingTop = "0";
-      messagesContainer.style.margin = "0";
-      messagesContainer.style.overflow = "auto";
-      messagesContainer.style.border = "";
     }
 
     // Show the header
@@ -2666,16 +2681,8 @@ const VoiceroText = {
       inputWrapper.style.marginTop = "0";
     }
 
-    // REMOVE the forced redraw logic
-    // document.getElementById("voicero-text-chat-container").style.display =
-    //   "none";
-    // setTimeout(() => {
-    //   document.getElementById("voicero-text-chat-container").style.display =
-    //     "block";
-
     // Ensure welcome message colors are applied without redraw
     this.forceWelcomeMessageColors();
-    // }, 0);
   },
 
   // Add message to the chat interface (used for both user and AI messages)

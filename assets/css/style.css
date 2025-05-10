@@ -457,7 +457,8 @@ div.message-bubble.user-bubble {
   border-radius: 18px !important;
   padding: 12px 15px !important;
   margin: 12px auto !important;
-  width: 85% !important;
+  width: 90% !important; /* Increased from 85% to make boxes wider */
+  max-width: 400px !important; /* Added max-width for consistency */
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
   position: relative !important;
   overflow: hidden !important;
