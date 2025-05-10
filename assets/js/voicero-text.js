@@ -271,6 +271,40 @@ const VoiceroText = {
     // Load existing messages from session
     this.loadMessagesFromSession();
 
+    // If shouldShowWelcome is true, add the welcome message
+    if (shouldShowWelcome) {
+      const messagesContainer = this.shadowRoot
+        ? this.shadowRoot.getElementById("chat-messages")
+        : document.getElementById("chat-messages");
+
+      if (messagesContainer) {
+        // Clear existing messages if any
+        const children = Array.from(messagesContainer.children);
+        for (const child of children) {
+          if (child.id !== "initial-suggestions") {
+            messagesContainer.removeChild(child);
+          }
+        }
+
+        // Add welcome message
+        this.addMessage(
+          `
+          <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
+            <div class="welcome-title">Aura, your website concierge</div>
+            <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
+            <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+          </div>
+          `,
+          "ai",
+          false,
+          true
+        );
+
+        // Force colors on the welcome message
+        this.forceWelcomeMessageColors();
+      }
+    }
+
     // Initialize visibility state
     this._isChatVisible = true;
     this._lastChatToggle = Date.now();

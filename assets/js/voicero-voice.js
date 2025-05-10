@@ -1034,14 +1034,12 @@ const VoiceroVoice = {
 
     this.reopenVoiceChat();
 
-    // Remove any welcome messages, voice prompts, placeholders, typing indicators, or empty message bubbles
+    // Remove any voice prompts, placeholders, typing indicators, or empty message bubbles
     const messagesContainer = document.getElementById("voice-messages");
     if (messagesContainer) {
-      // Remove system/placeholder elements
+      // Remove system/placeholder elements except welcome message
       messagesContainer
-        .querySelectorAll(
-          ".welcome-message, .voice-prompt, .placeholder, .typing-indicator"
-        )
+        .querySelectorAll(".voice-prompt, .placeholder, .typing-indicator")
         .forEach((el) => el.remove());
       // Remove empty message bubbles
       messagesContainer

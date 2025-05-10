@@ -1058,6 +1058,12 @@
         return;
       }
 
+      // If coreOpen is explicitly false, don't show the button
+      if (this.session && this.session.coreOpen === false) {
+        this.hideMainButton();
+        return;
+      }
+
       // Do a more thorough check of session state
       if (
         this.session &&
