@@ -8,72 +8,30 @@ const VoiceroContact = {
   init: function () {
     // This will be called when loaded
     console.log("VoiceroContact module initialized");
-
-    // Set up observer to watch for new AI messages
-    this.setupMessageObserver();
-  },
-
-  // Set up mutation observer to watch for new AI messages
-  setupMessageObserver: function () {
-    // Check every 1 second for new messages
-    setInterval(() => {
-      if (window.VoiceroText && window.VoiceroText.shadowRoot) {
-        const aiMessages =
-          window.VoiceroText.shadowRoot.querySelectorAll(".ai-message");
-
-        // Process only the newest message without a contact link
-        for (let i = aiMessages.length - 1; i >= 0; i--) {
-          const message = aiMessages[i];
-
-          // Skip messages that already have contact links or are contact forms
-          if (
-            message.querySelector(".contact-link") ||
-            message.querySelector(".contact-form-container") ||
-            message.classList.contains("typing-wrapper")
-          ) {
-            continue;
-          }
-
-          // Add contact link to this message
-          this.appendContactLinkToMessage(message);
-          break; // Process only one message at a time
-        }
-      }
-    }, 1000);
-  },
-
-  // Append contact link to AI message
-  appendContactLinkToMessage: function (messageElement) {
-    // Get the message content container
-    const messageContent = messageElement.querySelector(".message-content");
-    if (!messageContent) return;
-
-    // Create contact link
-    const contactLink = document.createElement("div");
-    contactLink.className = "contact-link";
-    contactLink.innerHTML = '<a href="#contact">Need more help? Contact us</a>';
-    contactLink.style.cssText = `
-      margin-top: 10px;
-      font-size: 12px;
-      text-align: right;
-      color: #666;
-    `;
-
-    // Add click event
-    contactLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      this.showContactForm();
-    });
-
-    // Append to message
-    messageContent.appendChild(contactLink);
   },
 
   // Create and display contact form in the chat interface
   showContactForm: function () {
-    // Get access to the text interface
-    if (!window.VoiceroText || !window.VoiceroText.shadowRoot) {
-      console.error("VoiceroText interface not available");
+    // Determine which interface is active
+    let messagesContainer;
+    let interfaceType = "text"; // Default to text interface
+    
+    // Check if called from voice interface
+    if (document.getElementById("voice-messages") && 
+        window.VoiceroCore && 
+        window.VoiceroCore.appState && 
+        window.VoiceroCore.appState.activeInterface === "voice") {
+      messagesContainer = document.getElementById("voice-messages");
+      interfaceType = "voice";
+    } 
+    // Otherwise use text interface
+    else if (window.VoiceroText && window.VoiceroText.shadowRoot) {
+      messagesContainer = window.VoiceroText.shadowRoot.getElementById("chat-messages");
+    }
+    
+    // Exit if neither interface is available
+    if (!messagesContainer) {
+      console.error("VoiceroText/Voice interface not available");
       return;
     }
 
@@ -114,19 +72,15 @@ const VoiceroContact = {
     // Add to message div
     messageDiv.appendChild(contentDiv);
 
-    // Add to messages container in the shadow DOM
-    const messagesContainer =
-      window.VoiceroText.shadowRoot.getElementById("chat-messages");
-    if (messagesContainer) {
-      messagesContainer.appendChild(messageDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // Add to messages container
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-      // Apply styles to form elements
-      this.applyFormStyles(messageDiv);
+    // Apply styles to form elements
+    this.applyFormStyles(messageDiv);
 
-      // Set up event listeners for the form
-      this.setupFormEventListeners(messageDiv);
-    }
+    // Set up event listeners for the form
+    this.setupFormEventListeners(messageDiv, interfaceType);
   },
 
   // Apply styles to the form elements
@@ -216,16 +170,6 @@ const VoiceroContact = {
       .contact-cancel-btn:hover {
         background-color: #e5e5e5;
       }
-      
-      .contact-link a {
-        color: ${mainColor};
-        text-decoration: none;
-        font-size: 12px;
-      }
-      
-      .contact-link a:hover {
-        text-decoration: underline;
-      }
     `;
 
     // Add styles to shadow DOM
@@ -235,7 +179,7 @@ const VoiceroContact = {
   },
 
   // Set up event listeners for the form
-  setupFormEventListeners: function (formContainer) {
+  setupFormEventListeners: function (formContainer, interfaceType) {
     // Get form elements
     const submitButton = formContainer.querySelector("#contact-submit");
     const cancelButton = formContainer.querySelector("#contact-cancel");
@@ -274,7 +218,8 @@ const VoiceroContact = {
         this.submitContactForm(
           emailInput.value.trim(),
           messageInput.value.trim(),
-          formContainer
+          formContainer,
+          interfaceType
         );
       });
     }
@@ -285,12 +230,13 @@ const VoiceroContact = {
         // Remove the form from the chat
         formContainer.remove();
 
-        // Add a cancellation message
-        if (window.VoiceroText && window.VoiceroText.addMessage) {
-          window.VoiceroText.addMessage(
-            "No problem! Let me know if you have any other questions.",
-            "ai"
-          );
+        // Add a cancellation message based on interface type
+        const cancelMessage = "No problem! Let me know if you have any other questions.";
+        
+        if (interfaceType === "voice" && window.VoiceroVoice && window.VoiceroVoice.addMessage) {
+          window.VoiceroVoice.addMessage(cancelMessage, "ai");
+        } else if (window.VoiceroText && window.VoiceroText.addMessage) {
+          window.VoiceroText.addMessage(cancelMessage, "ai");
         }
       });
     }
@@ -331,7 +277,7 @@ const VoiceroContact = {
   },
 
   // Submit the contact form to the WordPress REST API
-  submitContactForm: function (email, message, formContainer) {
+  submitContactForm: function (email, message, formContainer, interfaceType) {
     // Create submit in progress UI
     const submitButton = formContainer.querySelector("#contact-submit");
     const originalText = submitButton.textContent;
@@ -434,12 +380,13 @@ const VoiceroContact = {
         // Remove the form
         formContainer.remove();
 
-        // Show success message
-        if (window.VoiceroText && window.VoiceroText.addMessage) {
-          window.VoiceroText.addMessage(
-            "Thank you for your message! We've received your request and will get back to you soon.",
-            "ai"
-          );
+        // Show success message based on interface type
+        const successMessage = "Thank you for your message! We've received your request and will get back to you soon.";
+        
+        if (interfaceType === "voice" && window.VoiceroVoice && window.VoiceroVoice.addMessage) {
+          window.VoiceroVoice.addMessage(successMessage, "ai");
+        } else if (window.VoiceroText && window.VoiceroText.addMessage) {
+          window.VoiceroText.addMessage(successMessage, "ai");
         }
       })
       .catch((error) => {

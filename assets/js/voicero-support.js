@@ -62,7 +62,10 @@ const VoiceroSupport = {
                 !node.classList.contains("placeholder") &&
                 !node.classList.contains("typing-wrapper")
               ) {
-                this.attachReportButtonToMessage(node, "text");
+                // Use a small delay to ensure the message content is fully rendered
+                setTimeout(() => {
+                  this.attachReportButtonToMessage(node, "text");
+                }, 100);
               }
             }
           });
@@ -99,7 +102,10 @@ const VoiceroSupport = {
                 !node.classList.contains("placeholder") &&
                 !node.classList.contains("typing-indicator")
               ) {
-                this.attachReportButtonToMessage(node, "voice");
+                // Use a small delay to ensure the message content is fully rendered
+                setTimeout(() => {
+                  this.attachReportButtonToMessage(node, "voice");
+                }, 100);
               }
             }
           });
@@ -183,16 +189,16 @@ const VoiceroSupport = {
     // Create the report button
     const reportButton = document.createElement("div");
     reportButton.className = "voicero-report-button";
-    reportButton.innerHTML = "Report AI response";
+    reportButton.innerHTML = "Report an AI problem";
     reportButton.style.cssText = `
-      font-size: 11px;
+      font-size: 12px;
       color: #888;
-      margin-top: 4px;
-      margin-left: 8px;
+      margin-top: 10px;
+      text-align: right;
       cursor: pointer;
       text-decoration: underline;
-      display: inline-block;
-      opacity: 0.7;
+      display: block;
+      opacity: 0.8;
       transition: opacity 0.2s ease;
     `;
 
@@ -202,7 +208,7 @@ const VoiceroSupport = {
     });
 
     reportButton.addEventListener("mouseout", () => {
-      reportButton.style.opacity = "0.7";
+      reportButton.style.opacity = "0.8";
     });
 
     // Add click event to report the message
@@ -215,9 +221,9 @@ const VoiceroSupport = {
     });
 
     // Get the content container for message
-    const contentContainer =
+    const contentContainer = 
       chatType === "text"
-        ? messageElement
+        ? messageElement.querySelector(".message-content")
         : messageElement.querySelector(".voice-message-content");
 
     if (contentContainer) {
@@ -244,6 +250,9 @@ const VoiceroSupport = {
     // Get current thread ID from VoiceroCore if available
     let threadId = null;
     let actualMessageId = null;
+
+    // Immediately show an in-progress notification to the user
+    this.showReportStatus("Reporting AI problem...", "info");
 
     // We need to find the actual UUID message ID from the session data
     if (
@@ -416,14 +425,11 @@ const VoiceroSupport = {
       console.error("Found thread ID:", threadId);
       console.error("Found message ID:", actualMessageId);
       this.showReportStatus(
-        "Failed to report message. Please try again.",
+        "Sorry, couldn't report the AI problem. Please try again.",
         "error"
       );
       return;
     }
-
-    // Show reporting status
-    this.showReportStatus("Reporting message...", "info");
 
     console.log("VoiceroCore session:", window.VoiceroCore.session);
     console.log("Reporting message with ID:", actualMessageId);
@@ -452,14 +458,14 @@ const VoiceroSupport = {
       })
       .then((data) => {
         this.showReportStatus(
-          "Response reported successfully. Thank you!",
+          "Thank you! Your AI problem report has been submitted.",
           "success"
         );
       })
       .catch((error) => {
         console.error("Error reporting message:", error);
         this.showReportStatus(
-          "Failed to report message. Please try again.",
+          "Sorry, couldn't report the AI problem. Please try again.",
           "error"
         );
       });
@@ -488,15 +494,17 @@ const VoiceroSupport = {
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      padding: 10px 15px;
+      padding: 12px 20px;
       background-color: ${bgColor};
       color: white;
       border-radius: 4px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
       z-index: 9999999;
-      font-size: 14px;
+      font-size: 15px;
       opacity: 0;
       transition: opacity 0.3s ease;
+      text-align: center;
+      min-width: 250px;
     `;
 
     notification.textContent = message;
@@ -513,7 +521,7 @@ const VoiceroSupport = {
       setTimeout(() => {
         document.body.removeChild(notification);
       }, 300);
-    }, 3000);
+    }, 4000);
   },
 };
 
