@@ -1822,6 +1822,15 @@ function voicero_enqueue_scripts() {
             '1.1',
             true
         );
+        
+        // Add contact form handling script
+        wp_enqueue_script(
+            'voicero-contact-js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-contact.js',
+            ['voicero-text-js', 'jquery'],
+            '1.1',
+            true
+        );
 
         // Get access key
         $access_key = voicero_get_access_key();
@@ -2512,6 +2521,17 @@ add_action('rest_api_init', function() {
             'permission_callback' => '__return_true', // Allow all users to report issues
         ]
     );
+    
+    // 9) Contact form endpoint
+    register_rest_route(
+        'voicero/v1',
+        '/contactHelp',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_contact_form_handler',
+            'permission_callback' => '__return_true', // Allow all users to submit contact forms
+        ]
+    );
 });
 
 /**
@@ -2622,6 +2642,180 @@ function voicero_support_proxy($request) {
         json_decode($response_body, true),
         $status_code
     );
+}
+
+/**
+ * Handle contact form submissions
+ * Forwards data to www.voicero.ai/contacts/help and returns success/error response
+ */
+function voicero_contact_form_handler($request) {
+    // Get the request body
+    $json_body = $request->get_body();
+    $params = json_decode($json_body, true);
+    
+    // Validate required parameters
+    if (!isset($params['email']) || !isset($params['message'])) {
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Missing required parameters: email and message are required'
+        ], 400);
+    }
+    
+    // Sanitize inputs
+    $email = sanitize_email($params['email']);
+    $message = sanitize_textarea_field($params['message']);
+    
+    // Get thread ID and website ID - using camelCase to match Next.js API
+    $threadId = isset($params['threadId']) ? sanitize_text_field($params['threadId']) : '';
+    $websiteId = isset($params['websiteId']) ? sanitize_text_field($params['websiteId']) : '';
+    
+    // Verify required fields for the Next.js API
+    if (empty($websiteId)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Website ID is required'
+        ], 400);
+    }
+    
+    // Validate email
+    if (!is_email($email)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Invalid email address'
+        ], 400);
+    }
+    
+    // Validate message length
+    if (strlen($message) < 5) {
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Message is too short'
+        ], 400);
+    }
+    
+    // Get the access key from options
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'No access key configured'
+        ], 403);
+    }
+    
+    // Prepare data to send to the Voicero API - using camelCase to match Next.js API
+    $api_data = [
+        'email' => $email,
+        'message' => $message,
+        'websiteId' => $websiteId,
+        'source' => 'wordpress_plugin'
+    ];
+    
+    // Add threadId if available
+    if (!empty($threadId)) {
+        $api_data['threadId'] = $threadId;
+    }
+    
+    // Add site information
+    $api_data['siteUrl'] = home_url();
+    $api_data['siteName'] = get_bloginfo('name');
+    
+    // Log the request data for debugging
+    error_log('Contact form - Sending data to API: ' . json_encode($api_data));
+    
+    // Forward to Voicero API - using the correct API URL
+    $response = wp_remote_post('https://www.voicero.ai/api/contacts/help', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($api_data),
+        'timeout' => 15,
+        'sslverify' => true // Use true for production
+    ]);
+    
+    // Check for request errors
+    if (is_wp_error($response)) {
+        $error_message = 'Failed to connect to Voicero API: ' . $response->get_error_message();
+        error_log('Contact API error: ' . $error_message);
+        
+        // Also store in local database as backup
+        store_contact_in_database($email, $message, $threadId, $websiteId);
+        
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Failed to send your message. We\'ve logged it and will get back to you soon.'
+        ], 500);
+    }
+    
+    // Get response status and body
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Check if the API request was successful
+    if ($status_code >= 200 && $status_code < 300) {
+        // Success - also store in local database for redundancy
+        store_contact_in_database($email, $message, $threadId, $websiteId);
+        
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => 'Thank you for your message! We\'ve received your request and will get back to you soon.'
+        ], 200);
+    } else {
+        // API request failed - log the error but still store in local database
+        error_log('Contact API error: Status=' . $status_code . ', Body=' . substr($response_body, 0, 200));
+        store_contact_in_database($email, $message, $threadId, $websiteId);
+        
+        return new WP_REST_Response([
+            'success' => false,
+            'error' => 'Failed to process your request. We\'ve logged it and will get back to you soon.'
+        ], 500);
+    }
+}
+
+/**
+ * Helper function to store contact form data in the database
+ */
+function store_contact_in_database($email, $message, $thread_id, $website_id) {
+    try {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'voicero_contacts';
+        
+        // Check if table exists, create it if it doesn't
+        if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            $charset_collate = $wpdb->get_charset_collate();
+            $sql = "CREATE TABLE $table_name (
+                id mediumint(9) NOT NULL AUTO_INCREMENT,
+                time datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+                email varchar(100) NOT NULL,
+                message text NOT NULL,
+                thread_id varchar(255),
+                website_id varchar(255),
+                PRIMARY KEY  (id)
+            ) $charset_collate;";
+            
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            dbDelta($sql);
+        }
+        
+        // Insert the contact submission
+        $wpdb->insert(
+            $table_name,
+            array(
+                'time' => current_time('mysql'),
+                'email' => $email,
+                'message' => $message,
+                'thread_id' => $thread_id,
+                'website_id' => $website_id
+            )
+        );
+        
+        return true;
+    } catch(Exception $e) {
+        // Log error but continue
+        error_log('Error storing contact form submission: ' . $e->getMessage());
+        return false;
+    }
 }
 
 // Add a new function to track training status

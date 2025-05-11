@@ -3358,6 +3358,51 @@ const VoiceroText = {
       }, 100);
     }
   },
+
+  // Format content with potential links
+  formatContent: function (text) {
+    if (!text) return "";
+
+    // Check for special contact form tag and replace with empty string
+    // This will be handled separately by the showContactForm method
+    if (text.includes("[SHOW_CONTACT_FORM]")) {
+      // Trigger the contact form display with a small delay to ensure proper rendering
+      setTimeout(() => {
+        this.showContactForm();
+      }, 100);
+
+      // Remove the tag from the displayed message
+      text = text.replace("[SHOW_CONTACT_FORM]", "");
+    }
+
+    // Process URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const processedText = text.replace(
+      urlRegex,
+      '<a href="$1" target="_blank" class="chat-link">$1</a>'
+    );
+
+    return processedText;
+  },
+
+  // Show contact form in the chat interface
+  showContactForm: function () {
+    // Check if VoiceroContact module is available
+    if (
+      window.VoiceroContact &&
+      typeof window.VoiceroContact.showContactForm === "function"
+    ) {
+      window.VoiceroContact.showContactForm();
+    } else {
+      console.error("VoiceroContact module not available");
+
+      // Fallback: Display a message that contact form is not available
+      this.addMessage(
+        "I'm sorry, the contact form is not available right now. Please try again later or contact us directly.",
+        "ai"
+      );
+    }
+  },
 };
 
 // Initialize when core is ready
@@ -3390,6 +3435,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   }
 });
+
+// Show contact form in the chat interface
+VoiceroText.showContactForm = function () {
+  // Check if VoiceroContact module is available
+  if (
+    window.VoiceroContact &&
+    typeof window.VoiceroContact.showContactForm === "function"
+  ) {
+    window.VoiceroContact.showContactForm();
+  } else {
+    console.error("VoiceroContact module not available");
+
+    // Fallback: Display a message that contact form is not available
+    this.addMessage(
+      "I'm sorry, the contact form is not available right now. Please try again later or contact us directly.",
+      "ai"
+    );
+  }
+};
 
 // Expose global functions
 window.VoiceroText = VoiceroText;
