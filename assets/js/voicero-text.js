@@ -1672,19 +1672,6 @@ const VoiceroText = {
             min-height: 45px;
             width: calc(100% - 24px);
           ">
-            <div style="
-              width: 30px;
-              display: flex;
-              justify-content: center;
-              opacity: 0.6;
-            ">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-                <line x1="9" y1="9" x2="9.01" y2="9"></line>
-                <line x1="15" y1="9" x2="15.01" y2="9"></line>
-              </svg>
-            </div>
             <input
               type="text"
               id="chat-input"
@@ -1724,6 +1711,15 @@ const VoiceroText = {
                 <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
               </svg>
             </button>
+          </div>
+          <div style="
+            position: absolute;
+            bottom: 2px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            line-height: 1;
+          ">
           </div>
         </div>
       `;

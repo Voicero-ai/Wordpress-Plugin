@@ -1703,6 +1703,24 @@
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
+
+          <div style="
+            text-align: center;
+            margin-top: 18px;
+            line-height: 1;
+          ">
+            <div style="
+              font-size: 10px;
+              color: black;
+              opacity: 0.8;
+              margin-bottom: 2px;
+            ">Powered by Voicero</div>
+            <div style="
+              font-size: 8px;
+              color: black;
+              opacity: 0.6;
+            ">Voicero AI can make mistakes</div>
+          </div>
         </div>`
       );
       // Add click handlers to the new options
