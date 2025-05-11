@@ -204,7 +204,7 @@
         );
         mainButton = document.getElementById("chat-website-button");
       }
-      
+
       // Add "Powered by Voicero" text as a small hyperlink at the bottom
       if (toggleContainer && !document.getElementById("voicero-powered-by")) {
         toggleContainer.insertAdjacentHTML(
@@ -1545,32 +1545,66 @@
     attachButtonClickHandler: function () {
       const mainButton = document.getElementById("chat-website-button");
       if (!mainButton) return;
+
       // Remove existing listeners to prevent duplicates
       const newButton = mainButton.cloneNode(true);
       if (mainButton.parentNode) {
         mainButton.parentNode.replaceChild(newButton, mainButton);
       }
+
+      // Track if chooser is visible
+      this.isChooserVisible = false;
+
       // Add the new bulletproof click handler
       newButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Always recreate chooser with the unified function
-        this.createChooser();
-        // If chooser exists now, show it
+
+        // Get reference to current chooser
         let chooser = document.getElementById("interaction-chooser");
-        if (chooser) {
-          const computedStyle = window.getComputedStyle(chooser);
-          const isVisible =
-            computedStyle.display !== "none" &&
-            computedStyle.visibility !== "hidden";
-          if (isVisible) {
-            chooser.style.display = "none";
-            chooser.style.visibility = "hidden";
-            chooser.style.opacity = "0";
-          } else {
-            chooser.style.display = "flex";
-            chooser.style.visibility = "visible";
-            chooser.style.opacity = "1";
+
+        // Toggle visibility state based on tracked state
+        if (this.isChooserVisible && chooser) {
+          // Hide the chooser
+          chooser.style.cssText = `
+            display: none !important;
+            visibility: hidden !important; 
+            opacity: 0 !important;
+            pointer-events: none !important;
+          `;
+          this.isChooserVisible = false;
+        } else {
+          // Always recreate chooser fresh
+          this.createChooser();
+
+          // Get the newly created chooser
+          chooser = document.getElementById("interaction-chooser");
+
+          if (chooser) {
+            // Show the chooser with !important flags
+            chooser.style.cssText = `
+              position: fixed !important;
+              bottom: 80px !important;
+              right: 20px !important;
+              z-index: 10001 !important;
+              background-color: #c8c8c8 !important;
+              border-radius: 12px !important;
+              box-shadow: 6px 6px 0 ${
+                this.websiteColor || "#882be6"
+              } !important;
+              padding: 15px !important;
+              width: 280px !important;
+              border: 1px solid rgb(0, 0, 0) !important;
+              display: flex !important;
+              visibility: visible !important;
+              opacity: 1 !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              margin: 0 !important;
+              transform: none !important;
+              pointer-events: auto !important;
+            `;
+            this.isChooserVisible = true;
           }
         }
       });
@@ -1621,9 +1655,11 @@
       if (oldChooser && oldChooser.parentNode) {
         oldChooser.parentNode.removeChild(oldChooser);
       }
+
       const themeColor = this.websiteColor || "#882be6";
       const buttonContainer = document.getElementById("voice-toggle-container");
       if (!buttonContainer) return;
+
       buttonContainer.insertAdjacentHTML(
         "beforeend",
         `<div
@@ -1646,6 +1682,7 @@
             align-items: center !important;
             margin: 0 !important;
             transform: none !important;
+            pointer-events: none !important;
           "
         >
           <div
@@ -1723,13 +1760,25 @@
           </div>
         </div>`
       );
+
       // Add click handlers to the new options
       const chooser = document.getElementById("interaction-chooser");
       const container = document.getElementById("voicero-app-container");
       const voiceButton = document.getElementById("voice-chooser-button");
+
       if (voiceButton) {
         voiceButton.addEventListener("click", () => {
-          if (chooser) chooser.style.display = "none";
+          // Hide chooser and reset tracked state
+          if (chooser) {
+            chooser.style.cssText = `
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              pointer-events: none !important;
+            `;
+            this.isChooserVisible = false;
+          }
+
           let voiceInterface = document.getElementById("voice-chat-interface");
           if (!voiceInterface) {
             container.insertAdjacentHTML(
@@ -1737,6 +1786,7 @@
               `<div id=\"voice-chat-interface\" style=\"display: none;\"></div>`
             );
           }
+
           if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
             window.VoiceroVoice.openVoiceChat();
             setTimeout(() => {
@@ -1750,10 +1800,21 @@
           }
         });
       }
+
       const textButton = document.getElementById("text-chooser-button");
       if (textButton) {
         textButton.addEventListener("click", () => {
-          if (chooser) chooser.style.display = "none";
+          // Hide chooser and reset tracked state
+          if (chooser) {
+            chooser.style.cssText = `
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              pointer-events: none !important;
+            `;
+            this.isChooserVisible = false;
+          }
+
           let textInterface = document.getElementById(
             "voicero-text-chat-container"
           );
@@ -1763,6 +1824,7 @@
               `<div id=\"voicero-text-chat-container\" style=\"display: none;\"></div>`
             );
           }
+
           if (window.VoiceroText && window.VoiceroText.openTextChat) {
             window.VoiceroText.openTextChat();
             setTimeout(() => {
