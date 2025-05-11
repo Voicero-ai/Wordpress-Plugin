@@ -1813,6 +1813,15 @@ function voicero_enqueue_scripts() {
             '1.1',
             true
         );
+        
+        // Add support script for reporting functionality
+        wp_enqueue_script(
+            'voicero-support-js',
+            plugin_dir_url(__FILE__) . 'assets/js/voicero-support.js',
+            ['voicero-core-js', 'jquery'],
+            '1.1',
+            true
+        );
 
         // Get access key
         $access_key = voicero_get_access_key();
@@ -2492,7 +2501,128 @@ add_action('rest_api_init', function() {
             'permission_callback' => '__return_true',
         ]
     );
+    
+    // 8) Support feedback endpoint
+    register_rest_route(
+        'voicero/v1',
+        '/support',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_support_proxy',
+            'permission_callback' => '__return_true', // Allow all users to report issues
+        ]
+    );
 });
+
+/**
+ * Handle support feedback requests
+ * Forwards messageId and threadId to support API
+ */
+function voicero_support_proxy($request) {
+    // Get the request body
+    $json_body = $request->get_body();
+    $params = json_decode($json_body, true);
+    
+    // Validate required parameters - must be valid UUIDs
+    if (!isset($params['messageId']) || !isset($params['threadId'])) {
+        error_log('Support API: Missing required parameters: ' . $json_body);
+        return new WP_REST_Response([
+            'error' => 'Missing required parameters: messageId and threadId are required'
+        ], 400);
+    }
+    
+    // Log the incoming request
+    error_log('Support API request: messageId=' . $params['messageId'] . ', threadId=' . $params['threadId']);
+    
+    // Validate format
+    $uuid_pattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i';
+    if (!preg_match($uuid_pattern, $params['messageId']) || !preg_match($uuid_pattern, $params['threadId'])) {
+        error_log('Support API: Invalid UUID format: ' . $json_body);
+        return new WP_REST_Response([
+            'error' => 'Invalid format: messageId and threadId must be valid UUIDs'
+        ], 400);
+    }
+    
+    // Get the access key from options
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        error_log('Support API: No access key configured');
+        return new WP_REST_Response([
+            'error' => 'No access key configured'
+        ], 403);
+    }
+    
+    // Create session-like auth for the external API
+    // This fakes a session that the Next.js API expects
+    $session_auth = array(
+        'user' => array(
+            'id' => 'wordpress_plugin', // This will be checked by the API
+            'websiteId' => $params['threadId'], // Use the thread ID as website ID for auth
+        )
+    );
+    
+    // Encode as JWT-like format
+    $session_token = base64_encode(json_encode($session_auth));
+    
+    // Create data to forward
+    $forward_data = array(
+        'messageId' => sanitize_text_field($params['messageId']),
+        'threadId' => sanitize_text_field($params['threadId']),
+        // Add authentication data for the Next.js API
+        'auth' => array(
+            'session' => $session_token
+        )
+    );
+    
+    // Forward to support API
+    $response = wp_remote_post('https://www.voicero.ai/api/support/help', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'X-Voicero-Session' => $session_token, // Add session token in header
+            'X-Voicero-Source' => 'wordpress_plugin' // Add source identifier
+        ],
+        'body' => json_encode($forward_data),
+        'timeout' => 15,
+        'sslverify' => true // Enable SSL verification for production
+    ]);
+    
+    // Check for request errors
+    if (is_wp_error($response)) {
+        $error_message = 'Failed to connect to support API: ' . $response->get_error_message();
+        error_log('Support API error: ' . $error_message);
+        return new WP_REST_Response([
+            'error' => $error_message
+        ], 500);
+    }
+    
+    // Get response status and body
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    // Log the response for debugging
+    error_log('Support API response: Status=' . $status_code . ', Body=' . substr($response_body, 0, 200));
+    
+    // If it's a 401, try to handle it gracefully
+    if ($status_code === 401) {
+        // Try to parse the response for more details
+        $response_data = json_decode($response_body, true);
+        $error_message = isset($response_data['error']) ? $response_data['error'] : 'Authentication failed';
+        
+        error_log('Support API authentication failed: ' . $error_message);
+        return new WP_REST_Response([
+            'error' => 'Authentication failed with support API: ' . $error_message,
+            'suggestion' => 'Please check your access key or contact Voicero support'
+        ], 401);
+    }
+    
+    // Return the API response
+    return new WP_REST_Response(
+        json_decode($response_body, true),
+        $status_code
+    );
+}
 
 // Add a new function to track training status
 function voicero_get_training_status() {

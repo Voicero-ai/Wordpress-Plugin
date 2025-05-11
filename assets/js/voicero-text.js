@@ -490,7 +490,28 @@ const VoiceroText = {
       }
 
       this.messages.push(messageObj);
+
+      // Set message ID as data attribute on the DOM element for reporting
+      message.dataset.messageId = messageObj.id;
     }
+
+    // If this is an AI message, attach the support/report button using VoiceroSupport
+    if (
+      role === "ai" &&
+      window.VoiceroSupport &&
+      typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+    ) {
+      try {
+        // Small delay to ensure the message is fully rendered
+        setTimeout(() => {
+          window.VoiceroSupport.attachReportButtonToMessage(message, "text");
+        }, 50);
+      } catch (e) {
+        console.error("Failed to attach report button:", e);
+      }
+    }
+
+    return message;
   },
 
   // Generate a temporary ID for messages
@@ -2516,7 +2537,7 @@ const VoiceroText = {
     }
     this._lastChatToggle = now;
     this._isChatVisible = false;
-    
+
     // Update window state first (text open but window down)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
@@ -2545,11 +2566,11 @@ const VoiceroText = {
       // Important: Force visible the maximize button with fixed positioning
       maximizeBtn.style.display = "block";
       maximizeBtn.style.position = "fixed";
-      maximizeBtn.style.bottom = "100px"; 
+      maximizeBtn.style.bottom = "100px";
       maximizeBtn.style.left = "50%";
       maximizeBtn.style.transform = "translateX(-50%)";
       maximizeBtn.style.zIndex = "9999999";
-      
+
       // Ensure the button's style is applied correctly
       const maximizeButton = maximizeBtn.querySelector("button");
       if (maximizeButton) {
@@ -2729,6 +2750,11 @@ const VoiceroText = {
     const messageDiv = document.createElement("div");
     messageDiv.className = role === "user" ? "user-message" : "ai-message";
 
+    // Generate a unique ID for this message
+    const messageId =
+      "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    messageDiv.dataset.messageId = messageId;
+
     // Create message content
     const contentDiv = document.createElement("div");
     contentDiv.className = "message-content";
@@ -2837,6 +2863,24 @@ const VoiceroText = {
       });
 
       // Update VoiceroCore state if available
+    }
+
+    // If this is an AI message (and not a welcome/initial message), add report button
+    if (
+      role === "ai" &&
+      !isInitial &&
+      !isLoading &&
+      window.VoiceroSupport &&
+      typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+    ) {
+      try {
+        // Small delay to ensure the message is fully rendered
+        setTimeout(() => {
+          window.VoiceroSupport.attachReportButtonToMessage(messageDiv, "text");
+        }, 50);
+      } catch (e) {
+        console.error("Failed to attach report button:", e);
+      }
     }
 
     return messageDiv;
@@ -3294,17 +3338,17 @@ const VoiceroText = {
   },
 
   // Toggle from text chat to voice chat
-  toggleToVoiceChat: function() {
+  toggleToVoiceChat: function () {
     console.log("VoiceroText: Toggling from text to voice chat");
-    
+
     // First close the text chat interface
     this.closeTextChat();
-    
+
     // Then open the voice chat interface
     if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
       setTimeout(() => {
         window.VoiceroVoice.openVoiceChat();
-        
+
         // Make sure it's maximized
         if (window.VoiceroVoice.maximizeVoiceChat) {
           setTimeout(() => {

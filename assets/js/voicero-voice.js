@@ -2366,6 +2366,11 @@ const VoiceroVoice = {
     const messageEl = document.createElement("div");
     messageEl.className = role === "user" ? "user-message" : "ai-message";
 
+    // Generate a unique message ID for this message and store it as a data attribute
+    const messageId =
+      "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    messageEl.dataset.messageId = messageId;
+
     if (
       content === "Generating response..." ||
       content.includes("Thinking...") ||
@@ -2384,7 +2389,7 @@ const VoiceroVoice = {
     `;
 
     let messageContent = document.createElement("div");
-    messageContent.className = "message-content";
+    messageContent.className = "message-content voice-message-content";
 
     if (formatMarkdown && role === "ai" && VoiceroCore) {
       messageContent.innerHTML = VoiceroCore.formatMarkdown(content);
@@ -2460,6 +2465,26 @@ const VoiceroVoice = {
     messageEl.appendChild(messageContent);
     messagesContainer.appendChild(messageEl);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // If this is an AI message (not a placeholder), attach the "Report AI response" button using VoiceroSupport
+    if (
+      role === "ai" &&
+      content !== "Generating response..." &&
+      !content.includes("Thinking...") &&
+      content !== "..." &&
+      window.VoiceroSupport &&
+      typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+    ) {
+      try {
+        // Small delay to ensure the message is fully rendered
+        setTimeout(() => {
+          window.VoiceroSupport.attachReportButtonToMessage(messageEl, "voice");
+        }, 50);
+      } catch (e) {
+        console.error("Failed to attach report button to voice message:", e);
+      }
+    }
+
     return messageEl;
   },
 
@@ -3139,17 +3164,17 @@ const VoiceroVoice = {
   },
 
   // Toggle from voice chat to text chat
-  toggleToTextChat: function() {
+  toggleToTextChat: function () {
     console.log("VoiceroVoice: Toggling from voice to text chat");
-    
+
     // First close the voice chat interface
     this.closeVoiceChat();
-    
+
     // Then open the text chat interface
     if (window.VoiceroText && window.VoiceroText.openTextChat) {
       setTimeout(() => {
         window.VoiceroText.openTextChat();
-        
+
         // Make sure it's maximized
         if (window.VoiceroText.maximizeChat) {
           setTimeout(() => {
