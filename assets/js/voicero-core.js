@@ -204,6 +204,30 @@
         );
         mainButton = document.getElementById("chat-website-button");
       }
+      
+      // Add "Powered by Voicero" text as a small hyperlink at the bottom
+      if (toggleContainer && !document.getElementById("voicero-powered-by")) {
+        toggleContainer.insertAdjacentHTML(
+          "beforeend",
+          `<a 
+            id="voicero-powered-by" 
+            href="https://voicero.ai" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style="
+              display: block !important;
+              font-size: 10px !important;
+              color: #888 !important;
+              text-decoration: none !important;
+              margin-top: 5px !important;
+              text-align: right !important;
+              width: 100% !important;
+              opacity: 0.7 !important;
+              font-family: Arial, sans-serif !important;
+            "
+          >Powered by Voicero</a>`
+        );
+      }
     },
 
     // Create text chat interface (basic container elements)

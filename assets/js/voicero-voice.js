@@ -76,7 +76,7 @@ const VoiceroVoice = {
     const resetStyle = document.createElement("style");
     resetStyle.innerHTML = `
       #voice-messages {
-        padding: 15px !important; 
+        padding: 12px !important; 
         padding-top: 0 !important;
         margin: 0 !important;
         background-color: #f2f2f7 !important; /* iOS light gray background */
@@ -87,7 +87,7 @@ const VoiceroVoice = {
       }
 
       #voice-controls-header {
-        margin-bottom: 15px !important;
+        margin-bottom: 10px !important;
         margin-top: 0 !important;
         background-color: #f2f2f7 !important;
         position: sticky !important;
@@ -99,7 +99,7 @@ const VoiceroVoice = {
         width: 100% !important;
         left: 0 !important;
         right: 0 !important;
-        padding: 10px 15px !important;
+        padding: 8px 12px !important;
         box-sizing: border-box !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
@@ -204,20 +204,20 @@ const VoiceroVoice = {
       .welcome-message {
         text-align: center;
         background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%);
-        border-radius: 18px;
-        padding: 12px 15px;
-        margin: 12px auto;
+        border-radius: 16px;
+        padding: 4px 8px;
+        margin: 2px auto;
         width: 85%;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
         position: relative;
         overflow: hidden;
-        border: 1px solid rgba(136, 43, 230, 0.1);
+        border: 1px solid rgba(136, 43, 230, 0.05);
       }
       
       .welcome-title {
-        font-size: 18px;
+        font-size: 14px;
         font-weight: 700;
-        margin-bottom: 5px;
+        margin-bottom: 0;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
         background: linear-gradient(90deg, ${
           this.websiteColor || "#882be6"
@@ -229,11 +229,11 @@ const VoiceroVoice = {
       }
       
       .welcome-subtitle {
-        font-size: 14px;
-        line-height: 1.4;
+        font-size: 12px;
+        line-height: 1.2;
         color: #666;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-        margin-bottom: 3px;
+        margin: 1px 0;
       }
       
       .welcome-highlight {
@@ -242,20 +242,20 @@ const VoiceroVoice = {
       }
       
       .welcome-note {
-        font-size: 12px;
+        font-size: 10px;
         opacity: 0.75;
         font-style: italic;
-        margin-top: 5px;
+        margin-top: 1px;
         color: #888;
       }
       
       .welcome-pulse {
         display: inline-block;
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background-color: #ff4444;
         border-radius: 50%;
-        margin-right: 4px;
+        margin-right: 3px;
         animation: welcomePulse 1.5s infinite;
       }
       
@@ -429,6 +429,7 @@ const VoiceroVoice = {
     const clearButton = document.createElement("button");
     clearButton.id = "clear-voice-chat";
     clearButton.setAttribute("onclick", "VoiceroVoice.clearChatHistory()");
+    clearButton.setAttribute("title", "Clear Chat History");
     clearButton.style.cssText = `
       background: none;
       border: none;
@@ -456,6 +457,7 @@ const VoiceroVoice = {
     const minimizeButton = document.createElement("button");
     minimizeButton.id = "minimize-voice-chat";
     minimizeButton.setAttribute("onclick", "VoiceroVoice.minimizeVoiceChat()");
+    minimizeButton.setAttribute("title", "Minimize");
     minimizeButton.style.cssText = `
       background: none;
       border: none;
@@ -474,10 +476,37 @@ const VoiceroVoice = {
     `;
     controlsHeader.appendChild(minimizeButton);
 
+    // Create toggle button for the header (to switch to text chat)
+    const toggleButton = document.createElement("button");
+    toggleButton.id = "toggle-to-text-chat";
+    toggleButton.setAttribute("onclick", "VoiceroVoice.toggleToTextChat()");
+    toggleButton.setAttribute("title", "Switch to Text Chat");
+    toggleButton.style.cssText = `
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    `;
+    toggleButton.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
+        <rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect>
+        <path d="M14 9l-2 2-2-2"></path>
+        <path d="M12 11v4"></path>
+        <line x1="8" y1="16" x2="16" y2="16"></line>
+      </svg>
+    `;
+    controlsHeader.appendChild(toggleButton);
+
     // Create close button for the header
     const closeButton = document.createElement("button");
     closeButton.id = "close-voice-chat";
     closeButton.setAttribute("onclick", "VoiceroVoice.closeVoiceChat()");
+    closeButton.setAttribute("title", "Close");
     closeButton.style.cssText = `
       background: none;
       border: none;
@@ -525,6 +554,7 @@ const VoiceroVoice = {
 
     // Move the minimize and close buttons to the right container
     rightButtonsContainer.appendChild(minimizeButton);
+    rightButtonsContainer.appendChild(toggleButton);
     rightButtonsContainer.appendChild(closeButton);
     controlsHeader.appendChild(rightButtonsContainer);
 
@@ -862,10 +892,10 @@ const VoiceroVoice = {
     ) {
       // Add welcome message with clear prompt
       this.addSystemMessage(`
-        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-          <div class="welcome-title">Aura, your website concierge</div>
-          <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
-          <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
+        <div class="welcome-message" style="width: 90% !important; max-width: 380px !important; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important; background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important; border: none !important; padding: 4px 8px !important; margin: 2px auto !important;">
+          <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent; margin-bottom: 0; font-size: 14px;">Aura, your website concierge</div>
+          <div class="welcome-subtitle" style="margin: 1px 0; font-size: 12px;">Click mic & <span class="welcome-highlight">start talking</span></div>
+          <div class="welcome-note" style="margin-top: 1px; font-size: 10px;"><span class="welcome-pulse" style="background-color: rgb(99, 102, 241); width: 6px; height: 6px;"></span>Button glows during conversation</div>
         </div>
       `);
     } else {
@@ -1210,15 +1240,8 @@ const VoiceroVoice = {
 
       // Add a temporary "initializing..." message instead of immediately showing "I'm listening..."
       this.addSystemMessage(`
-        <div id="listening-indicator-message" class="welcome-message" style="width: 90% !important; max-width: 400px !important; padding: 4px 10px; margin: 4px auto;">
-          <div class="welcome-title" style="background: linear-gradient(90deg, var(--voicero-theme-color, ${
-            this.websiteColor || "#882be6"
-          }), ${this.adjustColor(
-        `var(--voicero-theme-color, ${this.websiteColor || "#882be6"})`,
-        0.2
-      )}, var(--voicero-theme-color, ${
-        this.websiteColor || "#882be6"
-      })); -webkit-background-clip: text; background-clip: text; margin-bottom: 0;">
+        <div id="listening-indicator-message" class="welcome-message" style="width: 90% !important; max-width: 400px !important; padding: 4px 10px; margin: 4px auto; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important; background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important; border: none !important;">
+          <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent; margin-bottom: 0;">
             Initializing microphone...
           </div>
         </div>
@@ -2531,10 +2554,10 @@ const VoiceroVoice = {
         if (shouldShowWelcome && existingMessages.length === 0) {
           // Add welcome message
           this.addSystemMessage(`
-            <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-              <div class="welcome-title">Aura, your website concierge</div>
-              <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
-              <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
+            <div class="welcome-message" style="width: 90% !important; max-width: 380px !important; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important; background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important; border: none !important; padding: 4px 8px !important; margin: 2px auto !important;">
+              <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent; margin-bottom: 0; font-size: 14px;">Aura, your website concierge</div>
+              <div class="welcome-subtitle" style="margin: 1px 0; font-size: 12px;">Click mic & <span class="welcome-highlight">start talking</span></div>
+              <div class="welcome-note" style="margin-top: 1px; font-size: 10px;"><span class="welcome-pulse" style="background-color: rgb(99, 102, 241); width: 6px; height: 6px;"></span>Button glows during conversation</div>
             </div>
           `);
         }
@@ -2658,7 +2681,7 @@ const VoiceroVoice = {
     messageDiv.style.cssText = `
       display: flex;
       justify-content: center;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
     `;
 
     // Create the message content
@@ -2667,16 +2690,16 @@ const VoiceroVoice = {
     contentDiv.innerHTML = text;
     contentDiv.style.cssText = `      background: #e5e5ea;
       color: #333;
-      border-radius: 18px;
-      padding: 12px 15px;
+      border-radius: 16px;
+      padding: 6px 10px;
       width: 90% !important;
       max-width: 400px !important;
       word-wrap: break-word;
-      font-size: 14px;
-      line-height: 1.4;
+      font-size: 13px;
+      line-height: 1.2;
       text-align: center;
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      margin: 12px auto;
+      margin: 4px auto;
     `;
 
     // Add content to message
@@ -2761,10 +2784,10 @@ const VoiceroVoice = {
 
     // Add welcome message again with the exact same format as in openVoiceChat
     this.addSystemMessage(`
-      <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-        <div class="welcome-title">Aura, your website concierge</div>
-        <div class="welcome-subtitle">Click the mic & <span class="welcome-highlight">start talking</span></div>
-        <div class="welcome-note"><span class="welcome-pulse"></span>Button glows during conversation</div>
+      <div class="welcome-message" style="width: 90% !important; max-width: 380px !important; padding: 4px 8px !important; margin: 2px auto !important;">
+        <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent; margin-bottom: 0; font-size: 14px;">Aura, your website concierge</div>
+        <div class="welcome-subtitle" style="margin: 1px 0; font-size: 12px;">Click mic & <span class="welcome-highlight">start talking</span></div>
+        <div class="welcome-note" style="margin-top: 1px; font-size: 10px;"><span class="welcome-pulse" style="background-color: rgb(99, 102, 241); width: 6px; height: 6px;"></span>Button glows during conversation</div>
       </div>
     `);
   },
@@ -3113,6 +3136,28 @@ const VoiceroVoice = {
     });
 
     return pageData;
+  },
+
+  // Toggle from voice chat to text chat
+  toggleToTextChat: function() {
+    console.log("VoiceroVoice: Toggling from voice to text chat");
+    
+    // First close the voice chat interface
+    this.closeVoiceChat();
+    
+    // Then open the text chat interface
+    if (window.VoiceroText && window.VoiceroText.openTextChat) {
+      setTimeout(() => {
+        window.VoiceroText.openTextChat();
+        
+        // Make sure it's maximized
+        if (window.VoiceroText.maximizeChat) {
+          setTimeout(() => {
+            window.VoiceroText.maximizeChat();
+          }, 100);
+        }
+      }, 100);
+    }
   },
 };
 

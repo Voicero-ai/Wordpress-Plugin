@@ -289,10 +289,10 @@ const VoiceroText = {
         // Add welcome message
         this.addMessage(
           `
-          <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-            <div class="welcome-title">Aura, your website concierge</div>
+          <div class="welcome-message" style="width: 90% !important; max-width: 400px !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important; background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important; border: none !important;">
+            <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent;">Aura, your website concierge</div>
             <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
-            <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+            <div class="welcome-note"><span class="welcome-pulse" style="background-color: rgb(99, 102, 241);"></span>Ask me anything about this site!</div>
           </div>
           `,
           "ai",
@@ -1454,22 +1454,17 @@ const VoiceroText = {
           .suggestion:hover {
             opacity: 0.9 !important;
           }
-          
-          /* IMPORTANT: New styles for maximize button to ensure visibility */
-          #maximize-chat {
-            display: none;
-            width: 100%;
-            text-align: center;
-            padding: 0;
-            margin: 0;
-            position: absolute;
-            bottom: 30px; /* Sit just above the input bar */
-            left: 0;
-            z-index: 999999;
-          }
-          
-          #maximize-chat button {
-            background: ${this.websiteColor || "#882be6"};
+        </style>
+
+        <!-- IMPORTANT: Restructured layout - Maximize button first in the DOM order -->
+        <!-- This is critical so it won't be affected by the messages container collapse -->
+        <div 
+          id="maximize-chat"
+          style="display: none; position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 999999;"
+        >
+          <button style="
+            position: relative;
+            background: rgb(99, 102, 241);
             border: none;
             color: white;
             padding: 10px 20px;
@@ -1477,24 +1472,16 @@ const VoiceroText = {
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-            display: inline-flex;
+            display: flex;
             align-items: center;
             justify-content: center;
             min-width: 160px;
-            margin-bottom: 0;
-            position: relative;
-            z-index: 1000000;
-          }
-        </style>
-
-        <!-- IMPORTANT: Restructured layout - Maximize button first in the DOM order -->
-        <!-- This is critical so it won't be affected by the messages container collapse -->
-        <div 
-          id="maximize-chat"
-          style="display: none; margin-top: 0; position: absolute; bottom: 60px; left: 0; width: 100%; z-index: 999999;"
-        >
-          <button>
+            margin-bottom: -30px;
+            height: 40px;
+            overflow: visible;
+            box-shadow: none;
+            width: auto;
+          ">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
               <polyline points="15 3 21 3 21 9"></polyline>
               <polyline points="9 21 3 21 3 15"></polyline>
@@ -1525,7 +1512,7 @@ const VoiceroText = {
           box-sizing: border-box !important;
           transform: translateZ(0);
         ">
-          <button id="clear-text-chat" style="
+          <button id="clear-text-chat" title="Clear Chat History" style="
             background: none;
             border: none;
             cursor: pointer;
@@ -1564,9 +1551,28 @@ const VoiceroText = {
               align-items: center;
               justify-content: center;
               transition: all 0.2s ease;
-            ">
+            " title="Minimize">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+            
+            <button id="toggle-to-voice-chat" style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              padding: 5px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: all 0.2s ease;
+            " title="Switch to Voice Chat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <path d="M12 19v4"/>
+                <path d="M8 23h8"/>
               </svg>
             </button>
             
@@ -1580,7 +1586,7 @@ const VoiceroText = {
               align-items: center;
               justify-content: center;
               transition: all 0.2s ease;
-            ">
+            " title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round">
                 <path d="M18 6L6 18M6 6l12 12"></path>
               </svg>
@@ -1761,6 +1767,7 @@ const VoiceroText = {
     const maximizeBtn = shadowRoot.getElementById("maximize-chat");
     const closeBtn = shadowRoot.getElementById("close-text-chat");
     const clearBtn = shadowRoot.getElementById("clear-text-chat");
+    const toggleBtn = shadowRoot.getElementById("toggle-to-voice-chat");
 
     // Remove onclick attributes and add event listeners
     if (minimizeBtn) {
@@ -1772,10 +1779,13 @@ const VoiceroText = {
       maximizeBtn.removeAttribute("onclick");
       maximizeBtn.addEventListener("click", () => this.maximizeChat());
 
-      // IMPORTANT: Force the button background color to match the theme
+      // We don't need to set the background color here anymore as it's already set in the HTML
+      // Just ensure the button has display:flex for the icon alignment
       const maximizeButton = maximizeBtn.querySelector("button");
       if (maximizeButton) {
-        maximizeButton.style.backgroundColor = this.websiteColor || "#882be6";
+        maximizeButton.style.display = "flex";
+        maximizeButton.style.alignItems = "center";
+        maximizeButton.style.justifyContent = "center";
       }
     }
 
@@ -1789,6 +1799,11 @@ const VoiceroText = {
       clearBtn.addEventListener("click", () => this.clearChatHistory());
     }
 
+    if (toggleBtn) {
+      toggleBtn.removeAttribute("onclick");
+      toggleBtn.addEventListener("click", () => this.toggleToVoiceChat());
+    }
+
     // Force all welcome message elements to use theme color
     this.forceWelcomeMessageColors();
   },
@@ -1797,19 +1812,14 @@ const VoiceroText = {
   forceWelcomeMessageColors: function () {
     if (!this.shadowRoot) return;
 
-    const mainColor = this.websiteColor || "#882be6";
+    const mainColor = "rgb(99, 102, 241)";
 
     // Force welcome message border color
     const welcomeMessages =
       this.shadowRoot.querySelectorAll(".welcome-message");
     welcomeMessages.forEach((msg) => {
-      msg.style.border = `1px solid rgba(${parseInt(
-        mainColor.slice(1, 3),
-        16
-      )}, ${parseInt(mainColor.slice(3, 5), 16)}, ${parseInt(
-        mainColor.slice(5, 7),
-        16
-      )}, 0.1)`;
+      // Explicitly remove border
+      msg.style.border = "none";
     });
 
     // Force welcome title colors
@@ -1912,10 +1922,10 @@ const VoiceroText = {
       // Add welcome message again
       this.addMessage(
         `
-        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important;">
-          <div class="welcome-title">Aura, your website concierge</div>
+        <div class="welcome-message" style="width: 90% !important; max-width: 400px !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important; background: linear-gradient(135deg, #f5f7fa 0%, #e6e9f0 100%) !important; border: none !important;">
+          <div class="welcome-title" style="background: linear-gradient(90deg, rgb(99, 102, 241), rgb(99, 102, 241)) text; -webkit-text-fill-color: transparent;">Aura, your website concierge</div>
           <div class="welcome-subtitle">Text me like your best friend and I'll solve any problem you may have.</div>
-          <div class="welcome-note"><span class="welcome-pulse"></span>Ask me anything about this site!</div>
+          <div class="welcome-note"><span class="welcome-pulse" style="background-color: rgb(99, 102, 241);"></span>Ask me anything about this site!</div>
         </div>
         `,
         "ai",
@@ -2510,8 +2520,8 @@ const VoiceroText = {
     }
     this._lastChatToggle = now;
     this._isChatVisible = false;
-
-    // Update window state first (text open but window minimized)
+    
+    // Update window state first (text open but window down)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         textOpen: true,
@@ -2536,13 +2546,37 @@ const VoiceroText = {
 
     // Make the maximize button visible first
     if (maximizeBtn) {
+      // Important: Force visible the maximize button with fixed positioning
       maximizeBtn.style.display = "block";
-      maximizeBtn.style.marginTop = "0";
-      maximizeBtn.style.position = "absolute";
-      maximizeBtn.style.bottom = "60px";
-      maximizeBtn.style.left = "0";
-      maximizeBtn.style.width = "100%";
-      maximizeBtn.style.zIndex = "999999";
+      maximizeBtn.style.position = "fixed";
+      maximizeBtn.style.bottom = "100px"; 
+      maximizeBtn.style.left = "50%";
+      maximizeBtn.style.transform = "translateX(-50%)";
+      maximizeBtn.style.zIndex = "9999999";
+      
+      // Ensure the button's style is applied correctly
+      const maximizeButton = maximizeBtn.querySelector("button");
+      if (maximizeButton) {
+        // Reapply the main styling to ensure it's consistent
+        maximizeButton.style.position = "relative";
+        maximizeButton.style.background = "rgb(99, 102, 241)"; // Use color from voice chat
+        maximizeButton.style.border = "none";
+        maximizeButton.style.color = "white";
+        maximizeButton.style.padding = "10px 20px";
+        maximizeButton.style.borderRadius = "20px 20px 0 0";
+        maximizeButton.style.fontSize = "14px";
+        maximizeButton.style.fontWeight = "500";
+        maximizeButton.style.cursor = "pointer";
+        maximizeButton.style.display = "flex";
+        maximizeButton.style.alignItems = "center";
+        maximizeButton.style.justifyContent = "center";
+        maximizeButton.style.minWidth = "160px";
+        maximizeButton.style.marginBottom = "-30px"; // Updated to match the HTML creation
+        maximizeButton.style.height = "40px";
+        maximizeButton.style.overflow = "visible";
+        maximizeButton.style.boxShadow = "none";
+        maximizeButton.style.width = "auto";
+      }
     }
 
     if (messagesContainer) {
@@ -2581,10 +2615,11 @@ const VoiceroText = {
       headerContainer.style.display = "none";
     }
 
-    // Adjust the input wrapper to connect with the button
+    // Adjust input wrapper
     if (inputWrapper) {
       inputWrapper.style.borderRadius = "12px";
-      inputWrapper.style.marginTop = "0";
+      inputWrapper.style.marginTop = "40px"; // Add space above the input wrapper for the button
+      inputWrapper.style.position = "relative";
     }
   },
 
@@ -3049,8 +3084,8 @@ const VoiceroText = {
 
   // Force welcome message colors globally with !important
   forceGlobalWelcomeStyles: function () {
-    // Get the main color
-    const mainColor = this.websiteColor || "#882be6";
+    // Use the fixed purple color
+    const mainColor = "rgb(99, 102, 241)";
 
     // Create or update global style tag
     let styleTag = document.getElementById("voicero-forced-styles");
@@ -3062,6 +3097,9 @@ const VoiceroText = {
 
     // Set extremely aggressive styling
     styleTag.textContent = `
+      .welcome-message {
+        border: none !important;
+      }
       .welcome-highlight {
         color: ${mainColor} !important;
       }
@@ -3257,6 +3295,28 @@ const VoiceroText = {
     });
 
     return pageData;
+  },
+
+  // Toggle from text chat to voice chat
+  toggleToVoiceChat: function() {
+    console.log("VoiceroText: Toggling from text to voice chat");
+    
+    // First close the text chat interface
+    this.closeTextChat();
+    
+    // Then open the voice chat interface
+    if (window.VoiceroVoice && window.VoiceroVoice.openVoiceChat) {
+      setTimeout(() => {
+        window.VoiceroVoice.openVoiceChat();
+        
+        // Make sure it's maximized
+        if (window.VoiceroVoice.maximizeVoiceChat) {
+          setTimeout(() => {
+            window.VoiceroVoice.maximizeVoiceChat();
+          }, 100);
+        }
+      }, 100);
+    }
   },
 };
 

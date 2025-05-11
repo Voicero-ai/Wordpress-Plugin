@@ -462,7 +462,6 @@ div.message-bubble.user-bubble {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
   position: relative !important;
   overflow: hidden !important;
-  border: 1px solid var(--voicero-theme-color-light) !important;
 }
 
 /* Welcome Title Gradient */
