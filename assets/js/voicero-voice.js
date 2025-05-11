@@ -1438,6 +1438,71 @@ const VoiceroVoice = {
                     ? whisperData.text
                     : "Could not transcribe audio");
 
+                // CHECK IF TRANSCRIPTION IS MEANINGFUL
+                // If Whisper returns an empty string, very short nonsense, or the default error message, don't process further
+                if (
+                  !transcription ||
+                  transcription.trim() === "" ||
+                  transcription === "Could not transcribe audio" ||
+                  transcription.length < 2
+                ) {
+                  console.log(
+                    "Voice interface: Empty or invalid transcription detected, stopping processing"
+                  );
+                  // Show a message to the user that nothing was heard
+                  this.addSystemMessage(`
+                    <div class="voice-prompt" style="background: #e5e5ea; color: #666;">
+                      I didn't hear anything. Please try speaking again.
+                    </div>
+                  `);
+                  return;
+                }
+
+                // Additional checks for nonsensical transcriptions
+                const cleanedTranscription = transcription.trim();
+                const wordCount = cleanedTranscription.split(/\s+/).length;
+
+                // Common patterns of random noise transcriptions
+                const appearsToBeForeignOrNonsense = (text) => {
+                  // Check for transcripts that are just a few random characters
+                  if (
+                    text.length < 5 &&
+                    !/^(hi|hey|yo|yes|no|ok)$/i.test(text)
+                  ) {
+                    return true;
+                  }
+
+                  // Check for very short transcripts that don't form common words or questions
+                  if (
+                    wordCount <= 2 &&
+                    text.length < 12 &&
+                    !/(hi|hey|yo|yes|no|ok|what|who|when|where|why|how|can|help|thanks|is|are)/i.test(
+                      text
+                    )
+                  ) {
+                    return true;
+                  }
+
+                  // Check for random character sequences often produced with background noise
+                  if (
+                    /^[a-z]{1,2}[aeiou]{1,2}[a-z]{1,2}$/i.test(text) ||
+                    /^[^a-z0-9\s]{3,}$/i.test(text)
+                  ) {
+                    return true;
+                  }
+
+                  return false;
+                };
+
+                if (appearsToBeForeignOrNonsense(cleanedTranscription)) {
+                  console.log(
+                    "Voice interface: Nonsensical transcription detected:",
+                    cleanedTranscription
+                  );
+                 
+                  return;
+                }
+
                 // Add the user message with transcription (restored from placeholder update)
                 this.addMessage(transcription, "user");
 
