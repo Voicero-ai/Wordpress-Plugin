@@ -1128,17 +1128,7 @@ function voicero_render_admin_page() {
                     <p><?php esc_html_e('Loading website information...', 'voicero-ai'); ?></p>
                 </div>
                 
-                <div style="margin-top: 20px;">
-                    <form method="post" action="" id="sync-form">
-                        <?php wp_nonce_field('voicero_sync_content_nonce'); ?>
-                        <input type="submit" 
-                               name="sync_content" 
-                               id="sync-button" 
-                               class="button" 
-                               value="<?php esc_attr_e('Sync Content Now', 'voicero-ai'); ?>">
-                        <span id="sync-status" style="margin-left: 10px;"></span>
-                    </form>
-                </div>
+               
             </div>
         <?php endif; ?>
     </div>   
@@ -1892,7 +1882,7 @@ function voicero_get_info() {
         return;
     }
 
-    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+    $response = wp_remote_get(VOICERO_API_URL . '/connect?nocache=' . time(), [
         'headers' => [
             'Authorization' => 'Bearer ' . $access_key,
             'Content-Type' => 'application/json',
@@ -2026,9 +2016,6 @@ function voicero_chat_proxy($request) {
     if (!isset($decoded_body['message'])) {
         return new WP_REST_Response(['error' => 'Message is required'], 400);
     }
-    
-    // Make sure type is set to "text"
-    $decoded_body['type'] = 'text';
     
     // Ensure pageData is included in the request
     if (!isset($decoded_body['pageData'])) {

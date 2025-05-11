@@ -69,6 +69,17 @@ jQuery(document).ready(function ($) {
     const syncButton = $("#sync-button");
     const syncStatusContainer = $("#sync-status");
 
+    // Check if plan is inactive
+    const plan = $("th:contains('Plan')").next().text().trim();
+    if (plan === "Inactive") {
+      syncStatusContainer.html(`
+        <div class="notice notice-error inline">
+          <p>⚠️ Please upgrade to a paid plan to sync content.</p>
+        </div>
+      `);
+      return;
+    }
+
     // Reset initial state
     syncButton.prop("disabled", true);
 
@@ -317,244 +328,229 @@ jQuery(document).ready(function ($) {
   function loadWebsiteInfo() {
     const $container = $("#website-info-container");
 
-    $.post(voiceroAdminConfig.ajaxUrl, {
-      action: "voicero_get_info",
-      nonce: voiceroAdminConfig.nonce,
-    })
-      .done(function (response) {
-        if (response.success) {
-          const data = response.data;
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Request timed out")), 10000); // 10 second timeout
+    });
 
-          // Format last sync date
-          let lastSyncDate = "Never";
-          if (data.lastSyncDate) {
-            const date = new Date(data.lastSyncDate);
-            lastSyncDate = date.toLocaleString();
-          }
+    // Show loading state
+    $container.html(`
+      <div class="spinner is-active" style="float: none;"></div>
+      <p>Loading website information...</p>
+    `);
 
-          // Format last training date
-          let lastTrainingDate = "Never";
-          if (data.lastTrainingDate) {
-            const date = new Date(data.lastTrainingDate);
-            lastTrainingDate = date.toLocaleString();
-          }
-
-          // Format plan details
-          const plan = data.plan || "Free";
-          const queryLimit = data.queryLimit || "N/A";
-          const isSubscribed = data.isSubscribed === true;
-
-          // Format website name
-          const name = data.name || window.location.hostname;
-
-          // Build HTML for website info
-          let html = `
-                    <table class="widefat">
-                        <tbody>
-                            <tr>
-                                <th>Website Name</th>
-                                <td>
-                                    ${name}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>URL</th>
-                                <td>${data.url || "Not set"}</td>
-                            </tr>
-                            <tr>
-                                <th>Plan</th>
-                                <td>${plan}</td>
-                            </tr>
-                            ${
-                              data.color
-                                ? `
-                            <tr>
-                                <th>Color</th>
-                                <td style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${data.color}; border: 1px solid #ddd;"></div>
-                                    <code style="font-size: 13px; padding: 4px 8px; background: #f0f0f1; border-radius: 3px;">${data.color}</code>
-                                </td>
-                            </tr>
-                            `
-                                : ""
-                            }
-                            <tr>
-                                <th>Status</th>
-                                <td>
-                                    <span class="button button-small ${
-                                      data.active
-                                        ? "button-primary"
-                                        : "button-secondary"
-                                    }">
-                                        ${data.active ? "Active" : "Inactive"}
-                                    </span>
-                                    <button class="button button-small toggle-status-btn" 
-                                            data-website-id="${data.id || ""}" 
-                                            ${
-                                              !data.lastSyncedAt
-                                                ? 'disabled title="Please sync your website first"'
-                                                : ""
-                                            }>
-                                        ${
-                                          data.active
-                                            ? "Deactivate"
-                                            : "Activate"
-                                        }
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Monthly Queries</th>
-                                <td>
-                                    ${data.monthlyQueries || 0} / ${
-            data.queryLimit || 200
-          }
-                                    <div class="progress-bar" style="
-                                        background: #f0f0f1;
-                                        height: 10px;
-                                        border-radius: 5px;
-                                        margin-top: 5px;
-                                        overflow: hidden;
-                                    ">
-                                        <div style="
-                                            width: ${
-                                              ((data.monthlyQueries || 0) /
-                                                (data.queryLimit || 200)) *
-                                              100
-                                            }%;
-                                            background: #2271b1;
-                                            height: 100%;
-                                            transition: width 0.3s ease;
-                                        "></div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Last Synced</th>
-                                <td>${
-                                  data.lastSyncedAt
-                                    ? new Date(
-                                        data.lastSyncedAt
-                                      ).toLocaleString()
-                                    : "Never"
-                                }</td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
-                        <a href="https://www.voicero.ai/app/websites/website?id=${
-                          data.id || ""
-                        }" target="_blank" class="button button-primary">
-                            Open Dashboard
-                        </a>
-                        <button class="button toggle-status-btn" 
-                                data-website-id="${data.id || ""}"
-                                ${
-                                  !data.lastSyncedAt
-                                    ? 'disabled title="Please sync your website first"'
-                                    : ""
-                                }>
-                            ${
-                              data.active
-                                ? "Deactivate Plugin"
-                                : "Activate Plugin"
-                            }
-                        </button>
-                        ${
-                          !data.lastSyncedAt
-                            ? `
-                            <span class="description" style="color: #d63638;">
-                                ⚠️ Please sync your website before activating the plugin
-                            </span>
-                        `
-                            : ""
-                        }
-                    </div>
-
-                    <div style="margin-top: 20px;">
-                        <h3>Content Statistics</h3>
-                        <table class="widefat">
-                            <thead>
-                                <tr>
-                                    <th>Content Type</th>
-                                    <th>Count</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Pages</td>
-                                    <td>${data._count?.pages || 0}</td>
-                                </tr>
-                                <tr>
-                                    <td>Posts</td>
-                                    <td>${data._count?.posts || 0}</td>
-                                </tr>
-                                <tr>
-                                    <td>Products</td>
-                                    <td>${data._count?.products || 0}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-
-          // Insert the HTML
-          $container.html(html);
-
-          // Only show first-time modal if we have a valid website connection
-          // AND it has never been synced
-          if (data && data.id && !data.lastSyncedAt) {
-            // Show the modal
-            $("#first-time-modal").fadeIn();
-
-            // Handle modal close
-            $(".modal-close").on("click", function () {
-              $("#first-time-modal").fadeOut();
-            });
-
-            // Close modal when clicking outside
-            $(window).on("click", function (e) {
-              if ($(e.target).is("#first-time-modal")) {
-                $("#first-time-modal").fadeOut();
-              }
-            });
-
-            // Handle first sync button click in modal (uses the main sync logic)
-            $("#first-sync-button").on("click", function () {
-              const $modalContent = $(this).closest(".notice");
-              $("#first-time-modal").fadeOut(); // Close modal immediately
-              $("#sync-button").trigger("click"); // Trigger the main sync button
-            });
-          }
-        } else {
-          let errorMsg = "Failed to load website info";
-          if (response && response.data && response.data.message) {
-            errorMsg = response.data.message;
-          } else if (response && response.data && response.data.body) {
-            try {
-              const body = JSON.parse(response.data.body);
-              errorMsg = body.message || errorMsg;
-            } catch (e) {}
-          }
-
-          $container.html(`
-                    <div class="notice notice-error inline">
-                        <p>Error loading website information: ${errorMsg}</p>
-                        <p>Please try refreshing the page.</p>
-                    </div>
-                `);
+    // Race between the actual request and the timeout
+    Promise.race([
+      $.post(voiceroAdminConfig.ajaxUrl, {
+        action: "voicero_get_info",
+        nonce: voiceroAdminConfig.nonce,
+      }),
+      timeoutPromise,
+    ])
+      .then(function (response) {
+        if (!response.success) {
+          throw new Error(
+            response.data?.message || "Failed to load website info"
+          );
         }
+        const data = response.data;
+
+        // Format last sync date
+        let lastSyncDate = "Never";
+        if (data.lastSyncDate) {
+          const date = new Date(data.lastSyncDate);
+          lastSyncDate = date.toLocaleString();
+        }
+
+        // Format last training date
+        let lastTrainingDate = "Never";
+        if (data.lastTrainingDate) {
+          const date = new Date(data.lastTrainingDate);
+          lastTrainingDate = date.toLocaleString();
+        }
+
+        // Format plan details
+        const plan = data.plan || "Inactive";
+        let queryLimit = 0;
+
+        // Set query limit based on plan type
+        switch (plan.toLowerCase()) {
+          case "starter":
+            queryLimit = 1000;
+            break;
+          case "growth":
+            queryLimit = 10000;
+            break;
+          default:
+            queryLimit = 0; // Inactive or unknown plan
+        }
+
+        const isSubscribed = data.isSubscribed === true;
+
+        // Format website name
+        const name = data.name || window.location.hostname;
+
+        // Build HTML for website info
+        let html = `
+          <table class="widefat">
+            <tbody>
+              <tr>
+                <th>Website Name</th>
+                <td>${name}</td>
+              </tr>
+              <tr>
+                <th>URL</th>
+                <td>${data.url || "Not set"}</td>
+              </tr>
+              <tr>
+                <th>Plan</th>
+                <td>
+                  ${plan}
+                  ${
+                    plan === "Inactive"
+                      ? '<span style="color: #d63638; margin-left: 10px;">⚠️ Please upgrade to a paid plan in your voicero.ai dashboard to continue</span>'
+                      : ""
+                  }
+                </td>
+              </tr>
+              ${
+                data.color
+                  ? `
+                <tr>
+                  <th>Color</th>
+                  <td style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${data.color}; border: 1px solid #ddd;"></div>
+                    <code style="font-size: 13px; padding: 4px 8px; background: #f0f0f1; border-radius: 3px;">${data.color}</code>
+                  </td>
+                </tr>
+              `
+                  : ""
+              }
+              <tr>
+                <th>Status</th>
+                <td>
+                  <span class="button button-small ${
+                    data.active ? "button-primary" : "button-secondary"
+                  }">
+                    ${data.active ? "Active" : "Inactive"}
+                  </span>
+                  <button class="button button-small toggle-status-btn" 
+                          data-website-id="${data.id || ""}" 
+                          ${
+                            !data.lastSyncedAt || plan === "Inactive"
+                              ? 'disabled title="Please sync your website first"'
+                              : ""
+                          }>
+                    ${data.active ? "Deactivate" : "Activate"}
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <th>Monthly Queries</th>
+                <td>
+                  ${data.monthlyQueries || 0} / ${queryLimit}
+                  <div class="progress-bar" style="background: #f0f0f1; height: 10px; border-radius: 5px; margin-top: 5px; overflow: hidden;">
+                    <div style="width: ${
+                      ((data.monthlyQueries || 0) / queryLimit) * 100
+                    }%; background: #2271b1; height: 100%; transition: width 0.3s ease;"></div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <th>Last Synced</th>
+                <td>${
+                  data.lastSyncedAt
+                    ? new Date(data.lastSyncedAt).toLocaleString()
+                    : "Never"
+                }</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+            <a href="https://www.voicero.ai/app/websites/website?id=${
+              data.id || ""
+            }" target="_blank" class="button button-primary">
+              Open Dashboard
+            </a>
+            <button class="button toggle-status-btn" 
+                    data-website-id="${data.id || ""}"
+                    ${
+                      !data.lastSyncedAt || plan === "Inactive"
+                        ? 'disabled title="Please sync your website first"'
+                        : ""
+                    }>
+              ${data.active ? "Deactivate Plugin" : "Activate Plugin"}
+            </button>
+            ${
+              !data.lastSyncedAt || plan === "Inactive"
+                ? `
+              <span class="description" style="color: #d63638;">
+                ⚠️ Please upgrade to a paid plan in your voicero.ai dashboard to continue
+              </span>
+            `
+                : ""
+            }
+          </div>
+
+          <div style="margin-top: 20px;">
+            <h3>Content Statistics</h3>
+            <table class="widefat">
+              <thead>
+                <tr>
+                  <th>Content Type</th>
+                  <th>Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Pages</td>
+                  <td>${data._count?.pages || 0}</td>
+                </tr>
+                <tr>
+                  <td>Posts</td>
+                  <td>${data._count?.posts || 0}</td>
+                </tr>
+                <tr>
+                  <td>Products</td>
+                  <td>${data._count?.products || 0}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <form method="post" action="" id="sync-form">
+              <input type="hidden" name="nonce" value="${
+                voiceroAdminConfig.nonce
+              }">
+              <input type="submit" 
+                     name="sync_content" 
+                     id="sync-button" 
+                     class="button" 
+                     value="Sync Content Now"
+                     ${plan === "Inactive" ? "disabled" : ""}>
+              <span id="sync-status" style="margin-left: 10px;"></span>
+              ${
+                plan === "Inactive"
+                  ? '<span style="color: #d63638; margin-left: 10px;">⚠️ Please upgrade to a paid plan in your voicero.ai dashboard to sync content</span>'
+                  : ""
+              }
+            </form>
+          </div>
+        `;
+
+        // Insert the HTML
+        $container.html(html);
       })
-      .fail(function (xhr, status, error) {
+      .catch(function (error) {
+        console.error("Error loading website info:", error);
         $container.html(`
-                    <div class="notice notice-error inline">
-                        <p>Network error loading website information: ${
-                          error || status
-                        }</p>
-                        <p>Please check your connection and try again.</p>
-                    </div>
-                `);
+          <div class="notice notice-error inline">
+            <p>Error loading website information: ${error.message}</p>
+            <p>Please try refreshing the page. If the problem persists, contact support.</p>
+          </div>
+        `);
       });
   }
 
