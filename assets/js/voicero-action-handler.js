@@ -42,7 +42,7 @@ const VoiceroActionHandler = {
         JSON.stringify(credentials)
       );
     } catch (e) {
-           // console.warn("Could not save credentials to localStorage:", e);
+      // console.warn("Could not save credentials to localStorage:", e);
     }
   },
 
@@ -53,7 +53,7 @@ const VoiceroActionHandler = {
         this.config.userCredentials = JSON.parse(saved);
       }
     } catch (e) {
-         // console.warn("Could not load credentials from localStorage:", e);
+      // console.warn("Could not load credentials from localStorage:", e);
     }
   },
 
@@ -62,7 +62,7 @@ const VoiceroActionHandler = {
       localStorage.removeItem("voiceroUserCredentials");
       this.config.userCredentials = null;
     } catch (e) {
-         // console.warn("Could not clear credentials:", e);
+      // console.warn("Could not clear credentials:", e);
     }
   },
 
@@ -81,12 +81,12 @@ const VoiceroActionHandler = {
 
   handle: function (response) {
     if (!response || typeof response !== "object") {
-        // console.warn('Invalid response object');
+      // console.warn('Invalid response object');
       return;
     }
 
     const { answer, action, action_context } = response;
-           // console.log("==>response", response)
+    // console.log("==>response", response)
     if (answer) {
       // console.debug("AI Response:", { answer, action, action_context });
     }
@@ -114,13 +114,13 @@ const VoiceroActionHandler = {
         // If we have targets, call handler for each one
         targets.forEach((target) => {
           if (target && typeof target === "object") {
-                  // console.log("==>target", target);
+            // console.log("==>target", target);
             this[handlerName](target);
           }
         });
       } else {
         // If no targets, just call the handler with no arguments
-            // console.log(`Calling ${handlerName} with no context`);
+        // console.log(`Calling ${handlerName} with no context`);
         this[handlerName]();
       }
     } catch (error) {
@@ -1203,6 +1203,27 @@ const VoiceroActionHandler = {
         } catch (fallbackError) {
           // console.warn("Fallback URL attempt failed:", fallbackUrl, fallbackError);
         }
+      }
+    }
+  },
+
+  handleContact: function (target) {
+    // Check if VoiceroContact module is available
+    if (
+      window.VoiceroContact &&
+      typeof window.VoiceroContact.showContactForm === "function"
+    ) {
+      // Show the contact form below the AI message
+      window.VoiceroContact.showContactForm();
+    } else {
+      console.error("VoiceroContact module not available");
+
+      // Fallback: Display a message that contact form is not available
+      if (window.VoiceroText && window.VoiceroText.addMessage) {
+        window.VoiceroText.addMessage(
+          "I'm sorry, the contact form is not available right now. Please try again later or contact us directly.",
+          "ai"
+        );
       }
     }
   },

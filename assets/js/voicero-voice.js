@@ -2141,32 +2141,38 @@ const VoiceroVoice = {
       window.VoiceroCore.thread.messages.length > 0
     ) {
       const messages = window.VoiceroCore.thread.messages;
-      let lastUserMsg = null;
-      let lastAiMsg = null;
 
-      // Find the last user and AI messages
-      for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
+      // Sort messages by creation time
+      const sortedMessages = [...messages].sort((a, b) => {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      });
 
-        if (!lastUserMsg && msg.role === "user") {
-          lastUserMsg = msg;
-        }
+      // Get last 5 user questions and last 5 AI responses
+      const userMessages = sortedMessages
+        .filter((msg) => msg.role === "user")
+        .slice(-5);
 
-        if (!lastAiMsg && msg.role === "assistant") {
-          lastAiMsg = msg;
-        }
+      const aiMessages = sortedMessages
+        .filter((msg) => msg.role === "assistant")
+        .slice(-5);
 
-        // Break once we've found both
-        if (lastUserMsg && lastAiMsg) {
-          break;
-        }
-      }
+      // Combine all messages in chronological order
+      const lastMessages = [...userMessages, ...aiMessages].sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      );
 
-      // Add messages to context in chronological order
-      if (lastAiMsg) {
-        try {
+      // Add each message to context
+      lastMessages.forEach((msg) => {
+        if (msg.role === "user") {
+          context.messages.push({
+            role: "user",
+            content: msg.content,
+            id: msg.id,
+            createdAt: msg.createdAt,
+          });
+        } else if (msg.role === "assistant") {
           // For AI messages, try to extract the answer from JSON if needed
-          let content = lastAiMsg.content;
+          let content = msg.content;
           try {
             const parsed = JSON.parse(content);
             if (parsed.answer) {
@@ -2179,18 +2185,45 @@ const VoiceroVoice = {
           context.messages.push({
             role: "assistant",
             content: content,
+            id: msg.id,
+            createdAt: msg.createdAt,
           });
-        } catch (e) {}
-      }
-
-      if (lastUserMsg) {
-        context.messages.push({
-          role: "user",
-          content: lastUserMsg.content,
-        });
-      }
+        }
+      });
     } else {
+      // If no thread exists, check if we have any local messages stored
+      if (
+        window.VoiceroCore &&
+        window.VoiceroCore.appState &&
+        window.VoiceroCore.appState.voiceMessages
+      ) {
+        const voiceMessages = window.VoiceroCore.appState.voiceMessages;
+
+        // Add user message if available
+        if (voiceMessages.user) {
+          context.messages.push({
+            role: "user",
+            content: voiceMessages.user,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        // Add AI message if available
+        if (voiceMessages.ai) {
+          context.messages.push({
+            role: "assistant",
+            content: voiceMessages.ai,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
     }
+
+    // Console log past context to verify implementation
+    console.log(
+      "Voice Past Context (Last 5 messages from each role):",
+      context
+    );
 
     return context;
   },

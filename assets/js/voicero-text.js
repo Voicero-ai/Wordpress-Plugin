@@ -2039,7 +2039,7 @@ const VoiceroText = {
       const recentThread = sortedThreads[0];
 
       // Check if this thread has messages
-      if (recentThread.messages && recentThread.messages.length >= 2) {
+      if (recentThread.messages && recentThread.messages.length > 0) {
         const threadMessages = recentThread.messages;
 
         // Sort messages by creation time to ensure proper order
@@ -2047,64 +2047,90 @@ const VoiceroText = {
           return new Date(a.createdAt) - new Date(b.createdAt);
         });
 
-        // Find the latest user message and AI response pair
-        let latestUserMsgIndex = -1;
+        // Get last 5 user questions and last 5 AI responses in chronological order
+        const userMessages = sortedMessages
+          .filter((msg) => msg.role === "user")
+          .slice(-5);
 
-        // Skip the current message by starting from length-2
-        for (let i = sortedMessages.length - 2; i >= 0; i--) {
-          if (sortedMessages[i].role === "user") {
-            latestUserMsgIndex = i;
-            break;
+        const aiMessages = sortedMessages
+          .filter((msg) => msg.role === "assistant")
+          .slice(-5);
+
+        // Combine all messages in chronological order
+        const lastMessages = [...userMessages, ...aiMessages].sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        );
+
+        // Add each message to pastContext with all metadata
+        lastMessages.forEach((msg) => {
+          if (msg.role === "user") {
+            requestBody.pastContext.push({
+              question: msg.content,
+              role: "user",
+              createdAt: msg.createdAt,
+              pageUrl: msg.pageUrl || window.location.href,
+              id: msg.id,
+              threadId: msg.threadId,
+            });
+          } else if (msg.role === "assistant") {
+            requestBody.pastContext.push({
+              answer: msg.content,
+              role: "assistant",
+              createdAt: msg.createdAt,
+              id: msg.id,
+              threadId: msg.threadId,
+            });
           }
-        }
-
-        // If we found a user message and there's an AI response after it
-        if (
-          latestUserMsgIndex >= 0 &&
-          latestUserMsgIndex + 1 < sortedMessages.length &&
-          sortedMessages[latestUserMsgIndex + 1].role === "assistant"
-        ) {
-          // Add the latest exchange with all metadata
-          const userMsg = sortedMessages[latestUserMsgIndex];
-          const aiMsg = sortedMessages[latestUserMsgIndex + 1];
-
-          // Add with complete metadata
-          requestBody.pastContext.push({
-            question: userMsg.content,
-            answer: aiMsg.content,
-            createdAt: userMsg.createdAt,
-            pageUrl: userMsg.pageUrl,
-            id: userMsg.id,
-            threadId: userMsg.threadId,
-          });
-        }
-      } else {
-      }
-    }
-    // Fallback to local messages array if session data isn't available
-    else if (this.messages && this.messages.length >= 2) {
-      // Get the last user message (excluding the current message being sent)
-      let lastUserIndex = -1;
-      for (let i = this.messages.length - 1; i >= 0; i--) {
-        if (this.messages[i].role === "user") {
-          lastUserIndex = i;
-          break;
-        }
-      }
-
-      // If we found a user message and there's an AI response after it
-      if (
-        lastUserIndex >= 0 &&
-        lastUserIndex + 1 < this.messages.length &&
-        this.messages[lastUserIndex + 1].role === "assistant"
-      ) {
-        // Add only the most recent pair
-        requestBody.pastContext.push({
-          question: this.messages[lastUserIndex].content,
-          answer: this.messages[lastUserIndex + 1].content,
         });
       }
     }
+    // Fallback to local messages array if session data isn't available
+    else if (this.messages && this.messages.length > 0) {
+      // Get last 5 user questions and last 5 AI responses
+      const userMessages = this.messages
+        .filter((msg) => msg.role === "user")
+        .slice(-5);
+
+      const aiMessages = this.messages
+        .filter((msg) => msg.role === "assistant")
+        .slice(-5);
+
+      // Combine all messages in chronological order
+      const lastMessages = [...userMessages, ...aiMessages].sort((a, b) => {
+        // Use createdAt if available, otherwise use order in array
+        if (a.createdAt && b.createdAt) {
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        }
+        return this.messages.indexOf(a) - this.messages.indexOf(b);
+      });
+
+      // Add each message to pastContext
+      lastMessages.forEach((msg) => {
+        if (msg.role === "user") {
+          requestBody.pastContext.push({
+            question: msg.content,
+            role: "user",
+            createdAt: msg.createdAt || new Date().toISOString(),
+            pageUrl: msg.pageUrl || window.location.href,
+            id: msg.id || this.generateId(),
+          });
+        } else if (msg.role === "assistant") {
+          requestBody.pastContext.push({
+            answer: msg.content,
+            role: "assistant",
+            createdAt: msg.createdAt || new Date().toISOString(),
+            id: msg.id || this.generateId(),
+          });
+        }
+      });
+    }
+
+    // Console log pastContext to verify implementation
+    console.log(
+      "Past Context (Last 5 messages from each role):",
+      requestBody.pastContext
+    );
+    console.log(requestBody);
 
     // Use WordPress proxy endpoint instead of direct API call
     return fetch("/wp-json/voicero/v1/wordpress/chat", {
@@ -3362,18 +3388,6 @@ const VoiceroText = {
   // Format content with potential links
   formatContent: function (text) {
     if (!text) return "";
-
-    // Check for special contact form tag and replace with empty string
-    // This will be handled separately by the showContactForm method
-    if (text.includes("[SHOW_CONTACT_FORM]")) {
-      // Trigger the contact form display with a small delay to ensure proper rendering
-      setTimeout(() => {
-        this.showContactForm();
-      }, 100);
-
-      // Remove the tag from the displayed message
-      text = text.replace("[SHOW_CONTACT_FORM]", "");
-    }
 
     // Process URLs
     const urlRegex = /(https?:\/\/[^\s]+)/g;
