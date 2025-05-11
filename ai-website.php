@@ -2027,9 +2027,6 @@ function voicero_chat_proxy($request) {
         return new WP_REST_Response(['error' => 'Message is required'], 400);
     }
     
-    // Make sure type is set to "text"
-    $decoded_body['type'] = 'text';
-    
     // Ensure pageData is included in the request
     if (!isset($decoded_body['pageData'])) {
         $decoded_body['pageData'] = [

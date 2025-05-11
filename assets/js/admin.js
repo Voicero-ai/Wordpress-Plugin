@@ -69,6 +69,17 @@ jQuery(document).ready(function ($) {
     const syncButton = $("#sync-button");
     const syncStatusContainer = $("#sync-status");
 
+    // Check if plan is inactive
+    const plan = $("th:contains('Plan')").next().text().trim();
+    if (plan === "Inactive") {
+      syncStatusContainer.html(`
+        <div class="notice notice-error inline">
+          <p>⚠️ Please upgrade to a paid plan to sync content.</p>
+        </div>
+      `);
+      return;
+    }
+
     // Reset initial state
     syncButton.prop("disabled", true);
 
@@ -340,8 +351,21 @@ jQuery(document).ready(function ($) {
           }
 
           // Format plan details
-          const plan = data.plan || "Free";
-          const queryLimit = data.queryLimit || "N/A";
+          const plan = data.plan || "Inactive";
+          let queryLimit = 0;
+
+          // Set query limit based on plan type
+          switch (plan.toLowerCase()) {
+            case "starter":
+              queryLimit = 1000;
+              break;
+            case "growth":
+              queryLimit = 10000;
+              break;
+            default:
+              queryLimit = 0; // Inactive or unknown plan
+          }
+
           const isSubscribed = data.isSubscribed === true;
 
           // Format website name
@@ -363,7 +387,14 @@ jQuery(document).ready(function ($) {
                             </tr>
                             <tr>
                                 <th>Plan</th>
-                                <td>${plan}</td>
+                                <td>
+                                    ${plan}
+                                    ${
+                                      plan === "Inactive"
+                                        ? '<span style="color: #d63638; margin-left: 10px;">⚠️ Please upgrade to a paid plan to continue</span>'
+                                        : ""
+                                    }
+                                </td>
                             </tr>
                             ${
                               data.color
@@ -406,9 +437,7 @@ jQuery(document).ready(function ($) {
                             <tr>
                                 <th>Monthly Queries</th>
                                 <td>
-                                    ${data.monthlyQueries || 0} / ${
-            data.queryLimit || 200
-          }
+                                    ${data.monthlyQueries || 0} / ${queryLimit}
                                     <div class="progress-bar" style="
                                         background: #f0f0f1;
                                         height: 10px;
@@ -419,9 +448,9 @@ jQuery(document).ready(function ($) {
                                         <div style="
                                             width: ${
                                               ((data.monthlyQueries || 0) /
-                                                (data.queryLimit || 200)) *
+                                                queryLimit) *
                                               100
-                                            }%;
+                                            }%
                                             background: #2271b1;
                                             height: 100%;
                                             transition: width 0.3s ease;
@@ -496,6 +525,24 @@ jQuery(document).ready(function ($) {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <form method="post" action="" id="sync-form">
+                            ${wp_nonce_field("voicero_sync_content_nonce")}
+                            <input type="submit" 
+                                   name="sync_content" 
+                                   id="sync-button" 
+                                   class="button" 
+                                   value="Sync Content Now"
+                                   ${plan === "Inactive" ? "disabled" : ""}>
+                            <span id="sync-status" style="margin-left: 10px;"></span>
+                            ${
+                              plan === "Inactive"
+                                ? '<span style="color: #d63638; margin-left: 10px;">⚠️ Please upgrade to a paid plan to sync content</span>'
+                                : ""
+                            }
+                        </form>
                     </div>
                 `;
 
