@@ -15,20 +15,20 @@ const VoiceroContact = {
     // Determine which interface is active
     let messagesContainer;
     let interfaceType = "text"; // Default to text interface
-    
+
     // Check if called from voice interface
-    if (document.getElementById("voice-messages") && 
-        window.VoiceroCore && 
-        window.VoiceroCore.appState && 
-        window.VoiceroCore.appState.activeInterface === "voice") {
+    if (document.getElementById("voice-messages")) {
       messagesContainer = document.getElementById("voice-messages");
       interfaceType = "voice";
-    } 
+      console.log("VoiceroContact: Using voice interface container");
+    }
     // Otherwise use text interface
     else if (window.VoiceroText && window.VoiceroText.shadowRoot) {
-      messagesContainer = window.VoiceroText.shadowRoot.getElementById("chat-messages");
+      messagesContainer =
+        window.VoiceroText.shadowRoot.getElementById("chat-messages");
+      console.log("VoiceroContact: Using text interface container");
     }
-    
+
     // Exit if neither interface is available
     if (!messagesContainer) {
       console.error("VoiceroText/Voice interface not available");
@@ -62,6 +62,10 @@ const VoiceroContact = {
     // Create message content
     const contentDiv = document.createElement("div");
     contentDiv.className = "message-content contact-form-message";
+    if (interfaceType === "voice") {
+      contentDiv.className =
+        "message-content voice-message-content contact-form-message";
+    }
     contentDiv.innerHTML = contactFormHTML;
 
     // Style the form to match the chat interface
@@ -81,12 +85,73 @@ const VoiceroContact = {
 
     // Set up event listeners for the form
     this.setupFormEventListeners(messageDiv, interfaceType);
+
+    // Generate a unique ID for the message for reporting
+    const messageId =
+      "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    messageDiv.dataset.messageId = messageId;
+
+    // Use VoiceroSupport to attach the report button if available
+    if (
+      window.VoiceroSupport &&
+      typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+    ) {
+      // Use a small delay to ensure the DOM is ready
+      setTimeout(() => {
+        window.VoiceroSupport.attachReportButtonToMessage(
+          messageDiv,
+          interfaceType
+        );
+      }, 100);
+    }
   },
 
   // Apply styles to the form elements
   applyFormStyles: function (formContainer) {
-    // Get the main theme color from VoiceroText
-    const mainColor = window.VoiceroText.websiteColor || "#882be6";
+    // Get the main theme color from VoiceroText or VoiceroVoice - more comprehensive approach
+    let mainColor;
+
+    // First try VoiceroVoice
+    if (window.VoiceroVoice && window.VoiceroVoice.websiteColor) {
+      mainColor = window.VoiceroVoice.websiteColor;
+      console.log("VoiceroContact: Using color from VoiceroVoice:", mainColor);
+    }
+    // Then try various ways to get it from VoiceroText
+    else if (window.VoiceroText) {
+      if (window.VoiceroText.websiteColor) {
+        mainColor = window.VoiceroText.websiteColor;
+        console.log(
+          "VoiceroContact: Using websiteColor from VoiceroText:",
+          mainColor
+        );
+      } else if (
+        window.VoiceroText.colorVariants &&
+        window.VoiceroText.colorVariants.main
+      ) {
+        mainColor = window.VoiceroText.colorVariants.main;
+        console.log(
+          "VoiceroContact: Using colorVariants.main from VoiceroText:",
+          mainColor
+        );
+      } else if (window.VoiceroText.shadowRoot) {
+        // Try to find color from send button which should have the website color
+        const sendButton =
+          window.VoiceroText.shadowRoot.getElementById("send-message-btn");
+        if (sendButton && sendButton.style.backgroundColor) {
+          mainColor = sendButton.style.backgroundColor;
+          console.log(
+            "VoiceroContact: Using extracted color from text UI:",
+            mainColor
+          );
+        }
+      }
+    }
+
+    // Fallback to default purple if no color found
+    if (!mainColor) {
+      mainColor = "#882be6";
+      console.log("VoiceroContact: Using fallback color:", mainColor);
+    }
 
     // Apply styles to form elements
     const styles = `
@@ -154,12 +219,13 @@ const VoiceroContact = {
       }
       
       .contact-submit-btn {
-        background-color: ${mainColor};
+        background-color: ${mainColor} !important;
         color: white;
       }
       
-      .contact-submit-btn:hover {
-        opacity: 0.9;
+      /* Force color with !important to override any other styles */
+      .contact-form-message .contact-submit-btn {
+        background-color: ${mainColor} !important;
       }
       
       .contact-cancel-btn {
@@ -172,10 +238,48 @@ const VoiceroContact = {
       }
     `;
 
-    // Add styles to shadow DOM
-    const styleEl = document.createElement("style");
-    styleEl.textContent = styles;
-    window.VoiceroText.shadowRoot.appendChild(styleEl);
+    // Determine where to add the styles based on interface
+    // For voice interface, add styles directly to the document head
+    if (document.getElementById("voice-messages")) {
+      // Check if style already exists
+      const existingStyle = document.getElementById("voicero-contact-styles");
+      if (existingStyle) {
+        existingStyle.textContent = styles;
+      } else {
+        const styleEl = document.createElement("style");
+        styleEl.id = "voicero-contact-styles";
+        styleEl.textContent = styles;
+        document.head.appendChild(styleEl);
+      }
+    }
+    // For text interface with shadow DOM
+    else if (window.VoiceroText && window.VoiceroText.shadowRoot) {
+      // Check if style already exists in shadow DOM
+      const existingStyle = window.VoiceroText.shadowRoot.getElementById(
+        "voicero-contact-styles"
+      );
+      if (existingStyle) {
+        existingStyle.textContent = styles;
+      } else {
+        const styleEl = document.createElement("style");
+        styleEl.id = "voicero-contact-styles";
+        styleEl.textContent = styles;
+        window.VoiceroText.shadowRoot.appendChild(styleEl);
+      }
+    }
+    // Fallback - add to document if neither condition is met
+    else {
+      // Check if style already exists
+      const existingStyle = document.getElementById("voicero-contact-styles");
+      if (existingStyle) {
+        existingStyle.textContent = styles;
+      } else {
+        const styleEl = document.createElement("style");
+        styleEl.id = "voicero-contact-styles";
+        styleEl.textContent = styles;
+        document.head.appendChild(styleEl);
+      }
+    }
   },
 
   // Set up event listeners for the form
@@ -185,6 +289,73 @@ const VoiceroContact = {
     const cancelButton = formContainer.querySelector("#contact-cancel");
     const emailInput = formContainer.querySelector("#contact-email");
     const messageInput = formContainer.querySelector("#contact-message");
+
+    // Directly set the button color to match current interface
+    if (submitButton) {
+      // Get the main theme color with more aggressive checks
+      let buttonColor = "#882be6"; // Default purple
+
+      // First try getting from the current interface
+      if (
+        interfaceType === "voice" &&
+        window.VoiceroVoice &&
+        window.VoiceroVoice.websiteColor
+      ) {
+        buttonColor = window.VoiceroVoice.websiteColor;
+      } else if (
+        interfaceType === "text" &&
+        window.VoiceroText &&
+        window.VoiceroText.websiteColor
+      ) {
+        buttonColor = window.VoiceroText.websiteColor;
+      }
+      // If still default, try harder to get the color
+      if (buttonColor === "#882be6") {
+        if (window.VoiceroVoice && window.VoiceroVoice.websiteColor) {
+          buttonColor = window.VoiceroVoice.websiteColor;
+        } else if (window.VoiceroText && window.VoiceroText.websiteColor) {
+          buttonColor = window.VoiceroText.websiteColor;
+        }
+        // Try to get from document style if available
+        else if (
+          document.documentElement.style.getPropertyValue(
+            "--voicero-theme-color"
+          )
+        ) {
+          buttonColor = document.documentElement.style.getPropertyValue(
+            "--voicero-theme-color"
+          );
+        }
+      }
+
+      // Forcefully apply the color to the button
+      submitButton.style.backgroundColor = buttonColor;
+
+      // SUPER AGGRESSIVE APPROACH: Force the color with !important inline style
+      submitButton.setAttribute(
+        "style",
+        `background-color: ${buttonColor} !important; color: white !important`
+      );
+
+      // Also set a timeout to apply the color again after a short delay in case it gets overridden
+      setTimeout(() => {
+        submitButton.setAttribute(
+          "style",
+          `background-color: ${buttonColor} !important; color: white !important`
+        );
+      }, 100);
+
+      // And check again after the form is fully rendered
+      setTimeout(() => {
+        if (submitButton.style.backgroundColor !== buttonColor) {
+          submitButton.setAttribute(
+            "style",
+            `background-color: ${buttonColor} !important; color: white !important`
+          );
+          console.log("VoiceroContact: Re-applied button color after render");
+        }
+      }, 500);
+    }
 
     // Add submit handler
     if (submitButton) {
@@ -231,9 +402,14 @@ const VoiceroContact = {
         formContainer.remove();
 
         // Add a cancellation message based on interface type
-        const cancelMessage = "No problem! Let me know if you have any other questions.";
-        
-        if (interfaceType === "voice" && window.VoiceroVoice && window.VoiceroVoice.addMessage) {
+        const cancelMessage =
+          "No problem! Let me know if you have any other questions.";
+
+        if (
+          interfaceType === "voice" &&
+          window.VoiceroVoice &&
+          window.VoiceroVoice.addMessage
+        ) {
           window.VoiceroVoice.addMessage(cancelMessage, "ai");
         } else if (window.VoiceroText && window.VoiceroText.addMessage) {
           window.VoiceroText.addMessage(cancelMessage, "ai");
@@ -347,7 +523,7 @@ const VoiceroContact = {
     }
 
     // Send the request to the WordPress REST API
-    fetch("/wp-json/voicero/v1/contactHelp", {
+    fetch("http://localhost:3000/api/contacts/help", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -381,9 +557,14 @@ const VoiceroContact = {
         formContainer.remove();
 
         // Show success message based on interface type
-        const successMessage = "Thank you for your message! We've received your request and will get back to you soon.";
-        
-        if (interfaceType === "voice" && window.VoiceroVoice && window.VoiceroVoice.addMessage) {
+        const successMessage =
+          "Thank you for your message! We've received your request and will get back to you soon.";
+
+        if (
+          interfaceType === "voice" &&
+          window.VoiceroVoice &&
+          window.VoiceroVoice.addMessage
+        ) {
           window.VoiceroVoice.addMessage(successMessage, "ai");
         } else if (window.VoiceroText && window.VoiceroText.addMessage) {
           window.VoiceroText.addMessage(successMessage, "ai");
