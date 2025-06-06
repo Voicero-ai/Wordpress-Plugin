@@ -53,6 +53,9 @@
             nonce: $("#voicero_nonce").val(),
           };
 
+    // Website ID can be included in the global config
+    const websiteId = config.websiteId || $("#voicero_website_id").val();
+
     // Send AJAX request to get AI history
     $.ajax({
       url: config.ajaxUrl,
@@ -60,6 +63,7 @@
       data: {
         action: "voicero_get_ai_history",
         nonce: config.nonce,
+        websiteId: websiteId,
       },
       success: function (response) {
         hideLoadingIndicator();

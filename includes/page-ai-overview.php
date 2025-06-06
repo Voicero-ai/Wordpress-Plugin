@@ -106,7 +106,9 @@ function voicero_render_ai_overview_page() {
             // Log the request data for debugging
             error_log('AI Overview page request data: ' . json_encode($request_data));
             
-            $endpoint = 'http://localhost:3000/api/aiHistory';
+            // Use the configured API base URL for flexibility
+            $api_base = defined('VOICERO_API_URL') ? VOICERO_API_URL : 'http://localhost:3000/api';
+            $endpoint  = trailingslashit($api_base) . 'aiHistory';
             $response = wp_remote_post($endpoint, [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $access_key,
@@ -212,6 +214,8 @@ function voicero_render_ai_overview_page() {
         
         <!-- Add hidden nonce field for AJAX -->
         <input type="hidden" id="voicero_nonce" value="<?php echo esc_attr(wp_create_nonce('voicero_ajax_nonce')); ?>" />
+        <!-- Expose website ID for JavaScript -->
+        <input type="hidden" id="voicero_website_id" value="<?php echo esc_attr($website_id); ?>" />
         
         <div id="voicero-overview-message"></div>     
         
