@@ -11,31 +11,46 @@ const VoiceroContact = {
   },
 
   // Create and display contact form in the chat interface
-  showContactForm: function () {
-    // Determine which interface is active
-    let messagesContainer;
-    let interfaceType = "text"; // Default to text interface
+  showContactForm: function (params) {
+    console.log("VoiceroContact: showContactForm called", params);
 
-    // Check if called from voice interface
-    if (document.getElementById("voice-messages")) {
-      messagesContainer = document.getElementById("voice-messages");
-      interfaceType = "voice";
-      console.log("VoiceroContact: Using voice interface container");
-    }
-    // Otherwise use text interface
-    else if (window.VoiceroText && window.VoiceroText.shadowRoot) {
-      messagesContainer =
+    // Extract message content from params if available
+    const prefilledMessage = params && params.message ? params.message : "";
+
+    // Determine which interface is active
+    let textMessagesContainer = null;
+    let voiceMessagesContainer = null;
+    let activeInterface = null;
+
+    // Check for text interface
+    if (window.VoiceroText && window.VoiceroText.shadowRoot) {
+      textMessagesContainer =
         window.VoiceroText.shadowRoot.getElementById("chat-messages");
-      console.log("VoiceroContact: Using text interface container");
+      if (textMessagesContainer) {
+        console.log("VoiceroContact: Found text interface container");
+        activeInterface = "text";
+      }
+    }
+
+    // Check for voice interface
+    if (document.getElementById("voice-messages")) {
+      voiceMessagesContainer = document.getElementById("voice-messages");
+      if (voiceMessagesContainer) {
+        console.log("VoiceroContact: Found voice interface container");
+        // Only override if text wasn't found
+        if (!activeInterface) {
+          activeInterface = "voice";
+        }
+      }
     }
 
     // Exit if neither interface is available
-    if (!messagesContainer) {
-      console.error("VoiceroText/Voice interface not available");
+    if (!textMessagesContainer && !voiceMessagesContainer) {
+      console.error("VoiceroContact: No valid interface container found");
       return;
     }
 
-    // Create the contact form HTML
+    // Create the contact form HTML with prefilled message if available
     const contactFormHTML = `
       <div class="contact-form-container">
         <h3>How can we help?</h3>
@@ -46,7 +61,7 @@ const VoiceroContact = {
         </div>
         <div class="form-group">
           <label for="contact-message">Message:</label>
-          <textarea id="contact-message" placeholder="How can we help you?" rows="4" required></textarea>
+          <textarea id="contact-message" placeholder="How can we help you?" rows="4" required>${prefilledMessage}</textarea>
         </div>
         <div class="form-actions">
           <button id="contact-submit" class="contact-submit-btn">Submit</button>
@@ -55,54 +70,100 @@ const VoiceroContact = {
       </div>
     `;
 
-    // Create a message element in the AI chat interface
-    const messageDiv = document.createElement("div");
-    messageDiv.className = "ai-message";
+    // Create and show the form in both interfaces if both are available
+    if (textMessagesContainer) {
+      // Create message for text interface
+      const textMessageDiv = document.createElement("div");
+      textMessageDiv.className = "ai-message";
 
-    // Create message content
-    const contentDiv = document.createElement("div");
-    contentDiv.className = "message-content contact-form-message";
-    if (interfaceType === "voice") {
-      contentDiv.className =
-        "message-content voice-message-content contact-form-message";
+      // Create message content
+      const textContentDiv = document.createElement("div");
+      textContentDiv.className = "message-content contact-form-message";
+      textContentDiv.innerHTML = contactFormHTML;
+
+      // Style the form to match the chat interface
+      textContentDiv.style.maxWidth = "85%";
+      textContentDiv.style.width = "300px";
+      textContentDiv.style.padding = "15px";
+
+      // Add to message div
+      textMessageDiv.appendChild(textContentDiv);
+
+      // Add to messages container
+      textMessagesContainer.appendChild(textMessageDiv);
+      textMessagesContainer.scrollTop = textMessagesContainer.scrollHeight;
+
+      // Apply styles and setup listeners
+      this.applyFormStyles(textMessageDiv);
+      this.setupFormEventListeners(textMessageDiv, "text");
+
+      // Generate a unique ID for the message for reporting
+      const textMessageId =
+        "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      textMessageDiv.dataset.messageId = textMessageId;
+
+      // Use VoiceroSupport to attach the report button if available
+      if (
+        window.VoiceroSupport &&
+        typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+      ) {
+        setTimeout(() => {
+          window.VoiceroSupport.attachReportButtonToMessage(
+            textMessageDiv,
+            "text"
+          );
+        }, 100);
+      }
+
+      console.log("VoiceroContact: Added form to text interface");
     }
-    contentDiv.innerHTML = contactFormHTML;
 
-    // Style the form to match the chat interface
-    contentDiv.style.maxWidth = "85%";
-    contentDiv.style.width = "300px";
-    contentDiv.style.padding = "15px";
+    // If voice interface is also available, add it there too
+    if (voiceMessagesContainer && activeInterface === "voice") {
+      // Create message for voice interface
+      const voiceMessageDiv = document.createElement("div");
+      voiceMessageDiv.className = "ai-message";
 
-    // Add to message div
-    messageDiv.appendChild(contentDiv);
+      // Create message content
+      const voiceContentDiv = document.createElement("div");
+      voiceContentDiv.className = "voice-message-content contact-form-message";
+      voiceContentDiv.innerHTML = contactFormHTML;
 
-    // Add to messages container
-    messagesContainer.appendChild(messageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      // Style the form to match the voice interface
+      voiceContentDiv.style.maxWidth = "85%";
+      voiceContentDiv.style.width = "300px";
+      voiceContentDiv.style.padding = "15px";
 
-    // Apply styles to form elements
-    this.applyFormStyles(messageDiv);
+      // Add to message div
+      voiceMessageDiv.appendChild(voiceContentDiv);
 
-    // Set up event listeners for the form
-    this.setupFormEventListeners(messageDiv, interfaceType);
+      // Add to messages container
+      voiceMessagesContainer.appendChild(voiceMessageDiv);
+      voiceMessagesContainer.scrollTop = voiceMessagesContainer.scrollHeight;
 
-    // Generate a unique ID for the message for reporting
-    const messageId =
-      "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-    messageDiv.dataset.messageId = messageId;
+      // Apply styles and setup listeners
+      this.applyFormStyles(voiceMessageDiv);
+      this.setupFormEventListeners(voiceMessageDiv, "voice");
 
-    // Use VoiceroSupport to attach the report button if available
-    if (
-      window.VoiceroSupport &&
-      typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
-    ) {
-      // Use a small delay to ensure the DOM is ready
-      setTimeout(() => {
-        window.VoiceroSupport.attachReportButtonToMessage(
-          messageDiv,
-          interfaceType
-        );
-      }, 100);
+      // Generate a unique ID for the message for reporting
+      const voiceMessageId =
+        "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      voiceMessageDiv.dataset.messageId = voiceMessageId;
+
+      // Use VoiceroSupport to attach the report button if available
+      if (
+        window.VoiceroSupport &&
+        typeof window.VoiceroSupport.attachReportButtonToMessage === "function"
+      ) {
+        setTimeout(() => {
+          window.VoiceroSupport.attachReportButtonToMessage(
+            voiceMessageDiv,
+            "voice"
+          );
+        }, 100);
+      }
+
+      console.log("VoiceroContact: Added form to voice interface");
     }
   },
 
@@ -523,7 +584,7 @@ const VoiceroContact = {
     }
 
     // Send the request to the WordPress REST API
-    fetch("http://localhost:3000/api/contacts/help", {
+    fetch("/wp-json/voicero/v1/contactHelp", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1703,76 +1703,94 @@ To make changes, please specify what you'd like to update.
 
   handleContact: function (target) {
     // This handler will show the contact form even when VoiceroText is not available
-    console.log("VoiceroActionHandler: Contact action detected");
+    console.log("VoiceroActionHandler: Contact action detected", target);
 
-    // Try to use VoiceroContact directly if available
-    if (
-      window.VoiceroContact &&
-      typeof window.VoiceroContact.showContactForm === "function"
-    ) {
+    // Add a small delay to ensure VoiceroContact is loaded
+    setTimeout(() => {
+      // Try to use VoiceroContact directly if available
+      if (
+        window.VoiceroContact &&
+        typeof window.VoiceroContact.showContactForm === "function"
+      ) {
+        console.log(
+          "VoiceroActionHandler: Using VoiceroContact module to show form"
+        );
+
+        try {
+          // Pass the message from the target to pre-fill the form if available
+          if (target && target.message) {
+            // Check if showContactForm accepts parameters
+            if (window.VoiceroContact.showContactForm.length > 0) {
+              window.VoiceroContact.showContactForm(target);
+            } else {
+              window.VoiceroContact.showContactForm();
+            }
+          } else {
+            window.VoiceroContact.showContactForm();
+          }
+          return;
+        } catch (error) {
+          console.error("Error showing contact form:", error);
+        }
+      }
+
+      // Try to use VoiceroText as fallback
+      if (
+        window.VoiceroText &&
+        typeof window.VoiceroText.showContactForm === "function"
+      ) {
+        console.log(
+          "VoiceroActionHandler: Using VoiceroText module to show form"
+        );
+        window.VoiceroText.showContactForm();
+        return;
+      }
+
+      // Last resort fallback: Create a simple contact form or show a message
       console.log(
-        "VoiceroActionHandler: Using VoiceroContact module to show form"
+        "VoiceroActionHandler: No contact modules available, creating fallback"
       );
-      setTimeout(() => window.VoiceroContact.showContactForm(), 500);
-      return;
-    }
 
-    // Try to use VoiceroText as fallback
-    if (
-      window.VoiceroText &&
-      typeof window.VoiceroText.showContactForm === "function"
-    ) {
-      console.log(
-        "VoiceroActionHandler: Using VoiceroText module to show form"
+      // Check if there's already a contact form on the page
+      const existingForm = document.querySelector('form[action*="contact"]');
+      if (existingForm) {
+        // Scroll to the existing form
+        existingForm.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Highlight the form
+        const originalStyle = existingForm.style.cssText;
+        existingForm.style.cssText =
+          "border: 2px solid #882be6 !important; padding: 10px !important; box-shadow: 0 0 15px rgba(136, 43, 230, 0.5) !important;";
+
+        // Reset style after a few seconds
+        setTimeout(() => {
+          existingForm.style.cssText = originalStyle;
+        }, 5000);
+
+        return;
+      }
+
+      // If no form exists, show a message directing to the contact page
+      alert(
+        "To contact us, please visit our contact page or send an email to our customer support."
       );
-      window.VoiceroText.showContactForm();
-      return;
-    }
 
-    // Last resort fallback: Create a simple contact form or show a message
-    console.log(
-      "VoiceroActionHandler: No contact modules available, creating fallback"
-    );
+      // Try to navigate to the contact page if it likely exists
+      const contactLinks = Array.from(document.querySelectorAll("a")).filter(
+        (a) =>
+          a.href &&
+          (a.href.includes("/contact") ||
+            a.href.includes("/support") ||
+            a.textContent.toLowerCase().includes("contact"))
+      );
 
-    // Check if there's already a contact form on the page
-    const existingForm = document.querySelector('form[action*="contact"]');
-    if (existingForm) {
-      // Scroll to the existing form
-      existingForm.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Highlight the form
-      const originalStyle = existingForm.style.cssText;
-      existingForm.style.cssText =
-        "border: 2px solid #882be6 !important; padding: 10px !important; box-shadow: 0 0 15px rgba(136, 43, 230, 0.5) !important;";
-
-      // Reset style after a few seconds
-      setTimeout(() => {
-        existingForm.style.cssText = originalStyle;
-      }, 5000);
-
-      return;
-    }
-
-    // If no form exists, show a message directing to the contact page
-    alert(
-      "To contact us, please visit our contact page or send an email to our customer support."
-    );
-
-    // Try to navigate to the contact page if it likely exists
-    const contactLinks = Array.from(document.querySelectorAll("a")).filter(
-      (a) =>
-        a.href &&
-        (a.href.includes("/contact") ||
-          a.href.includes("/support") ||
-          a.textContent.toLowerCase().includes("contact"))
-    );
-
-    if (contactLinks.length > 0) {
-      // Click the first contact link found
-      contactLinks[0].click();
-    } else {
-      // Try to navigate to a likely contact page
-      window.location.href = "/contact";
-    }
+      if (contactLinks.length > 0) {
+        // Click the first contact link found
+        contactLinks[0].click();
+      } else {
+        // Try to navigate to a likely contact page
+        window.location.href = "/contact";
+      }
+    }, 500); // Add a 500ms delay to ensure modules are loaded
   },
 
   handleReturn_order: function (target) {
