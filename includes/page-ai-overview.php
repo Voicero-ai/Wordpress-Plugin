@@ -273,40 +273,8 @@ function voicero_render_ai_overview_page() {
         <!-- Include the JS file -->
         <script type="text/javascript" src="<?php echo esc_url(plugin_dir_url(__FILE__) . '../assets/js/admin/voicero-ai-overview.js'); ?>"></script>
         
-        <!-- Add website information section -->
-        <div class="voicero-card">
-            <div class="voicero-card-header">
-                <div class="card-header-icon">
-                    <span class="dashicons dashicons-admin-site"></span>
-                </div>
-                <h2><?php esc_html_e('Website Information', 'voicero-ai'); ?></h2>
-            </div>
-            
-            <div class="voicero-card-content">
-                <div class="website-info">
-                    <div class="info-item">
-                        <div class="info-label"><?php esc_html_e('Name:', 'voicero-ai'); ?></div>
-                        <div class="info-value" id="website-name">Loading...</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label"><?php esc_html_e('Plan:', 'voicero-ai'); ?></div>
-                        <div class="info-value" id="website-plan">Loading...</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label"><?php esc_html_e('Queries:', 'voicero-ai'); ?></div>
-                        <div class="info-value" id="website-queries">Loading...</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label"><?php esc_html_e('Domain:', 'voicero-ai'); ?></div>
-                        <div class="info-value" id="website-domain">Loading...</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label"><?php esc_html_e('Status:', 'voicero-ai'); ?></div>
-                        <div class="info-value" id="website-status">Loading...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+       
+        
     </div>
     <?php
 }

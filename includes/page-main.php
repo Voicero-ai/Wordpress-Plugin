@@ -11,92 +11,20 @@ if (!defined('ABSPATH')) {
    1. ADD FRONT-END INTERFACES TO <body>
 ------------------------------------------------------------------------ */
 function voicero_add_toggle_button() {
+    // This function now only initializes data attributes that JavaScript will use
+    // All HTML rendering is handled by JavaScript
+    
     $hook = current_filter(); // Get the current hook being used
     
-    // Only add the button if the website is active AND synced
-    $saved_key = voicero_get_access_key();
-    $is_active = false; // Default
-    $is_synced = false; // Default
-
-    if ($saved_key) {
-        // We need to fetch the status - this is tricky without duplicating the API call.
-        // Simplification: Assume if key exists, we *might* add the button,
-        // JS will handle showing/hiding based on actual fetched status later.
-        // Or better: Check a transient or option set during sync/activation.
-        // For now, let's just enqueue scripts regardless and let JS decide to show the button.
-    }
-
+    // Add a data attribute to the body for JS to detect
     ?>
-    <!-- Voicero AI Chat Interface -->
-    <div id="voicero-app-container" data-hook="<?php echo esc_attr($hook); ?>">
-        <!-- Chat Toggle Button -->
-        <button id="voicero-toggle-button" class="voicero-toggle-button" aria-label="<?php esc_attr_e('Chat with AI Assistant', 'voicero-ai'); ?>">
-            <div class="voicero-button-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="currentColor"/>
-                </svg>
-            </div>
-            <span class="voicero-button-text"><?php esc_html_e('Chat with AI', 'voicero-ai'); ?></span>
-        </button>
-        
-        <!-- Chat Window -->
-        <div id="voicero-chat-window" class="voicero-chat-window">
-            <div class="voicero-chat-header">
-                <div class="voicero-chat-title">
-                    <div class="voicero-logo">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="currentColor"/>
-                        </svg>
-                    </div>
-                    <h3><?php esc_html_e('AI Assistant', 'voicero-ai'); ?></h3>
-                </div>
-                <div class="voicero-chat-controls">
-                    <button class="voicero-minimize-btn" aria-label="<?php esc_attr_e('Minimize', 'voicero-ai'); ?>">
-                        <span class="dashicons dashicons-minus"></span>
-                    </button>
-                    <button class="voicero-close-btn" aria-label="<?php esc_attr_e('Close', 'voicero-ai'); ?>">
-                        <span class="dashicons dashicons-no-alt"></span>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="voicero-chat-body">
-                <div class="voicero-messages-container" id="voicero-messages">
-                    <!-- Messages will be dynamically added here -->
-                    <div class="voicero-message voicero-message-ai">
-                        <div class="voicero-message-avatar">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="currentColor"/>
-                            </svg>
-                        </div>
-                        <div class="voicero-message-bubble">
-                            <p><?php esc_html_e('Hello! How can I assist you today?', 'voicero-ai'); ?></p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="voicero-chat-input-container">
-                    <div class="voicero-input-controls">
-                        <button id="voicero-voice-input-btn" class="voicero-voice-btn" aria-label="<?php esc_attr_e('Voice Input', 'voicero-ai'); ?>">
-                            <span class="dashicons dashicons-microphone"></span>
-                        </button>
-                        <textarea id="voicero-chat-input" placeholder="<?php esc_attr_e('Type your message...', 'voicero-ai'); ?>" rows="1"></textarea>
-                        <button id="voicero-send-btn" class="voicero-send-btn" aria-label="<?php esc_attr_e('Send Message', 'voicero-ai'); ?>" disabled>
-                            <span class="dashicons dashicons-arrow-right-alt2"></span>
-                        </button>
-                    </div>
-                    <div class="voicero-powered-by">
-                        <span><?php esc_html_e('Powered by', 'voicero-ai'); ?> </span>
-                        <a href="https://voicero.ai" target="_blank" rel="noopener noreferrer">Voicero.AI</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <script type="text/javascript">
+        document.body.setAttribute('data-voicero-hook', '<?php echo esc_attr($hook); ?>');
+    </script>
     <?php
 }
 
-// Hook into WordPress to add the button
+// Hook into WordPress to add the data attributes for JavaScript
 add_action('wp_body_open', 'voicero_add_toggle_button');
 add_action('wp_footer', 'voicero_add_toggle_button', 999);
 

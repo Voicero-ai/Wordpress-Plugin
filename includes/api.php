@@ -2053,3 +2053,445 @@ function voicero_get_ai_history_ajax() {
     // 10) Return the data
     wp_send_json_success($data);
 }
+
+/**
+ * Handle AJAX requests for messages/contacts
+ */
+add_action('wp_ajax_voicero_get_messages', 'voicero_get_messages_ajax');
+
+function voicero_get_messages_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check if we have a website ID
+    $website_id = isset($_REQUEST['websiteId']) ? sanitize_text_field(wp_unslash($_REQUEST['websiteId'])) : '';
+    if (empty($website_id)) {
+        wp_send_json_error(['message' => esc_html__('Website ID is required', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 4) Get the filter parameter
+    $filter = isset($_REQUEST['filter']) ? sanitize_text_field(wp_unslash($_REQUEST['filter'])) : 'all';
+
+    // 5) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 6) Make the API request to the contacts endpoint
+    $api_url = VOICERO_API_URL . '/contacts';
+    
+    error_log('Contacting API for messages: ' . $api_url);
+    error_log('Website ID: ' . $website_id);
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode([
+            'websiteId' => $website_id,
+            'filter' => $filter
+        ]),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 7) Handle errors
+    if (is_wp_error($response)) {
+        $error_message = $response->get_error_message();
+        error_log('Error contacting contacts API: ' . $error_message);
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($error_message)
+            )
+        ], 500);
+        return;
+    }
+
+    // 8) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    error_log('Contacts API response code: ' . $status_code);
+    error_log('Contacts API response body (first 200 chars): ' . substr($response_body, 0, 200));
+    
+    $data = json_decode($response_body, true);
+
+    if ($status_code !== 200 || !is_array($data)) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($status_code)
+            ),
+            'body' => wp_kses_post($response_body)
+        ], $status_code);
+        return;
+    }
+
+    // 9) Format the data for the frontend
+    $messages = [];
+    $stats = [
+        'total' => 0,
+        'unread' => 0,
+        'read' => 0,
+        'high_priority' => 0,
+        'response_rate' => 0
+    ];
+    
+    if (isset($data['success']) && $data['success'] && isset($data['contacts'])) {
+        $contacts = $data['contacts'];
+        
+        // Count stats
+        $stats['total'] = count($contacts);
+        
+        // Process each contact into a message format
+        foreach ($contacts as $contact) {
+            $is_read = isset($contact['isRead']) ? (bool)$contact['isRead'] : false;
+            
+            if (!$is_read) {
+                $stats['unread']++;
+            } else {
+                $stats['read']++;
+            }
+            
+            if (isset($contact['isPriority']) && $contact['isPriority']) {
+                $stats['high_priority']++;
+            }
+            
+            $messages[] = [
+                'id' => $contact['id'],
+                'email' => isset($contact['email']) ? $contact['email'] : (isset($contact['user']['email']) ? $contact['user']['email'] : 'No email'),
+                'message' => isset($contact['message']) ? $contact['message'] : 'No message content',
+                'time' => isset($contact['createdAt']) ? date('M j, Y g:i a', strtotime($contact['createdAt'])) : 'Unknown date',
+                'is_read' => $is_read,
+                'is_priority' => isset($contact['isPriority']) ? (bool)$contact['isPriority'] : false
+            ];
+        }
+        
+        // Calculate response rate if data available
+        if (isset($data['responseRate'])) {
+            $stats['response_rate'] = $data['responseRate'];
+        } else if ($stats['total'] > 0) {
+            // Basic calculation if not provided
+            $stats['response_rate'] = round(($stats['read'] / $stats['total']) * 100);
+        }
+    }
+    
+    // 10) Return the formatted data
+    wp_send_json_success([
+        'messages' => $messages,
+        'stats' => $stats
+    ]);
+}
+
+/**
+ * Handle AJAX requests to mark a message as read
+ */
+add_action('wp_ajax_voicero_mark_message_read', 'voicero_mark_message_read_ajax');
+
+function voicero_mark_message_read_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check required params
+    $message_id = isset($_REQUEST['message_id']) ? sanitize_text_field(wp_unslash($_REQUEST['message_id'])) : '';
+    $website_id = isset($_REQUEST['websiteId']) ? sanitize_text_field(wp_unslash($_REQUEST['websiteId'])) : '';
+    
+    if (empty($message_id)) {
+        wp_send_json_error(['message' => esc_html__('Message ID is required', 'voicero-ai')], 400);
+        return;
+    }
+    
+    if (empty($website_id)) {
+        wp_send_json_error(['message' => esc_html__('Website ID is required', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 4) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 5) Make the API request to mark message as read
+    $api_url = VOICERO_API_URL . '/contacts/read';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode([
+            'messageId' => $message_id,
+            'websiteId' => $website_id
+        ]),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 6) Handle errors
+    if (is_wp_error($response)) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 7) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+
+    if ($status_code !== 200) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($status_code)
+            ),
+            'body' => wp_kses_post($response_body)
+        ], $status_code);
+        return;
+    }
+
+    // 8) Return success with updated stats
+    wp_send_json_success([
+        'success' => true,
+        'stats' => isset($data['stats']) ? $data['stats'] : [
+            'total' => 0,
+            'unread' => 0,
+            'read' => 0,
+            'high_priority' => 0,
+            'response_rate' => 0
+        ]
+    ]);
+}
+
+/**
+ * Handle AJAX requests to send a reply to a message
+ */
+add_action('wp_ajax_voicero_send_reply', 'voicero_send_reply_ajax');
+
+function voicero_send_reply_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check required params
+    $message_id = isset($_REQUEST['message_id']) ? sanitize_text_field(wp_unslash($_REQUEST['message_id'])) : '';
+    $subject = isset($_REQUEST['subject']) ? sanitize_text_field(wp_unslash($_REQUEST['subject'])) : '';
+    $content = isset($_REQUEST['content']) ? sanitize_textarea_field(wp_unslash($_REQUEST['content'])) : '';
+    $website_id = isset($_REQUEST['websiteId']) ? sanitize_text_field(wp_unslash($_REQUEST['websiteId'])) : '';
+    
+    if (empty($message_id) || empty($content)) {
+        wp_send_json_error(['message' => esc_html__('Message ID and content are required', 'voicero-ai')], 400);
+        return;
+    }
+    
+    if (empty($website_id)) {
+        wp_send_json_error(['message' => esc_html__('Website ID is required', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 4) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 5) Make the API request to send reply
+    $api_url = VOICERO_API_URL . '/contacts/reply';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode([
+            'messageId' => $message_id,
+            'websiteId' => $website_id,
+            'subject' => $subject,
+            'content' => $content
+        ]),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 6) Handle errors
+    if (is_wp_error($response)) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 7) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+
+    if ($status_code !== 200) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($status_code)
+            ),
+            'body' => wp_kses_post($response_body)
+        ], $status_code);
+        return;
+    }
+
+    // 8) Return success
+    wp_send_json_success([
+        'success' => true,
+        'message' => esc_html__('Reply sent successfully', 'voicero-ai')
+    ]);
+}
+
+/**
+ * Handle AJAX requests to delete a message
+ */
+add_action('wp_ajax_voicero_delete_message', 'voicero_delete_message_ajax');
+
+function voicero_delete_message_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check required params
+    $message_id = isset($_REQUEST['message_id']) ? sanitize_text_field(wp_unslash($_REQUEST['message_id'])) : '';
+    $website_id = isset($_REQUEST['websiteId']) ? sanitize_text_field(wp_unslash($_REQUEST['websiteId'])) : '';
+    
+    if (empty($message_id)) {
+        wp_send_json_error(['message' => esc_html__('Message ID is required', 'voicero-ai')], 400);
+        return;
+    }
+    
+    if (empty($website_id)) {
+        wp_send_json_error(['message' => esc_html__('Website ID is required', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 4) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 5) Make the API request to delete message
+    $api_url = VOICERO_API_URL . '/contacts/delete';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode([
+            'messageId' => $message_id,
+            'websiteId' => $website_id
+        ]),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 6) Handle errors
+    if (is_wp_error($response)) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 7) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+
+    if ($status_code !== 200) {
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($status_code)
+            ),
+            'body' => wp_kses_post($response_body)
+        ], $status_code);
+        return;
+    }
+
+    // 8) Return success with updated stats
+    wp_send_json_success([
+        'success' => true,
+        'stats' => isset($data['stats']) ? $data['stats'] : [
+            'total' => 0,
+            'unread' => 0,
+            'read' => 0,
+            'high_priority' => 0,
+            'response_rate' => 0
+        ],
+        'message' => esc_html__('Message deleted successfully', 'voicero-ai')
+    ]);
+}

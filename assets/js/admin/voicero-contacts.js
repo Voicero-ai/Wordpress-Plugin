@@ -8,6 +8,8 @@
 
   // Store the current filter state
   let currentFilter = "all";
+  // Store the website ID
+  let websiteId = null;
 
   /**
    * Initialize the contacts page functionality
@@ -22,11 +24,91 @@
     // Set up refresh button
     $("#refresh-messages").on("click", function (e) {
       e.preventDefault();
-      loadMessages(currentFilter);
+      if (websiteId) {
+        loadMessages(currentFilter, websiteId);
+      } else {
+        showError(
+          "Website ID not configured. Please set up your website in the settings."
+        );
+      }
     });
 
-    // Initialize by loading all messages
-    loadMessages("all");
+    // First load website info to get the website ID, then load messages
+    loadWebsiteInfo();
+  }
+
+  /**
+   * Load website information first, then load messages
+   * Similar to the approach in voicero-ai-overview.js
+   */
+  function loadWebsiteInfo() {
+    // Show loading state
+    showLoadingState();
+
+    // Create a config object with fallbacks if voiceroConfig isn't defined
+    const config =
+      typeof voiceroConfig !== "undefined"
+        ? voiceroConfig
+        : {
+            ajaxUrl: ajaxurl,
+            nonce: $("#voicero_nonce").val(),
+          };
+
+    console.log("Fetching website information first...");
+
+    // Use jQuery AJAX to get website info
+    $.ajax({
+      url: config.ajaxUrl,
+      type: "POST",
+      data: {
+        action: "voicero_get_info",
+        nonce: config.nonce,
+      },
+      success: function (response) {
+        if (response.success && response.data) {
+          const websiteData = response.data;
+          console.log("Website data:", websiteData);
+
+          // Save the website ID to use for messages
+          if (websiteData.id) {
+            console.log("Got website ID:", websiteData.id);
+            websiteId = websiteData.id;
+
+            // Now load messages with the website ID
+            loadMessages(currentFilter, websiteData.id);
+          } else {
+            hideLoadingState();
+            showError(
+              "Website ID not found in the response. Please configure your website in the settings."
+            );
+            console.error("Website ID not found in the response:", websiteData);
+
+            // Show empty state
+            $("#messages-container").html(
+              '<div class="no-messages">Please configure your website ID in the settings to view customer messages.</div>'
+            );
+          }
+        } else {
+          hideLoadingState();
+          showError(
+            "Failed to load website information. Please refresh the page and try again."
+          );
+          console.error("Failed to load website information:", response);
+        }
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        hideLoadingState();
+        console.error(
+          "AJAX error while loading website info:",
+          textStatus,
+          errorThrown
+        );
+        console.error("Response:", jqXHR.responseText);
+        showError(
+          "Failed to connect to the server. Please check your internet connection and try again."
+        );
+      },
+    });
   }
 
   /**
@@ -46,8 +128,14 @@
       const filter = $(this).data("filter");
       currentFilter = filter;
 
-      // Load messages with the selected filter
-      loadMessages(filter);
+      // Load messages with the selected filter if we have a website ID
+      if (websiteId) {
+        loadMessages(filter, websiteId);
+      } else {
+        showError(
+          "Website ID not configured. Please set up your website in the settings."
+        );
+      }
     });
   }
 
@@ -75,8 +163,9 @@
   /**
    * Load messages based on the filter
    * @param {string} filter - The filter to apply (all, unread, read)
+   * @param {string} siteId - The website ID
    */
-  function loadMessages(filter) {
+  function loadMessages(filter, siteId) {
     // Show loading state
     showLoadingState();
 
@@ -89,6 +178,13 @@
             nonce: $("#voicero_nonce").val(),
           };
 
+    console.log(
+      "Loading messages with filter:",
+      filter,
+      "and website ID:",
+      siteId
+    );
+
     // Send AJAX request to get messages
     $.ajax({
       url: config.ajaxUrl,
@@ -97,11 +193,16 @@
         action: "voicero_get_messages",
         nonce: config.nonce,
         filter: filter,
+        websiteId: siteId,
       },
       success: function (response) {
         hideLoadingState();
+        console.log("Messages response:", response);
 
         if (response.success) {
+          // Clear any static content first
+          $("#messages-container").empty();
+
           // Update messages list
           updateMessagesList(response.data.messages);
 
@@ -112,12 +213,44 @@
           showError(
             response.data.message || "An error occurred while loading messages."
           );
+
+          // Show empty state
+          $("#messages-container").html(
+            '<div class="no-messages">No messages available. ' +
+              (response.data.message || "Please try again later.") +
+              "</div>"
+          );
         }
       },
-      error: function () {
+      error: function (jqXHR, textStatus, errorThrown) {
         hideLoadingState();
+        console.error("AJAX error while loading messages:");
+        console.error("Status:", textStatus);
+        console.error("Error:", errorThrown);
+        console.error("Response:", jqXHR.responseText);
+
         showError(
           "An error occurred while loading messages. Please try again."
+        );
+
+        // Show empty state with error details
+        let errorMsg = "An error occurred while loading messages.";
+        if (jqXHR.responseText) {
+          try {
+            const responseData = JSON.parse(jqXHR.responseText);
+            if (responseData.data && responseData.data.message) {
+              errorMsg = responseData.data.message;
+            }
+          } catch (e) {
+            // If we can't parse JSON, just use the raw response text
+            if (jqXHR.responseText.length < 100) {
+              errorMsg += " " + jqXHR.responseText;
+            }
+          }
+        }
+
+        $("#messages-container").html(
+          '<div class="no-messages">' + errorMsg + "</div>"
         );
       },
     });
@@ -133,7 +266,7 @@
     // Clear the container
     $container.empty();
 
-    if (messages.length === 0) {
+    if (!messages || messages.length === 0) {
       // Show empty state
       $container.html('<div class="no-messages">No messages found.</div>');
       return;
@@ -189,21 +322,24 @@
    * @param {Object} stats - The message statistics
    */
   function updateMessageStats(stats) {
-    $("#total-messages").text(stats.total || 0);
-    $("#unread-messages").text(stats.unread || 0);
-    $("#high-priority-messages").text(stats.high_priority || 0);
-    $("#response-rate").text((stats.response_rate || 0) + "%");
+    // Default to zero values if stats are missing
+    const safeStats = stats || {};
+
+    $("#total-messages").text(safeStats.total || 0);
+    $("#unread-messages").text(safeStats.unread || 0);
+    $("#high-priority-messages").text(safeStats.high_priority || 0);
+    $("#response-rate").text((safeStats.response_rate || 0) + "%");
 
     // Update unread count in the message center header
-    const unreadCount = stats.unread || 0;
+    const unreadCount = safeStats.unread || 0;
     $("#unread-count").text(
       unreadCount + " " + (unreadCount === 1 ? "Unread" : "Unread")
     );
 
     // Update tab counts
-    $("#all-count").text("(" + (stats.total || 0) + ")");
-    $("#unread-tab-count").text("(" + (stats.unread || 0) + ")");
-    $("#read-count").text("(" + (stats.read || 0) + ")");
+    $("#all-count").text("(" + (safeStats.total || 0) + ")");
+    $("#unread-tab-count").text("(" + (safeStats.unread || 0) + ")");
+    $("#read-count").text("(" + (safeStats.read || 0) + ")");
   }
 
   /**
@@ -211,6 +347,12 @@
    * @param {number} messageId - The ID of the message to mark as read
    */
   function markAsRead(messageId) {
+    // Check if we have a website ID
+    if (!websiteId) {
+      showError("Website ID not configured. Cannot mark message as read.");
+      return;
+    }
+
     // Create a config object with fallbacks if voiceroConfig isn't defined
     const config =
       typeof voiceroConfig !== "undefined"
@@ -228,6 +370,7 @@
         action: "voicero_mark_message_read",
         nonce: config.nonce,
         message_id: messageId,
+        websiteId: websiteId,
       },
       success: function (response) {
         if (response.success) {
@@ -239,7 +382,7 @@
 
           // Reload messages if we're on a filtered view
           if (currentFilter !== "all") {
-            loadMessages(currentFilter);
+            loadMessages(currentFilter, websiteId);
           }
 
           // Update the stats
@@ -259,6 +402,12 @@
    * @param {number} messageId - The ID of the message to reply to
    */
   function replyToMessage(messageId) {
+    // Check if we have a website ID
+    if (!websiteId) {
+      showError("Website ID not configured. Cannot reply to message.");
+      return;
+    }
+
     // Get the message email
     const email = $(
       `.message-item[data-id="${messageId}"] .message-email`
@@ -329,6 +478,12 @@
    * Send a reply to a message
    */
   function sendReply() {
+    // Check if we have a website ID
+    if (!websiteId) {
+      showError("Website ID not configured. Cannot send reply.");
+      return;
+    }
+
     const messageId = $("#reply-message-id").val();
     const subject = $("#reply-subject").val();
     const content = $("#reply-content").val();
@@ -362,6 +517,7 @@
         message_id: messageId,
         subject: subject,
         content: content,
+        websiteId: websiteId,
       },
       success: function (response) {
         $submitButton.prop("disabled", false).text(originalText);
@@ -380,7 +536,7 @@
           markAsRead(messageId);
 
           // Reload messages to update the UI
-          loadMessages(currentFilter);
+          loadMessages(currentFilter, websiteId);
         } else {
           showError(
             response.data.message ||
@@ -402,6 +558,12 @@
    * @param {number} messageId - The ID of the message to delete
    */
   function deleteMessage(messageId) {
+    // Check if we have a website ID
+    if (!websiteId) {
+      showError("Website ID not configured. Cannot delete message.");
+      return;
+    }
+
     if (
       !confirm(
         "Are you sure you want to delete this message? This action cannot be undone."
@@ -427,6 +589,7 @@
         action: "voicero_delete_message",
         nonce: config.nonce,
         message_id: messageId,
+        websiteId: websiteId,
       },
       success: function (response) {
         if (response.success) {
@@ -782,6 +945,16 @@
                 
                 .messages-header h2 {
                     margin: 0;
+                }
+                
+                /* Empty state styling */
+                .empty-state {
+                    text-align: center;
+                    padding: 30px;
+                    color: #666;
+                    background: #f9f9f9;
+                    border-radius: 5px;
+                    font-style: italic;
                 }
             </style>
         `);

@@ -97,7 +97,7 @@ function voicero_debug_info() {
     global $wp_scripts;
     
     // Get all expected script handles from the JS directory
-    $js_dir = plugin_dir_path(__FILE__) . 'assets/js/';
+    $js_dir = plugin_dir_path(__FILE__) . 'assets/js/user/';
     $js_files = glob($js_dir . '*.js');
     $expected_handles = array();
     
@@ -1269,5 +1269,93 @@ function voicero_admin_enqueue_assets($hook_suffix) {
     );
 }
 add_action('admin_enqueue_scripts', 'voicero_admin_enqueue_assets');
+
+/**
+ * Enqueue frontend scripts for Voicero.AI
+ */
+function voicero_frontend_enqueue_assets() {
+    // Only load if we have an access key and we're not in admin
+    if (empty(voicero_get_access_key()) || is_admin()) {
+        return;
+    }
+
+    // Get all JS files from the user directory
+    $js_dir = plugin_dir_path(__FILE__) . 'assets/js/user/';
+    $js_files = glob($js_dir . '*.js');
+    
+    if (!empty($js_files)) {
+        // Sort files to ensure core loads first
+        usort($js_files, function($a, $b) {
+            if (strpos($a, 'voicero-core.js') !== false) return -1;
+            if (strpos($b, 'voicero-core.js') !== false) return 1;
+            return strcmp($a, $b);
+        });
+        
+        // Register and enqueue each file
+        $core_handle = '';
+        $loaded_handles = [];
+        
+        foreach ($js_files as $js_file) {
+            $file_name = basename($js_file);
+            $handle = str_replace('.js', '', $file_name);
+            
+            // Determine dependencies
+            $deps = ['jquery'];
+            
+            // Set core as dependency for other files
+            if (strpos($file_name, 'voicero-core.js') !== false) {
+                $core_handle = $handle;
+            } elseif (!empty($core_handle)) {
+                $deps[] = $core_handle;
+            }
+            
+            // Special case for text dependency
+            if (strpos($file_name, 'voicero-contact.js') !== false && in_array('voicero-text', $loaded_handles)) {
+                $deps[] = 'voicero-text';
+            }
+            
+            wp_register_script(
+                $handle,
+                plugin_dir_url(__FILE__) . 'assets/js/user/' . $file_name,
+                $deps,
+                filemtime($js_file),  // Use file modification time as version
+                true  // Load in footer
+            );
+            
+            wp_enqueue_script($handle);
+            $loaded_handles[] = $handle;
+        }
+        
+        // Pass config to scripts
+        if (!empty($core_handle)) {
+            wp_localize_script(
+                $core_handle,
+                'voiceroConfig',
+                [
+                    'ajaxUrl'   => admin_url('admin-ajax.php'),
+                    'nonce'     => wp_create_nonce('voicero_ajax_nonce'),
+                    'apiUrl'    => defined('VOICERO_API_URL') ? VOICERO_API_URL : 'http://localhost:3000/api',
+                    'siteUrl'   => get_site_url(),
+                    'pluginUrl' => plugin_dir_url(__FILE__),
+                    'websiteId' => get_option('voicero_website_id', ''),
+                    'debug'     => defined('WP_DEBUG') && WP_DEBUG ? true : false
+                ]
+            );
+        }
+    }
+}
+add_action('wp_enqueue_scripts', 'voicero_frontend_enqueue_assets');
+
+
+
+/**
+ * Helper function to update training status
+ */
+function voicero_update_training_status($key, $value) {
+    $training_data = get_option('voicero_training_status', []);
+    $training_data[$key] = $value;
+    update_option('voicero_training_status', $training_data);
+    return $training_data;
+}
 
 
