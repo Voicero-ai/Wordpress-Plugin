@@ -1253,10 +1253,11 @@ function voicero_admin_enqueue_assets($hook_suffix) {
         'voicero-admin-js',
         'voiceroAdminConfig',
         [
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce'   => wp_create_nonce('voicero_ajax_nonce'),
+            'ajaxUrl'   => admin_url('admin-ajax.php'),
+            'nonce'     => wp_create_nonce('voicero_ajax_nonce'),
             'accessKey' => $access_key,
-            'apiUrl' => defined('VOICERO_API_URL') ? VOICERO_API_URL : 'http://localhost:3000/api'
+            'apiUrl'    => defined('VOICERO_API_URL') ? VOICERO_API_URL : 'http://localhost:3000/api',
+            'websiteId' => get_option('voicero_website_id', '')
         ]
     );
     

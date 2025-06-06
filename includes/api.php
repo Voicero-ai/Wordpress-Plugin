@@ -1910,8 +1910,10 @@ function voicero_get_ai_history_ajax() {
         return;
     }
 
-    // 4) Get the website ID
-    $website_id = get_option('voicero_website_id', '');
+    // 4) Get the website ID (allow override via request)
+    $website_id = isset($_REQUEST['websiteId'])
+        ? sanitize_text_field(wp_unslash($_REQUEST['websiteId']))
+        : get_option('voicero_website_id', '');
     error_log('AI History - Website ID from option: ' . $website_id);
     
     if (empty($website_id)) {
@@ -1942,7 +1944,9 @@ function voicero_get_ai_history_ajax() {
     error_log('AI History request data: ' . json_encode($request_data));
 
     // 7) Make the API request
-    $endpoint = 'http://localhost:3000/api/aiHistory';
+    // Allow the API base URL to be configured via constant
+    $api_base = defined('VOICERO_API_URL') ? VOICERO_API_URL : 'http://localhost:3000/api';
+    $endpoint  = trailingslashit($api_base) . 'aiHistory';
     
     try {
         $response = wp_remote_post($endpoint, [
