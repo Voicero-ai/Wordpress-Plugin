@@ -41,7 +41,7 @@ const VoiceroText = {
     // Check if already initialized
     if (this.initialized) return;
 
-    // Mark as initialized
+    // Set initialized flag
     this.initialized = true;
 
     console.log("VoiceroText: Initializing");
@@ -55,7 +55,10 @@ const VoiceroText = {
       this.thread = window.VoiceroCore.thread;
       this.sessionId = window.VoiceroCore.sessionId;
       this.websiteId = window.VoiceroCore.websiteId;
-      this.websiteColor = window.VoiceroCore.websiteColor;
+
+      // IMPORTANT: Always get the latest websiteColor from VoiceroCore
+      this.websiteColor = window.VoiceroCore.websiteColor || "#882be6";
+      console.log("VoiceroText: Using website color:", this.websiteColor);
 
       // Ensure the text interface is always maximized by default
       if (this.session && this.session.textOpen) {
@@ -79,23 +82,93 @@ const VoiceroText = {
         this.apiBaseUrl = VoiceroCore.getApiBaseUrl();
       }
 
-      // Get website color from VoiceroCore
-      if (window.VoiceroCore.websiteColor) {
-        this.websiteColor = window.VoiceroCore.websiteColor;
-
-        // Generate color variants
-        this.getColorVariants(this.websiteColor);
+      // Always use the VoiceroColor utility if available
+      if (
+        window.VoiceroColor &&
+        typeof window.VoiceroColor.getColorVariants === "function"
+      ) {
+        this.colorVariants = window.VoiceroColor.getColorVariants(
+          this.websiteColor
+        );
+        console.log(
+          "VoiceroText: Generated color variants using VoiceroColor:",
+          this.colorVariants
+        );
       } else {
-        // Use default color and generate variants
-
-        this.getColorVariants(this.websiteColor);
+        // Fallback to our own implementation
+        this.colorVariants = this.getColorVariants(this.websiteColor);
+        console.log(
+          "VoiceroText: Generated color variants using fallback:",
+          this.colorVariants
+        );
       }
-
-      // SECURITY: Direct API access and accessKey handling removed - now using server-side proxy
     } else {
       // Use default color and generate variants
+      this.colorVariants = this.getColorVariants(this.websiteColor);
+    }
 
-      this.getColorVariants(this.websiteColor);
+    // PRE-INITIALIZATION CHECK: Check for empty message arrays and set flags
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.threads &&
+      window.VoiceroCore.session.threads.length > 0
+    ) {
+      // Sort threads to get the most recent one
+      const threads = [...window.VoiceroCore.session.threads];
+      const sortedThreads = threads.sort((a, b) => {
+        if (a.lastMessageAt && b.lastMessageAt) {
+          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        }
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      const mostRecentThread = sortedThreads[0];
+      console.log(
+        "VoiceroText [INIT]: Checking thread on initialization:",
+        mostRecentThread
+      );
+
+      // If thread has no messages or only system messages, prepare welcome message
+      if (
+        !mostRecentThread.messages ||
+        mostRecentThread.messages.length === 0
+      ) {
+        console.log(
+          "VoiceroText [INIT]: Thread has empty messages array, preparing welcome message"
+        );
+        if (window.VoiceroCore.session) {
+          // Force the welcome message by setting session flag directly
+          window.VoiceroCore.session.textWelcome = true;
+          // Reset internal flags
+          this.hasShownWelcome = false;
+          localStorage.removeItem("voicero_shown_text_welcome");
+          if (window.VoiceroCore && window.VoiceroCore.appState) {
+            window.VoiceroCore.appState.hasShownTextWelcome = false;
+          }
+        }
+      } else {
+        // Check if there are any non-system messages
+        const nonSystemMessages = mostRecentThread.messages.filter(
+          (msg) => msg.role !== "system" && msg.type !== "page_data"
+        );
+
+        if (nonSystemMessages.length === 0) {
+          console.log(
+            "VoiceroText [INIT]: Thread has only system messages, preparing welcome message"
+          );
+          if (window.VoiceroCore.session) {
+            // Force the welcome message by setting session flag directly
+            window.VoiceroCore.session.textWelcome = true;
+            // Reset internal flags
+            this.hasShownWelcome = false;
+            localStorage.removeItem("voicero_shown_text_welcome");
+            if (window.VoiceroCore && window.VoiceroCore.appState) {
+              window.VoiceroCore.appState.hasShownTextWelcome = false;
+            }
+          }
+        }
+      }
     }
 
     // Create HTML structure for the chat interface but keep it hidden
@@ -115,13 +188,27 @@ const VoiceroText = {
   applyDynamicColors: function () {
     if (!this.shadowRoot) return;
 
-    // Make sure we have color variants
-    if (!this.colorVariants) {
-      this.getColorVariants(this.websiteColor);
+    // CRITICAL: Always get the latest websiteColor from VoiceroCore
+    if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
+      this.websiteColor = window.VoiceroCore.websiteColor;
+      console.log("VoiceroText: Updated website color:", this.websiteColor);
     }
 
-    // Get the main color - USE WEBSITE COLOR DIRECTLY INSTEAD OF VARIANTS
-    const mainColor = this.websiteColor || "#882be6"; // Use website color directly
+    // Always regenerate color variants with the latest websiteColor
+    if (
+      window.VoiceroColor &&
+      typeof window.VoiceroColor.getColorVariants === "function"
+    ) {
+      this.colorVariants = window.VoiceroColor.getColorVariants(
+        this.websiteColor
+      );
+    } else {
+      this.colorVariants = this.getColorVariants(this.websiteColor);
+    }
+
+    // Get the main color - ALWAYS USE LATEST WEBSITE COLOR
+    const mainColor = this.websiteColor || "#882be6";
+    console.log("VoiceroText: Applying dynamic color:", mainColor);
 
     // Update send button color
     const sendButton = this.shadowRoot.getElementById("send-message-btn");
@@ -171,6 +258,26 @@ const VoiceroText = {
         background-color: ${mainColor} !important;
         color: white !important;
       }
+
+      /* Force suggestion buttons to use website color */
+      .suggestion {
+        background-color: ${mainColor} !important;
+      }
+
+      /* Force user message bubbles to use website color */
+      .user-message .message-content {
+        background-color: ${mainColor} !important;
+      }
+
+      /* Force send button to use website color */
+      #send-message-btn {
+        background-color: ${mainColor} !important;
+      }
+
+      /* Force welcome question spans to use website color */
+      .welcome-question {
+        color: ${mainColor} !important;
+      }
     `;
 
     // Remove existing custom variables if any
@@ -194,6 +301,87 @@ const VoiceroText = {
       "VoiceroText: Opening text chat interface - ensuring it's maximized"
     );
 
+    // IMMEDIATE CHECK: Check for empty message arrays and force welcome message if needed
+    // This must happen before any other checks to ensure the welcome message shows on first load
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.threads &&
+      window.VoiceroCore.session.threads.length > 0
+    ) {
+      // Sort threads to get the most recent one
+      const threads = [...window.VoiceroCore.session.threads];
+      const sortedThreads = threads.sort((a, b) => {
+        if (a.lastMessageAt && b.lastMessageAt) {
+          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        }
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      const mostRecentThread = sortedThreads[0];
+      console.log("VoiceroText [INIT]: Most recent thread:", mostRecentThread);
+
+      // If thread has no messages or only system messages, force welcome message
+      if (
+        !mostRecentThread.messages ||
+        mostRecentThread.messages.length === 0
+      ) {
+        console.log(
+          "VoiceroText [INIT]: Thread has empty messages array, forcing welcome message"
+        );
+        if (window.VoiceroCore.session) {
+          window.VoiceroCore.session.textWelcome = true;
+          // Reset any stored flags
+          this.hasShownWelcome = false;
+          localStorage.removeItem("voicero_shown_text_welcome");
+          if (window.VoiceroCore && window.VoiceroCore.appState) {
+            window.VoiceroCore.appState.hasShownTextWelcome = false;
+          }
+        }
+      } else {
+        // Check if there are any non-system messages
+        const nonSystemMessages = mostRecentThread.messages.filter(
+          (msg) => msg.role !== "system" && msg.type !== "page_data"
+        );
+
+        if (nonSystemMessages.length === 0) {
+          console.log(
+            "VoiceroText [INIT]: Thread has only system messages, forcing welcome message"
+          );
+          if (window.VoiceroCore.session) {
+            window.VoiceroCore.session.textWelcome = true;
+            // Reset any stored flags
+            this.hasShownWelcome = false;
+            localStorage.removeItem("voicero_shown_text_welcome");
+            if (window.VoiceroCore && window.VoiceroCore.appState) {
+              window.VoiceroCore.appState.hasShownTextWelcome = false;
+            }
+          }
+        }
+      }
+    }
+
+    // CRITICAL: Ensure we have the latest website color from VoiceroCore
+    if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
+      this.websiteColor = window.VoiceroCore.websiteColor;
+      console.log(
+        "VoiceroText: Updated website color on open:",
+        this.websiteColor
+      );
+
+      // Regenerate color variants
+      if (
+        window.VoiceroColor &&
+        typeof window.VoiceroColor.getColorVariants === "function"
+      ) {
+        this.colorVariants = window.VoiceroColor.getColorVariants(
+          this.websiteColor
+        );
+      } else {
+        this.colorVariants = this.getColorVariants(this.websiteColor);
+      }
+    }
+
     // IMPORTANT: Always ensure textOpenWindowUp is true when opening the interface
     // It should only be set to false when the user explicitly clicks the minimize button
     if (window.VoiceroCore && window.VoiceroCore.session) {
@@ -205,26 +393,100 @@ const VoiceroText = {
 
     // Determine if we should show welcome message
     let shouldShowWelcome = false;
-    if (window.VoiceroCore && window.VoiceroCore.appState) {
-      // Show welcome if we haven't shown it before
-      shouldShowWelcome =
-        window.VoiceroCore.appState.hasShownTextWelcome === undefined ||
-        window.VoiceroCore.appState.hasShownTextWelcome === false;
 
-      // Mark that we've shown the welcome message
-      if (shouldShowWelcome) {
-        window.VoiceroCore.appState.hasShownTextWelcome = true;
-        // Also set our internal flag for consistent tracking
-        this.hasShownWelcome = false; // We want the welcome message to be shown once during this session
+    console.log("VoiceroText: Checking if welcome message should be shown");
+
+    // Check if the session already has a textWelcome flag set
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.textWelcome !== undefined
+    ) {
+      // Use the existing value from the session
+      shouldShowWelcome = window.VoiceroCore.session.textWelcome;
+      console.log(
+        "VoiceroText: Using existing textWelcome value from session:",
+        shouldShowWelcome
+      );
+    }
+    // Only calculate a new value if session doesn't have it set
+    else if (window.VoiceroCore && window.VoiceroCore.appState) {
+      // Check if the most recent thread has an empty messages array - should show welcome message
+      if (
+        window.VoiceroCore &&
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.threads &&
+        window.VoiceroCore.session.threads.length > 0
+      ) {
+        // Sort threads to ensure we have the most recent one first
+        const threads = [...window.VoiceroCore.session.threads];
+        const sortedThreads = threads.sort((a, b) => {
+          // First try to sort by lastMessageAt if available
+          if (a.lastMessageAt && b.lastMessageAt) {
+            return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+          }
+          // Fall back to createdAt if lastMessageAt is not available
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+
+        const mostRecentThread = sortedThreads[0];
+        console.log("VoiceroText: Most recent thread:", mostRecentThread);
+
+        if (
+          !mostRecentThread.messages ||
+          mostRecentThread.messages.length === 0
+        ) {
+          console.log(
+            "VoiceroText: Most recent thread has empty messages array, showing welcome message"
+          );
+          shouldShowWelcome = true;
+          // FORCE the welcome message by overriding session value
+          if (window.VoiceroCore && window.VoiceroCore.session) {
+            window.VoiceroCore.session.textWelcome = true;
+          }
+        } else {
+          console.log(
+            "VoiceroText: Most recent thread has",
+            mostRecentThread.messages.length,
+            "messages"
+          );
+        }
+      } else {
+        console.log("VoiceroText: No threads found in session");
+      }
+
+      // If not determined by thread, check app state
+      if (!shouldShowWelcome) {
+        // Show welcome if we haven't shown it before
+        shouldShowWelcome =
+          window.VoiceroCore.appState.hasShownTextWelcome === undefined ||
+          window.VoiceroCore.appState.hasShownTextWelcome === false;
+
+        console.log(
+          "VoiceroText: Welcome state from VoiceroCore.appState:",
+          shouldShowWelcome
+        );
+
+        // Mark that we've shown the welcome message
+        if (shouldShowWelcome) {
+          window.VoiceroCore.appState.hasShownTextWelcome = true;
+          // Also set our internal flag for consistent tracking
+          this.hasShownWelcome = false; // We want the welcome message to be shown once during this session
+        }
       }
     }
+
+    console.log(
+      "VoiceroText: Final shouldShowWelcome value:",
+      shouldShowWelcome
+    );
 
     // Update window state if it hasn't been done already
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
       window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: true, // Always start maximized
-        textWelcome: shouldShowWelcome, // Keep the existing welcome message state
+        textWelcome: shouldShowWelcome, // Use value from session or calculated value
         coreOpen: false, // Always false when opening chat
         voiceOpen: false,
         voiceOpenWindowUp: false,
@@ -465,6 +727,53 @@ const VoiceroText = {
     // Flag to track if any messages were loaded
     let messagesLoaded = false;
 
+    console.log("VoiceroText: Loading messages from session");
+
+    // CRITICAL: First check VoiceroCore.session.textWelcome - if it's true, ALWAYS show welcome message
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.textWelcome === true
+    ) {
+      console.log(
+        "VoiceroText: VoiceroCore.session.textWelcome is true, forcing welcome message"
+      );
+      // Reset welcome flags to ensure welcome message is shown
+      this.hasShownWelcome = false;
+      localStorage.removeItem("voicero_shown_text_welcome");
+      if (window.VoiceroCore && window.VoiceroCore.appState) {
+        window.VoiceroCore.appState.hasShownTextWelcome = false;
+        if (
+          window.VoiceroCore.saveState &&
+          typeof window.VoiceroCore.saveState === "function"
+        ) {
+          window.VoiceroCore.saveState();
+        }
+      }
+    }
+
+    // If textWelcome is explicitly false, don't show welcome message
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.session &&
+      window.VoiceroCore.session.textWelcome === false
+    ) {
+      console.log(
+        "VoiceroText: VoiceroCore.session.textWelcome is false, not showing welcome message"
+      );
+      this.hasShownWelcome = true;
+      localStorage.setItem("voicero_shown_text_welcome", "true");
+      if (window.VoiceroCore && window.VoiceroCore.appState) {
+        window.VoiceroCore.appState.hasShownTextWelcome = true;
+        if (
+          window.VoiceroCore.saveState &&
+          typeof window.VoiceroCore.saveState === "function"
+        ) {
+          window.VoiceroCore.saveState();
+        }
+      }
+    }
+
     // Flag to check if we should show welcome message
     let shouldShowWelcome = false;
 
@@ -475,6 +784,7 @@ const VoiceroText = {
       window.VoiceroCore.session.textWelcome
     ) {
       shouldShowWelcome = true;
+      console.log("VoiceroText: textWelcome flag is true in session");
     }
 
     // Check if we have a session with threads
@@ -497,76 +807,98 @@ const VoiceroText = {
 
       // Use the most recent thread (first after sorting)
       const currentThread = sortedThreads[0];
+      console.log("VoiceroText: Most recent thread:", currentThread);
 
       if (
         currentThread &&
         currentThread.messages &&
         currentThread.messages.length > 0
       ) {
-        // Sort messages by createdAt (oldest first)
-        const sortedMessages = [...currentThread.messages].sort((a, b) => {
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        });
+        // Check if there are any non-system messages
+        const nonSystemMessages = currentThread.messages.filter(
+          (msg) => msg.role !== "system" && msg.type !== "page_data"
+        );
 
-        // Clear existing messages if any
-        const messagesContainer = this.shadowRoot
-          ? this.shadowRoot.getElementById("chat-messages")
-          : document.getElementById("chat-messages");
+        console.log(
+          "VoiceroText: Thread has",
+          nonSystemMessages.length,
+          "non-system messages"
+        );
 
-        if (messagesContainer) {
-          // Keep the container but remove children (except initial suggestions)
-          const children = Array.from(messagesContainer.children);
-          for (const child of children) {
-            if (child.id !== "initial-suggestions") {
-              messagesContainer.removeChild(child);
+        if (nonSystemMessages.length === 0) {
+          // If there are no actual messages, mark as empty for welcome message
+          console.log(
+            "VoiceroText: Thread has only system messages, should show welcome message"
+          );
+          shouldShowWelcome = true;
+          messagesLoaded = false;
+
+          // IMPORTANT: Force the welcome message to show for threads with empty messages
+          if (window.VoiceroCore && window.VoiceroCore.session) {
+            console.log(
+              "VoiceroText: Thread has no non-system messages, forcing welcome message"
+            );
+            window.VoiceroCore.session.textWelcome = true;
+            // Reset flags to ensure welcome message shows
+            this.hasShownWelcome = false;
+            localStorage.removeItem("voicero_shown_text_welcome");
+            if (window.VoiceroCore && window.VoiceroCore.appState) {
+              window.VoiceroCore.appState.hasShownTextWelcome = false;
             }
           }
-        }
+        } else {
+          // Sort messages by createdAt (oldest first)
+          const sortedMessages = [...nonSystemMessages].sort((a, b) => {
+            return new Date(a.createdAt) - new Date(b.createdAt);
+          });
 
-        // Add each message to the UI
-        sortedMessages.forEach((msg) => {
-          // Skip system messages and page_data messages
-          if (msg.role === "system" || msg.type === "page_data") {
-            return; // Skip this message
-          }
+          // Clear existing messages if any
+          const messagesContainer = this.shadowRoot
+            ? this.shadowRoot.getElementById("chat-messages")
+            : document.getElementById("chat-messages");
 
-          if (msg.role === "user") {
-            // Add user message
-            this.addMessage(msg.content, "user", true); // true = skip adding to messages array
-            messagesLoaded = true;
-          } else if (msg.role === "assistant") {
-            try {
-              // Parse the content which is a JSON string
-              let content = msg.content;
-              let aiMessage = "";
-
-              try {
-                // Try to parse as JSON
-                const parsedContent = JSON.parse(content);
-                if (parsedContent.answer) {
-                  aiMessage = parsedContent.answer;
-                }
-              } catch (e) {
-                // If parsing fails, use the raw content
-
-                aiMessage = content;
+          if (messagesContainer) {
+            // Keep the container but remove children (except initial suggestions)
+            const children = Array.from(messagesContainer.children);
+            for (const child of children) {
+              if (child.id !== "initial-suggestions") {
+                messagesContainer.removeChild(child);
               }
-
-              // Add AI message
-              this.addMessage(aiMessage, "ai", true); // true = skip adding to messages array
-              messagesLoaded = true;
-            } catch (e) {}
+            }
           }
-        });
 
-        // Store the complete message objects with metadata in the local array
-        this.messages = sortedMessages
-          .filter(
-            (msg) =>
-              // Filter out system messages and page_data messages from the messages array
-              msg.role !== "system" && msg.type !== "page_data"
-          )
-          .map((msg) => ({
+          // Add each message to the UI
+          sortedMessages.forEach((msg) => {
+            if (msg.role === "user") {
+              // Add user message
+              this.addMessage(msg.content, "user", true); // true = skip adding to messages array
+              messagesLoaded = true;
+            } else if (msg.role === "assistant") {
+              try {
+                // Parse the content which is a JSON string
+                let content = msg.content;
+                let aiMessage = "";
+
+                try {
+                  // Try to parse as JSON
+                  const parsedContent = JSON.parse(content);
+                  if (parsedContent.answer) {
+                    aiMessage = parsedContent.answer;
+                  }
+                } catch (e) {
+                  // If parsing fails, use the raw content
+                  aiMessage = content;
+                }
+
+                // Add AI message
+                this.addMessage(aiMessage, "ai", true); // true = skip adding to messages array
+                messagesLoaded = true;
+              } catch (e) {}
+            }
+          });
+
+          // Store the complete message objects with metadata in the local array
+          this.messages = sortedMessages.map((msg) => ({
             ...msg, // Keep all original properties (id, createdAt, threadId, etc.)
             // Ensure 'content' is properly formatted for assistant messages
             content:
@@ -575,57 +907,193 @@ const VoiceroText = {
                 : msg.content,
           }));
 
-        // Store the thread ID
-        this.currentThreadId = currentThread.threadId;
+          // Store the thread ID
+          this.currentThreadId = currentThread.threadId;
 
-        // Scroll to bottom
-        if (messagesContainer) {
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          // Scroll to bottom
+          if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+
+          // Process the AI messages to ensure report buttons are attached
+          setTimeout(() => {
+            this.processExistingAIMessages();
+          }, 500);
+        }
+      } else {
+        // Thread exists but has empty messages array - should show welcome message
+        console.log(
+          "VoiceroText: Thread has empty messages array, should show welcome message"
+        );
+        shouldShowWelcome = true;
+        messagesLoaded = false;
+
+        // IMPORTANT: Force the welcome message to show for empty message arrays
+        if (window.VoiceroCore && window.VoiceroCore.session) {
+          console.log(
+            "VoiceroText: Thread has empty messages array, forcing welcome message"
+          );
+          window.VoiceroCore.session.textWelcome = true;
+          // Reset flags to ensure welcome message shows
+          this.hasShownWelcome = false;
+          localStorage.removeItem("voicero_shown_text_welcome");
+          if (window.VoiceroCore && window.VoiceroCore.appState) {
+            window.VoiceroCore.appState.hasShownTextWelcome = false;
+          }
         }
 
-        // Process the AI messages to ensure report buttons are attached
-        setTimeout(() => {
-          this.processExistingAIMessages();
-        }, 500);
-      } else {
         // Still store the thread ID even if no messages
-        this.currentThreadId = currentThread.threadId;
-
-        // Thread exists but has no messages, mark as empty for welcome message
-        shouldShowWelcome = true;
+        if (currentThread) {
+          this.currentThreadId = currentThread.threadId;
+        }
       }
     } else {
       // No threads available, mark as empty for welcome message
+      console.log("VoiceroText: No threads found in session");
       shouldShowWelcome = true;
     }
 
+    console.log(
+      "VoiceroText: shouldShowWelcome:",
+      shouldShowWelcome,
+      "messagesLoaded:",
+      messagesLoaded
+    );
+
     // If no messages were loaded and we should show welcome message
-    if (!messagesLoaded && shouldShowWelcome) {
-      this.showWelcomeMessage();
+    // Also respect explicit textWelcome=true from session
+    if (
+      (!messagesLoaded && shouldShowWelcome) ||
+      (window.VoiceroCore &&
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.textWelcome === true)
+    ) {
+      // Extra check to prevent duplicate welcome messages
+      if (
+        !this.hasShownWelcome &&
+        localStorage.getItem("voicero_shown_text_welcome") !== "true" &&
+        !(
+          window.VoiceroCore &&
+          window.VoiceroCore.appState &&
+          window.VoiceroCore.appState.hasShownTextWelcome === true
+        ) &&
+        !(
+          window.VoiceroCore &&
+          window.VoiceroCore.session &&
+          window.VoiceroCore.session.textWelcome === false
+        )
+      ) {
+        // Verify no welcome messages are already in the DOM
+        const messagesContainer = this.shadowRoot
+          ? this.shadowRoot.getElementById("chat-messages")
+          : document.getElementById("chat-messages");
+
+        if (messagesContainer) {
+          const existingWelcomeMessages = messagesContainer.querySelectorAll(
+            ".ai-message .welcome-question"
+          );
+          if (existingWelcomeMessages.length === 0) {
+            console.log(
+              "VoiceroText: All checks passed, showing welcome message"
+            );
+            this.showWelcomeMessage();
+          } else {
+            console.log(
+              "VoiceroText: Found existing welcome message in DOM, not showing again"
+            );
+            this.hasShownWelcome = true;
+            localStorage.setItem("voicero_shown_text_welcome", "true");
+            if (window.VoiceroCore && window.VoiceroCore.appState) {
+              window.VoiceroCore.appState.hasShownTextWelcome = true;
+            }
+          }
+        } else {
+          // If there's no messages container, just show the message
+          this.showWelcomeMessage();
+        }
+      } else {
+        console.log(
+          "VoiceroText: Not showing welcome message due to existing flags"
+        );
+      }
     }
   },
 
   // Helper function to display the welcome message
   showWelcomeMessage: function () {
-    // If this welcome message has already been shown, don't show it again
-    if (this.hasShownWelcome) {
-      console.log("Welcome message already shown, skipping...");
-      return;
-    }
-
-    // Set the flag to indicate we've shown the welcome
-    this.hasShownWelcome = true;
-
-    // Prevent showing welcome message if an AI message already exists
+    // CRITICAL: Check for existing welcome messages in the DOM first
     const messagesContainer = this.shadowRoot
       ? this.shadowRoot.getElementById("chat-messages")
       : document.getElementById("chat-messages");
 
-    if (messagesContainer && messagesContainer.querySelector(".ai-message")) {
+    if (messagesContainer) {
+      const existingWelcomeMessages = messagesContainer.querySelectorAll(
+        ".ai-message .welcome-question"
+      );
+      if (existingWelcomeMessages.length > 0) {
+        console.log(
+          "VoiceroText: Welcome message already exists in DOM, not showing again"
+        );
+        this.hasShownWelcome = true;
+        localStorage.setItem("voicero_shown_text_welcome", "true");
+        if (window.VoiceroCore && window.VoiceroCore.appState) {
+          window.VoiceroCore.appState.hasShownTextWelcome = true;
+        }
+        return;
+      }
+    }
+
+    // Multiple checks to prevent welcome message from showing repeatedly
+
+    // Check internal flag
+    if (this.hasShownWelcome) {
+      console.log("VoiceroText: Welcome message blocked by internal flag");
       return;
     }
 
-    // Get website name if available
+    // Also check VoiceroCore's appState
+    if (
+      window.VoiceroCore &&
+      window.VoiceroCore.appState &&
+      window.VoiceroCore.appState.hasShownTextWelcome === true
+    ) {
+      console.log(
+        "VoiceroText: Welcome message blocked by VoiceroCore appState"
+      );
+      this.hasShownWelcome = true;
+      return;
+    }
+
+    // Check localStorage for persistence across page refreshes
+    if (localStorage.getItem("voicero_shown_text_welcome") === "true") {
+      console.log("VoiceroText: Welcome message blocked by localStorage flag");
+      this.hasShownWelcome = true;
+      return;
+    }
+
+    // If we get here, we need to show the welcome message
+    // Set all flags to indicate welcome was shown
+    this.hasShownWelcome = true;
+    localStorage.setItem("voicero_shown_text_welcome", "true");
+    if (window.VoiceroCore && window.VoiceroCore.appState) {
+      window.VoiceroCore.appState.hasShownTextWelcome = true;
+      if (
+        window.VoiceroCore.saveState &&
+        typeof window.VoiceroCore.saveState === "function"
+      ) {
+        window.VoiceroCore.saveState();
+      }
+    }
+
+    // Additional check for existing AI messages
+    if (messagesContainer && messagesContainer.querySelector(".ai-message")) {
+      console.log(
+        "VoiceroText: Welcome message blocked by existing AI messages"
+      );
+      return;
+    }
+
+    // Get website name - try different sources
     let websiteName = "our website";
     if (
       window.VoiceroCore &&
@@ -634,21 +1102,18 @@ const VoiceroText = {
       window.VoiceroCore.session.website.name
     ) {
       websiteName = window.VoiceroCore.session.website.name;
-    } else {
-      // Try to get from document title as fallback
-      if (document.title) {
-        // Extract site name (before " - " or " | " if present)
-        const title = document.title;
-        const separatorIndex = Math.min(
-          title.indexOf(" - ") > -1 ? title.indexOf(" - ") : Infinity,
-          title.indexOf(" | ") > -1 ? title.indexOf(" | ") : Infinity
-        );
+    } else if (document.title) {
+      // Extract site name (before " - " or " | " if present)
+      const title = document.title;
+      const separatorIndex = Math.min(
+        title.indexOf(" - ") > -1 ? title.indexOf(" - ") : Infinity,
+        title.indexOf(" | ") > -1 ? title.indexOf(" | ") : Infinity
+      );
 
-        if (separatorIndex !== Infinity) {
-          websiteName = title.substring(0, separatorIndex);
-        } else {
-          websiteName = title;
-        }
+      if (separatorIndex !== Infinity) {
+        websiteName = title.substring(0, separatorIndex);
+      } else {
+        websiteName = title;
       }
     }
 
@@ -661,6 +1126,7 @@ const VoiceroText = {
         : window.voiceroBotName || window.VoiceroCore?.botName || "Voicero";
 
     let welcomeMessageContent = "";
+    let welcomeMessage = "";
 
     // Check if there's a custom welcome message from the API
     if (
@@ -682,12 +1148,15 @@ const VoiceroText = {
 Feel free to ask me anything, and I'll do my best to assist you!`;
     }
 
-    let welcomeMessage = `
-
-Hi, I'm ${botName}! ${welcomeMessageContent}
+    welcomeMessage = `Hi, I'm ${botName}! ${welcomeMessageContent}
 
 **Start Typing to Chat**
 `;
+
+    // IMPORTANT: Always get the latest websiteColor from VoiceroCore
+    if (window.VoiceroCore && window.VoiceroCore.websiteColor) {
+      this.websiteColor = window.VoiceroCore.websiteColor;
+    }
 
     // Check if we have custom pop-up questions to add to the welcome message
     let customPopUpQuestions = [];
@@ -766,7 +1235,7 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
         const questionText = item.question || item;
         if (questionText && typeof questionText === "string") {
           welcomeMessage += `\n- <span class="welcome-question" style="text-decoration: underline; color: ${
-            this.websiteColor || "#882be6"
+            this.websiteColor
           }; cursor: pointer;" data-question="${questionText.replace(
             /"/g,
             "&quot;"
@@ -996,8 +1465,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
 
   // Fetch website data from /api/connect endpoint
   fetchWebsiteData: function () {
-    // Use direct API endpoint instead of WordPress AJAX
-    fetch("http://localhost:3000/api/connect", {
+    // Use WordPress proxy endpoint instead of direct API endpoint
+    fetch("/wp-json/voicero/v1/connect", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2213,8 +2682,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
   clearChatHistory: function () {
     // Call the session/clear API endpoint
     if (window.VoiceroCore && window.VoiceroCore.sessionId) {
-      // Use direct API endpoint
-      fetch("http://localhost:3000/api/session/clear", {
+      // Use WordPress proxy endpoint
+      fetch("/wp-json/voicero/v1/session_clear", {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -2287,10 +2756,25 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
     // Reset messages array
     this.messages = [];
 
-    // Reset the welcome flag so we can show welcome message after clearing
+    // RESET all welcome flags to false to ensure showing welcome message again after clearing
     this.hasShownWelcome = false;
+    localStorage.removeItem("voicero_shown_text_welcome");
 
-    // Show welcome message after clearing chat
+    // Update VoiceroCore state
+    if (window.VoiceroCore) {
+      if (window.VoiceroCore.appState) {
+        window.VoiceroCore.appState.hasShownTextWelcome = false;
+      }
+
+      // Also update session flag
+      if (window.VoiceroCore.updateWindowState) {
+        window.VoiceroCore.updateWindowState({
+          textWelcome: true, // Set to true to force showing welcome again
+        });
+      }
+    }
+
+    // Directly show the welcome message
     this.showWelcomeMessage();
   },
 
@@ -2462,9 +2946,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
       JSON.stringify(requestBody, null, 2)
     );
 
-    // Try localhost first for the /shopify/hat route, then fall back to normal endpoint
-    // First, attempt to use localhost:3000 with the /shopify/hat path
-    return fetch("http://localhost:3000/api/shopify/chat", {
+    // Use WordPress proxy endpoint instead of direct localhost call
+    return fetch("/wp-json/voicero/v1/wordpress/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2477,29 +2960,18 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
     })
       .then((response) => {
         if (!response.ok) {
-          throw new Error(`Local endpoint failed: ${response.status}`);
+          throw new Error(`Chat API request failed: ${response.status}`);
         }
-        console.log("[VOICERO TEXT] Successfully used localhost endpoint");
+        console.log(
+          "[VOICERO TEXT] Successfully used WordPress proxy endpoint"
+        );
         return response;
       })
       .catch((error) => {
-        console.log(
-          "[VOICERO TEXT] Localhost failed, falling back to voicero.ai:",
-          error.message
-        );
+        console.log("[VOICERO TEXT] API request failed:", error.message);
 
-        // Fallback to the original endpoint with the correct path
-        return fetch("http://localhost:3000/api/shopify/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            ...(window.voiceroConfig?.getAuthHeaders
-              ? window.voiceroConfig.getAuthHeaders()
-              : {}),
-          },
-          body: JSON.stringify(requestBody),
-        });
+        // Throw the error so it can be handled by the calling function
+        throw error;
       });
   },
 
@@ -2980,9 +3452,17 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
 
     // Update window state first (text open but window down)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      // Preserve the existing textWelcome value from the session
+      const currentWelcomeState =
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.textWelcome !== undefined
+          ? window.VoiceroCore.session.textWelcome
+          : false;
+
       const updateResult = window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: false, // Set to false when minimized
+        textWelcome: currentWelcomeState, // Preserve existing welcome state
         coreOpen: false,
         voiceOpen: false,
         voiceOpenWindowUp: false,
@@ -3130,9 +3610,17 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
 
     // Update window state first (text open with window up)
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      // Preserve the existing textWelcome value from the session
+      const currentWelcomeState =
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.textWelcome !== undefined
+          ? window.VoiceroCore.session.textWelcome
+          : false;
+
       const updateResult = window.VoiceroCore.updateWindowState({
         textOpen: true,
         textOpenWindowUp: true, // Set to true when maximized
+        textWelcome: currentWelcomeState, // Preserve existing welcome state
         coreOpen: false,
         voiceOpen: false,
         voiceOpenWindowUp: false,
@@ -3441,13 +3929,13 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
 
   // Get color variants from a hex color
   getColorVariants: function (color) {
-    // Use the shared utility function instead of duplicating the code
+    // Use the shared VoiceroColor utility function
     if (window.VoiceroColor && window.VoiceroColor.getColorVariants) {
       this.colorVariants = window.VoiceroColor.getColorVariants(color);
       return this.colorVariants;
     }
 
-    // Fallback implementation if utility isn't loaded
+    // Fallback implementation if VoiceroColor isn't loaded yet
     if (!color) color = this.websiteColor || "#882be6";
 
     // Initialize with the main color
@@ -3516,7 +4004,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
 
   // Helper methods for color variations
   colorLighter: function (color) {
-    return window.VoiceroColor && window.VoiceroColor.colorLighter
+    return window.VoiceroColor &&
+      typeof window.VoiceroColor.colorLighter === "function"
       ? window.VoiceroColor.colorLighter(color)
       : !color
       ? "#d5c5f3"
@@ -3526,7 +4015,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
   },
 
   colorLight: function (color) {
-    return window.VoiceroColor && window.VoiceroColor.colorLight
+    return window.VoiceroColor &&
+      typeof window.VoiceroColor.colorLight === "function"
       ? window.VoiceroColor.colorLight(color)
       : !color
       ? "#9370db"
@@ -3536,7 +4026,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
   },
 
   colorDark: function (color) {
-    return window.VoiceroColor && window.VoiceroColor.colorDark
+    return window.VoiceroColor &&
+      typeof window.VoiceroColor.colorDark === "function"
       ? window.VoiceroColor.colorDark(color)
       : !color
       ? "#7a5abf"
@@ -3546,7 +4037,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
   },
 
   colorDarker: function (color) {
-    return window.VoiceroColor && window.VoiceroColor.colorDarker
+    return window.VoiceroColor &&
+      typeof window.VoiceroColor.colorDarker === "function"
       ? window.VoiceroColor.colorDarker(color)
       : !color
       ? "#5e3b96"
@@ -3556,7 +4048,8 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
   },
 
   adjustColor: function (color, adjustment) {
-    return window.VoiceroColor && window.VoiceroColor.adjustColor
+    return window.VoiceroColor &&
+      typeof window.VoiceroColor.adjustColor === "function"
       ? window.VoiceroColor.adjustColor(color, adjustment)
       : !color
       ? "#ff4444"
@@ -3630,11 +4123,26 @@ Hi, I'm ${botName}! ${welcomeMessageContent}
     // Update window state with a single call instead of sequentially
     // This prevents race conditions where coreOpen ends up as true
     if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
+      // Preserve existing welcome values from session
+      const currentTextWelcome =
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.textWelcome !== undefined
+          ? window.VoiceroCore.session.textWelcome
+          : false;
+
+      const currentVoiceWelcome =
+        window.VoiceroCore.session &&
+        window.VoiceroCore.session.voiceWelcome !== undefined
+          ? window.VoiceroCore.session.voiceWelcome
+          : false;
+
       const updateResult = window.VoiceroCore.updateWindowState({
         voiceOpen: true,
         voiceOpenWindowUp: true, // Explicitly set to true to ensure maximized
+        voiceWelcome: currentVoiceWelcome, // Preserve voice welcome state
         textOpen: false,
         textOpenWindowUp: false,
+        textWelcome: currentTextWelcome, // Preserve text welcome state
         coreOpen: false,
         autoMic: false,
       });

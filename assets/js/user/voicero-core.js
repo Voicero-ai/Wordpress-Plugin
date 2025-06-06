@@ -904,7 +904,7 @@
                 this.sessionId = parsedSession.id;
 
                 // Fetch latest session data from API
-                fetch(`${baseUrl}/api/session?sessionId=${this.sessionId}`, {
+                fetch(`${baseUrl}/session?sessionId=${this.sessionId}`, {
                   method: "GET",
                   headers: {
                     Accept: "application/json",

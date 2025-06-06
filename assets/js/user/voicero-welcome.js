@@ -81,56 +81,16 @@ const VoiceroWelcome = {
 
   // Show welcome message in voice interface
   showVoiceWelcome: function () {
-    // Only proceed if voice interface is active
-    if (!window.VoiceroVoice || !document.getElementById("voice-messages")) {
-      console.log("Voice interface not ready for welcome message");
-      return;
-    }
-
-    console.log("Showing voice welcome message");
-
-    // Get website name if available
-    const websiteName = this.getWebsiteName();
-
-    // Create welcome message
-    const welcomeMessage = this.getWelcomeMessage(websiteName, "voice");
-
-    // Add the message to the voice interface
-    window.VoiceroVoice.addMessage(welcomeMessage, "ai");
-
-    // Update state to prevent showing welcome again
-    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      window.VoiceroCore.updateWindowState({
-        voiceWelcome: false,
-      });
-    }
+    // Disabled - using welcome message directly from VoiceroVoice instead
+    console.log("VoiceroWelcome: Voice welcome message disabled");
+    return;
   },
 
   // Show welcome message in text interface
   showTextWelcome: function () {
-    // Only proceed if text interface is active
-    if (!window.VoiceroText || !window.VoiceroText.shadowRoot) {
-      console.log("Text interface not ready for welcome message");
-      return;
-    }
-
-    console.log("Showing text welcome message");
-
-    // Get website name if available
-    const websiteName = this.getWebsiteName();
-
-    // Create welcome message
-    const welcomeMessage = this.getWelcomeMessage(websiteName, "text");
-
-    // Add the message to the text interface
-    window.VoiceroText.addMessage(welcomeMessage, "ai");
-
-    // Update state to prevent showing welcome again
-    if (window.VoiceroCore && window.VoiceroCore.updateWindowState) {
-      window.VoiceroCore.updateWindowState({
-        textWelcome: false,
-      });
-    }
+    // Disabled - using welcome message directly from VoiceroText instead
+    console.log("VoiceroWelcome: Text welcome message disabled");
+    return;
   },
 
   // Get website name from session if available
@@ -150,7 +110,7 @@ const VoiceroWelcome = {
       const title = document.title;
       const separatorIndex = Math.min(
         title.indexOf(" - ") > -1 ? title.indexOf(" - ") : Infinity,
-        title.indexOf(" | ") > -1 ? title.indexOf(" | ") : Infinity,
+        title.indexOf(" | ") > -1 ? title.indexOf(" | ") : Infinity
       );
 
       if (separatorIndex !== Infinity) {
@@ -166,11 +126,11 @@ const VoiceroWelcome = {
   getWelcomeMessage: function (websiteName, interfaceType) {
     // Voice interface should have a shorter, more conversational message
     if (interfaceType === "voice") {
-      return `👋 Welcome to ${websiteName}! I'm your AI assistant. You can ask me questions about products, services, or anything else about ${websiteName}. How can I help you today?`;
+      return `Welcome to ${websiteName}! I'm your AI assistant. You can ask me questions about products, services, or anything else about ${websiteName}. How can I help you today?`;
     }
 
     // Text interface can have a slightly longer message with more details
-    return `👋 Welcome to ${websiteName}! 
+    return `Welcome to ${websiteName}! 
 
 I'm your AI assistant powered by VoiceroAI. I'm here to help answer your questions about products, services, or anything else related to ${websiteName}.
 
