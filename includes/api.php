@@ -3674,3 +3674,102 @@ function voicero_save_user_settings_ajax() {
     // 7) Delegate to the new handler
     return voicero_update_user_settings_ajax();
 }
+
+/**
+ * Handle AJAX requests for customer data
+ */
+add_action('wp_ajax_voicero_set_customer_data', 'voicero_set_customer_data_ajax');
+add_action('wp_ajax_nopriv_voicero_set_customer_data', 'voicero_set_customer_data_ajax');
+
+function voicero_set_customer_data_ajax() {
+    // Log for debugging
+    error_log('voicero_set_customer_data_ajax called - checking nonce');
+    
+    // 1) Verify nonce - accept either frontend or ajax nonce for flexibility
+    $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+    
+    // Try with different nonce actions to be flexible with how the nonce was created
+    $nonce_valid = wp_verify_nonce($nonce, 'voicero_frontend_nonce') || 
+                  wp_verify_nonce($nonce, 'voicero_ajax_nonce');
+    
+    if (empty($nonce) || !$nonce_valid) {
+        error_log('Voicero nonce verification failed: ' . $nonce);
+        wp_send_json_error(['message' => 'Security check failed - invalid nonce']);
+        return;
+    }
+
+    // 2) Get the payload
+    if (!isset($_POST['payload'])) {
+        error_log('Voicero: No payload provided in request');
+        wp_send_json_error(['message' => 'No payload provided']);
+        return;
+    }
+
+    // Handle different possible payload formats
+    $raw_payload = $_POST['payload'];
+    
+    // Log payload excerpt for debugging
+    error_log('Voicero payload (first 100 chars): ' . substr($raw_payload, 0, 100));
+    
+    // Try different payload parsing approaches
+    // First try with no modification
+    $payload = json_decode($raw_payload, true);
+    
+    // If that fails, try with stripslashes
+    if (!$payload) {
+        $payload = json_decode(stripslashes($raw_payload), true);
+    }
+    
+    // If both approaches fail, error out
+    if (!$payload) {
+        error_log('Voicero: Failed to parse payload JSON: ' . json_last_error_msg());
+        wp_send_json_error(['message' => 'Invalid payload format: ' . json_last_error_msg()]);
+        return;
+    }
+
+    // 3) Get the access key from server-side (more secure than client-side)
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => 'No access key configured']);
+        return;
+    }
+
+    // 4) Forward to external API
+    $response = wp_remote_post(VOICERO_API_URL . '/wordpress/setCustomer', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 30, // Longer timeout for API
+        'sslverify' => false // For local development
+    ]);
+
+    // 5) Handle errors
+    if (is_wp_error($response)) {
+        error_log('VoiceroUserData API Error: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => 'API connection failed: ' . $response->get_error_message()
+        ]);
+        return;
+    }
+
+    // 6) Get response details
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+
+    // 7) Check status code for specific error handling
+    if ($status_code !== 200) {
+        error_log('VoiceroUserData API Error: Status ' . $status_code . ' - ' . $response_body);
+        wp_send_json_error([
+            'message' => 'API returned error: ' . $status_code,
+            'data' => $data
+        ], $status_code);
+        return;
+    }
+
+    // 8) Return the successful response to the client
+    wp_send_json_success($data);
+}

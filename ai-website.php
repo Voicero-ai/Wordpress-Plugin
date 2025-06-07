@@ -1358,4 +1358,263 @@ function voicero_update_training_status($key, $value) {
     return $training_data;
 }
 
+// Add new AJAX endpoint for fetching WooCommerce orders
+add_action('wp_ajax_voicero_get_woo_orders', 'voicero_get_woo_orders');
+add_action('wp_ajax_nopriv_voicero_get_woo_orders', 'voicero_get_woo_orders');
+
+/**
+ * AJAX handler to fetch WooCommerce orders from the last X days
+ */
+function voicero_get_woo_orders() {
+    // Verify nonce for security
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'voicero_ajax_nonce')) {
+        wp_send_json_error('Security check failed');
+        return;
+    }
+    
+    // Check if WooCommerce is active
+    if (!class_exists('WooCommerce')) {
+        wp_send_json_error('WooCommerce is not active');
+        return;
+    }
+    
+    // Get number of days from request or default to 30
+    $days = isset($_POST['days']) ? intval($_POST['days']) : 30;
+    $days = max(1, min($days, 90)); // Limit between 1 and 90 days
+    
+    try {
+        // Calculate date from X days ago
+        $date_from = new DateTime();
+        $date_from->modify("-{$days} days");
+        
+        // Query parameters for WooCommerce orders
+        $args = array(
+            'limit' => 100, // Reasonable limit
+            'date_created' => '>=' . $date_from->format('Y-m-d'),
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'status' => array('completed', 'processing', 'on-hold') // Common statuses
+        );
+        
+        // Create the query
+        $orders_query = new WC_Order_Query($args);
+        $orders = $orders_query->get_orders();
+        
+        if (empty($orders)) {
+            wp_send_json_success(array());
+            return;
+        }
+        
+        // Format orders for response
+        $formatted_orders = array();
+        foreach ($orders as $order) {
+            $formatted_orders[] = array(
+                'id' => $order->get_id(),
+                'number' => $order->get_order_number(),
+                'status' => $order->get_status(),
+                'date_created' => $order->get_date_created() ? $order->get_date_created()->format('c') : '',
+                'date_modified' => $order->get_date_modified() ? $order->get_date_modified()->format('c') : '',
+                'total' => $order->get_total(),
+                'subtotal' => $order->get_subtotal(),
+                'currency' => $order->get_currency(),
+                'payment_method' => $order->get_payment_method_title(),
+                'billing' => array(
+                    'first_name' => $order->get_billing_first_name(),
+                    'last_name' => $order->get_billing_last_name(),
+                    'email' => $order->get_billing_email(),
+                    'phone' => $order->get_billing_phone(),
+                    'address_1' => $order->get_billing_address_1(),
+                    'address_2' => $order->get_billing_address_2(),
+                    'city' => $order->get_billing_city(),
+                    'state' => $order->get_billing_state(),
+                    'postcode' => $order->get_billing_postcode(),
+                    'country' => $order->get_billing_country()
+                ),
+                'shipping' => array(
+                    'first_name' => $order->get_shipping_first_name(),
+                    'last_name' => $order->get_shipping_last_name(),
+                    'address_1' => $order->get_shipping_address_1(),
+                    'address_2' => $order->get_shipping_address_2(),
+                    'city' => $order->get_shipping_city(),
+                    'state' => $order->get_shipping_state(),
+                    'postcode' => $order->get_shipping_postcode(),
+                    'country' => $order->get_shipping_country()
+                )
+            );
+        }
+        
+        wp_send_json_success($formatted_orders);
+    } catch (Exception $e) {
+        wp_send_json_error('Error fetching orders: ' . $e->getMessage());
+    }
+}
+
+// Add new AJAX endpoints for WooCommerce customer and cart data
+add_action('wp_ajax_voicero_get_customer_data', 'voicero_get_customer_data');
+add_action('wp_ajax_nopriv_voicero_get_customer_data', 'voicero_get_customer_data');
+add_action('wp_ajax_voicero_get_cart_data', 'voicero_get_cart_data');
+add_action('wp_ajax_nopriv_voicero_get_cart_data', 'voicero_get_cart_data');
+
+/**
+ * AJAX handler to fetch current WooCommerce customer data
+ */
+function voicero_get_customer_data() {
+    // Verify nonce for security
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'voicero_ajax_nonce')) {
+        wp_send_json_error('Security check failed');
+        return;
+    }
+    
+    // Check if WooCommerce is active
+    if (!class_exists('WooCommerce')) {
+        wp_send_json_error('WooCommerce is not active');
+        return;
+    }
+    
+    // Initialize response
+    $customer_data = array();
+    
+    // Check if user is logged in
+    if (is_user_logged_in()) {
+        $current_user = wp_get_current_user();
+        $customer_data['id'] = $current_user->ID;
+        $customer_data['first_name'] = $current_user->first_name;
+        $customer_data['last_name'] = $current_user->last_name;
+        $customer_data['email'] = $current_user->user_email;
+        $customer_data['username'] = $current_user->user_login;
+        $customer_data['display_name'] = $current_user->display_name;
+        $customer_data['logged_in'] = true;
+        
+        // Get user meta data for billing and shipping
+        $customer_data['billing'] = array(
+            'first_name' => get_user_meta($current_user->ID, 'billing_first_name', true),
+            'last_name' => get_user_meta($current_user->ID, 'billing_last_name', true),
+            'company' => get_user_meta($current_user->ID, 'billing_company', true),
+            'address_1' => get_user_meta($current_user->ID, 'billing_address_1', true),
+            'address_2' => get_user_meta($current_user->ID, 'billing_address_2', true),
+            'city' => get_user_meta($current_user->ID, 'billing_city', true),
+            'state' => get_user_meta($current_user->ID, 'billing_state', true),
+            'postcode' => get_user_meta($current_user->ID, 'billing_postcode', true),
+            'country' => get_user_meta($current_user->ID, 'billing_country', true),
+            'email' => get_user_meta($current_user->ID, 'billing_email', true),
+            'phone' => get_user_meta($current_user->ID, 'billing_phone', true)
+        );
+        
+        $customer_data['shipping'] = array(
+            'first_name' => get_user_meta($current_user->ID, 'shipping_first_name', true),
+            'last_name' => get_user_meta($current_user->ID, 'shipping_last_name', true),
+            'company' => get_user_meta($current_user->ID, 'shipping_company', true),
+            'address_1' => get_user_meta($current_user->ID, 'shipping_address_1', true),
+            'address_2' => get_user_meta($current_user->ID, 'shipping_address_2', true),
+            'city' => get_user_meta($current_user->ID, 'shipping_city', true),
+            'state' => get_user_meta($current_user->ID, 'shipping_state', true),
+            'postcode' => get_user_meta($current_user->ID, 'shipping_postcode', true),
+            'country' => get_user_meta($current_user->ID, 'shipping_country', true)
+        );
+        
+        // Get recent orders
+        $args = array(
+            'customer_id' => $current_user->ID,
+            'limit' => 10,
+            'orderby' => 'date',
+            'order' => 'DESC'
+        );
+        
+        $orders = wc_get_orders($args);
+        $recent_orders = array();
+        
+        foreach ($orders as $order) {
+            $order_data = array(
+                'id' => $order->get_id(),
+                'number' => $order->get_order_number(),
+                'status' => $order->get_status(),
+                'date_created' => $order->get_date_created() ? $order->get_date_created()->format('c') : '',
+                'total' => $order->get_total(),
+                'currency' => $order->get_currency(),
+                'payment_method' => $order->get_payment_method_title()
+            );
+            
+            // Add line items
+            $line_items = array();
+            foreach ($order->get_items() as $item_id => $item) {
+                $line_items[] = array(
+                    'id' => $item_id,
+                    'name' => $item->get_name(),
+                    'quantity' => $item->get_quantity(),
+                    'total' => $item->get_total()
+                );
+            }
+            
+            $order_data['line_items'] = $line_items;
+            $recent_orders[] = $order_data;
+        }
+        
+        $customer_data['recent_orders'] = $recent_orders;
+        
+        // Calculate total spent and order count
+        $customer = new WC_Customer($current_user->ID);
+        $customer_data['total_spent'] = $customer->get_total_spent();
+        $customer_data['orders_count'] = $customer->get_order_count();
+    }
+    
+    wp_send_json_success($customer_data);
+}
+
+/**
+ * AJAX handler to fetch current WooCommerce cart data
+ */
+function voicero_get_cart_data() {
+    // Verify nonce for security
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'voicero_ajax_nonce')) {
+        wp_send_json_error('Security check failed');
+        return;
+    }
+    
+    // Check if WooCommerce is active
+    if (!class_exists('WooCommerce')) {
+        wp_send_json_error('WooCommerce is not active');
+        return;
+    }
+    
+    // Get cart data
+    $cart = WC()->cart;
+    
+    if (empty($cart)) {
+        wp_send_json_success(array());
+        return;
+    }
+    
+    $cart_data = array(
+        'items_count' => $cart->get_cart_contents_count(),
+        'total' => $cart->get_total(),
+        'subtotal' => $cart->get_subtotal(),
+        'tax_total' => $cart->get_total_tax(),
+        'items' => array()
+    );
+    
+    // Get cart items
+    foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
+        $product = $cart_item['data'];
+        $product_id = $cart_item['product_id'];
+        
+        $item_data = array(
+            'key' => $cart_item_key,
+            'product_id' => $product_id,
+            'name' => $product->get_name(),
+            'quantity' => $cart_item['quantity'],
+            'price' => $product->get_price(),
+            'line_total' => $cart_item['line_total'],
+            'line_tax' => $cart_item['line_tax']
+        );
+        
+        // Add product URL and image
+        $item_data['url'] = get_permalink($product_id);
+        $item_data['image'] = wp_get_attachment_url($product->get_image_id());
+        
+        $cart_data['items'][] = $item_data;
+    }
+    
+    wp_send_json_success($cart_data);
+}
+
 
