@@ -168,6 +168,21 @@ add_action('rest_api_init', function() {
             'permission_callback' => '__return_true',
         ]
     );
+
+    // Register the website auto features update endpoint
+    register_rest_route(
+        'voicero/v1',
+        '/website-auto-features',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_website_auto_features_proxy',
+            'permission_callback' => function() {
+                // Allow access to site administrators or through valid API request
+                return current_user_can('manage_options') || 
+                       (isset($_SERVER['HTTP_X_VOICERO_API']) && $_SERVER['HTTP_X_VOICERO_API'] === get_option('voicero_api_secret', ''));
+            },
+        ]
+    );
 });
 
 function voicero_connect_proxy() {
@@ -2613,4 +2628,1049 @@ function voicero_delete_message_ajax() {
         ],
         'message' => esc_html__('Message deleted successfully', 'voicero-ai')
     ]);
+}
+
+/**
+ * Handle AJAX requests for website auto features update
+ */
+add_action('wp_ajax_voicero_update_website_autos', 'voicero_update_website_autos_ajax');
+
+function voicero_update_website_autos_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get the features data from request
+    $features = isset($_REQUEST['features']) ? $_REQUEST['features'] : [];
+    if (empty($features) || !is_array($features)) {
+        wp_send_json_error(['message' => esc_html__('No feature data provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 5) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 6) Get the website ID by making a request to the connect endpoint
+    error_log('Getting website ID from API connect endpoint');
+    
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Error getting website info: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    if ($response_code !== 200) {
+        error_log('API returned error: ' . $response_code . ' - ' . $body);
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($response_code)
+            ),
+            'body' => wp_kses_post($body)
+        ]);
+        return;
+    }
+    
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['website']) || !isset($data['website']['id'])) {
+        error_log('Invalid response structure from server: ' . $body);
+        wp_send_json_error([
+            'message' => esc_html__('Invalid response structure from server.', 'voicero-ai')
+        ]);
+        return;
+    }
+    
+    $website_id = $data['website']['id'];
+    error_log('Found website ID: ' . $website_id);
+
+    // 7) Prepare request payload - ensure all values are explicit booleans
+    // This must exactly match the expected format in the Next.js API
+    $payload = [
+        'websiteId' => $website_id,
+    ];
+    
+    // Add all features with explicit boolean conversion
+    if (isset($features['allowAutoRedirect'])) {
+        $payload['allowAutoRedirect'] = $features['allowAutoRedirect'] === true || $features['allowAutoRedirect'] === 'true' || $features['allowAutoRedirect'] === '1' || $features['allowAutoRedirect'] === 1;
+    }
+    
+    if (isset($features['allowAutoScroll'])) {
+        $payload['allowAutoScroll'] = $features['allowAutoScroll'] === true || $features['allowAutoScroll'] === 'true' || $features['allowAutoScroll'] === '1' || $features['allowAutoScroll'] === 1;
+    }
+    
+    if (isset($features['allowAutoHighlight'])) {
+        $payload['allowAutoHighlight'] = $features['allowAutoHighlight'] === true || $features['allowAutoHighlight'] === 'true' || $features['allowAutoHighlight'] === '1' || $features['allowAutoHighlight'] === 1;
+    }
+    
+    if (isset($features['allowAutoClick'])) {
+        $payload['allowAutoClick'] = $features['allowAutoClick'] === true || $features['allowAutoClick'] === 'true' || $features['allowAutoClick'] === '1' || $features['allowAutoClick'] === 1;
+    }
+    
+    if (isset($features['allowAutoFillForm'])) {
+        $payload['allowAutoFillForm'] = $features['allowAutoFillForm'] === true || $features['allowAutoFillForm'] === 'true' || $features['allowAutoFillForm'] === '1' || $features['allowAutoFillForm'] === 1;
+    }
+    
+    if (isset($features['allowAutoCancel'])) {
+        $payload['allowAutoCancel'] = $features['allowAutoCancel'] === true || $features['allowAutoCancel'] === 'true' || $features['allowAutoCancel'] === '1' || $features['allowAutoCancel'] === 1;
+    }
+    
+    if (isset($features['allowAutoTrackOrder'])) {
+        $payload['allowAutoTrackOrder'] = $features['allowAutoTrackOrder'] === true || $features['allowAutoTrackOrder'] === 'true' || $features['allowAutoTrackOrder'] === '1' || $features['allowAutoTrackOrder'] === 1;
+    }
+    
+    if (isset($features['allowAutoGetUserOrders'])) {
+        $payload['allowAutoGetUserOrders'] = $features['allowAutoGetUserOrders'] === true || $features['allowAutoGetUserOrders'] === 'true' || $features['allowAutoGetUserOrders'] === '1' || $features['allowAutoGetUserOrders'] === 1;
+    }
+    
+    if (isset($features['allowAutoUpdateUserInfo'])) {
+        $payload['allowAutoUpdateUserInfo'] = $features['allowAutoUpdateUserInfo'] === true || $features['allowAutoUpdateUserInfo'] === 'true' || $features['allowAutoUpdateUserInfo'] === '1' || $features['allowAutoUpdateUserInfo'] === 1;
+    }
+    
+    if (isset($features['allowAutoLogout'])) {
+        $payload['allowAutoLogout'] = $features['allowAutoLogout'] === true || $features['allowAutoLogout'] === 'true' || $features['allowAutoLogout'] === '1' || $features['allowAutoLogout'] === 1;
+    }
+    
+    if (isset($features['allowAutoLogin'])) {
+        $payload['allowAutoLogin'] = $features['allowAutoLogin'] === true || $features['allowAutoLogin'] === 'true' || $features['allowAutoLogin'] === '1' || $features['allowAutoLogin'] === 1;
+    }
+    
+    // Add support for allowAutoReturn and allowAutoExchange if they exist
+    if (isset($features['allowAutoReturn'])) {
+        $payload['allowAutoReturn'] = $features['allowAutoReturn'] === true || $features['allowAutoReturn'] === 'true' || $features['allowAutoReturn'] === '1' || $features['allowAutoReturn'] === 1;
+    }
+    
+    if (isset($features['allowAutoExchange'])) {
+        $payload['allowAutoExchange'] = $features['allowAutoExchange'] === true || $features['allowAutoExchange'] === 'true' || $features['allowAutoExchange'] === '1' || $features['allowAutoExchange'] === 1;
+    }
+    
+    if (isset($features['allowAutoGenerateImage'])) {
+        $payload['allowAutoGenerateImage'] = $features['allowAutoGenerateImage'] === true || $features['allowAutoGenerateImage'] === 'true' || $features['allowAutoGenerateImage'] === '1' || $features['allowAutoGenerateImage'] === 1;
+    }
+    
+    error_log('Updating website auto features with payload: ' . json_encode($payload));
+    
+    // 8) Make the API request to updateWebsiteAutos endpoint
+    $api_url = VOICERO_API_URL . '/wordpress/updateWebsiteAutos';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 9) Handle API errors
+    if (is_wp_error($response)) {
+        error_log('Error updating website auto features: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 10) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+    
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . substr($response_body, 0, 500)); // Log first 500 chars
+    
+    if ($status_code !== 200 || !$data || !isset($data['success']) || !$data['success']) {
+        $error_message = isset($data['error']) ? $data['error'] : esc_html__('Unknown error occurred', 'voicero-ai');
+        wp_send_json_error([
+            'message' => $error_message,
+            'status' => $status_code,
+            'details' => $data
+        ], $status_code >= 400 ? $status_code : 500);
+        return;
+    }
+
+    // 11) Store the updated settings in WordPress options for later use
+    if (isset($data['settings']) && is_array($data['settings'])) {
+        update_option('voicero_ai_features', $data['settings'], false);
+    }
+
+    // 12) Return success
+    wp_send_json_success([
+        'message' => isset($data['message']) ? $data['message'] : esc_html__('AI features updated successfully', 'voicero-ai'),
+        'settings' => isset($data['settings']) ? $data['settings'] : []
+    ]);
+}
+
+/**
+ * REST API proxy for website auto features update
+ * 
+ * @param WP_REST_Request $request The request object
+ * @return WP_REST_Response The response
+ */
+function voicero_website_auto_features_proxy(WP_REST_Request $request) {
+    // Get the request body
+    $params = $request->get_json_params();
+    
+    // Validate required data
+    if (empty($params) || !is_array($params)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'No feature data provided'
+        ], 400);
+    }
+    
+    // Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'No access key configured'
+        ], 403);
+    }
+    
+    // Get the website ID by making a request to the connect endpoint
+    error_log('REST API: Getting website ID from API connect endpoint');
+    
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('REST API: Error getting website info: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Connection failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    if ($response_code !== 200) {
+        error_log('REST API: API returned error: ' . $response_code . ' - ' . $body);
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Server returned error: ' . $response_code
+        ], $response_code);
+    }
+    
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['website']) || !isset($data['website']['id'])) {
+        error_log('REST API: Invalid response structure from server: ' . $body);
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Invalid response structure from server'
+        ], 500);
+    }
+    
+    $website_id = $data['website']['id'];
+    error_log('REST API: Found website ID: ' . $website_id);
+    
+    // Prepare request payload - ensure all values are explicit booleans
+    // This must exactly match the expected format in the Next.js API
+    $payload = [
+        'websiteId' => $website_id,
+    ];
+    
+    // Add all features with explicit boolean conversion
+    if (isset($params['allowAutoRedirect'])) {
+        $payload['allowAutoRedirect'] = $params['allowAutoRedirect'] === true || $params['allowAutoRedirect'] === 'true' || $params['allowAutoRedirect'] === '1' || $params['allowAutoRedirect'] === 1;
+    }
+    
+    if (isset($params['allowAutoScroll'])) {
+        $payload['allowAutoScroll'] = $params['allowAutoScroll'] === true || $params['allowAutoScroll'] === 'true' || $params['allowAutoScroll'] === '1' || $params['allowAutoScroll'] === 1;
+    }
+    
+    if (isset($params['allowAutoHighlight'])) {
+        $payload['allowAutoHighlight'] = $params['allowAutoHighlight'] === true || $params['allowAutoHighlight'] === 'true' || $params['allowAutoHighlight'] === '1' || $params['allowAutoHighlight'] === 1;
+    }
+    
+    if (isset($params['allowAutoClick'])) {
+        $payload['allowAutoClick'] = $params['allowAutoClick'] === true || $params['allowAutoClick'] === 'true' || $params['allowAutoClick'] === '1' || $params['allowAutoClick'] === 1;
+    }
+    
+    if (isset($params['allowAutoFillForm'])) {
+        $payload['allowAutoFillForm'] = $params['allowAutoFillForm'] === true || $params['allowAutoFillForm'] === 'true' || $params['allowAutoFillForm'] === '1' || $params['allowAutoFillForm'] === 1;
+    }
+    
+    if (isset($params['allowAutoCancel'])) {
+        $payload['allowAutoCancel'] = $params['allowAutoCancel'] === true || $params['allowAutoCancel'] === 'true' || $params['allowAutoCancel'] === '1' || $params['allowAutoCancel'] === 1;
+    }
+    
+    if (isset($params['allowAutoTrackOrder'])) {
+        $payload['allowAutoTrackOrder'] = $params['allowAutoTrackOrder'] === true || $params['allowAutoTrackOrder'] === 'true' || $params['allowAutoTrackOrder'] === '1' || $params['allowAutoTrackOrder'] === 1;
+    }
+    
+    if (isset($params['allowAutoGetUserOrders'])) {
+        $payload['allowAutoGetUserOrders'] = $params['allowAutoGetUserOrders'] === true || $params['allowAutoGetUserOrders'] === 'true' || $params['allowAutoGetUserOrders'] === '1' || $params['allowAutoGetUserOrders'] === 1;
+    }
+    
+    if (isset($params['allowAutoUpdateUserInfo'])) {
+        $payload['allowAutoUpdateUserInfo'] = $params['allowAutoUpdateUserInfo'] === true || $params['allowAutoUpdateUserInfo'] === 'true' || $params['allowAutoUpdateUserInfo'] === '1' || $params['allowAutoUpdateUserInfo'] === 1;
+    }
+    
+    if (isset($params['allowAutoLogout'])) {
+        $payload['allowAutoLogout'] = $params['allowAutoLogout'] === true || $params['allowAutoLogout'] === 'true' || $params['allowAutoLogout'] === '1' || $params['allowAutoLogout'] === 1;
+    }
+    
+    if (isset($params['allowAutoLogin'])) {
+        $payload['allowAutoLogin'] = $params['allowAutoLogin'] === true || $params['allowAutoLogin'] === 'true' || $params['allowAutoLogin'] === '1' || $params['allowAutoLogin'] === 1;
+    }
+    
+    // Add support for allowAutoReturn and allowAutoExchange if they exist
+    if (isset($params['allowAutoReturn'])) {
+        $payload['allowAutoReturn'] = $params['allowAutoReturn'] === true || $params['allowAutoReturn'] === 'true' || $params['allowAutoReturn'] === '1' || $params['allowAutoReturn'] === 1;
+    }
+    
+    if (isset($params['allowAutoExchange'])) {
+        $payload['allowAutoExchange'] = $params['allowAutoExchange'] === true || $params['allowAutoExchange'] === 'true' || $params['allowAutoExchange'] === '1' || $params['allowAutoExchange'] === 1;
+    }
+    
+    if (isset($params['allowAutoGenerateImage'])) {
+        $payload['allowAutoGenerateImage'] = $params['allowAutoGenerateImage'] === true || $params['allowAutoGenerateImage'] === 'true' || $params['allowAutoGenerateImage'] === '1' || $params['allowAutoGenerateImage'] === 1;
+    }
+    
+    error_log('REST API: Updating website auto features with payload: ' . json_encode($payload));
+    
+    // Make the API request to updateWebsiteAutos endpoint
+    $api_url = VOICERO_API_URL . '/wordpress/updateWebsiteAutos';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+    
+    // Handle API errors
+    if (is_wp_error($response)) {
+        error_log('REST API: Error updating website auto features: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Connection failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+    
+    error_log('REST API: API response code: ' . $status_code);
+    error_log('REST API: API response body: ' . substr($response_body, 0, 500)); // Log first 500 chars
+    
+    // Store the updated settings in WordPress options for later use
+    if (isset($data['settings']) && is_array($data['settings'])) {
+        update_option('voicero_ai_features', $data['settings'], false);
+    }
+    
+    // Return the API response
+    return new WP_REST_Response($data, $status_code);
+}
+
+/**
+ * Handle AJAX requests for AI features (original handler, now uses the proxy)
+ */
+add_action('wp_ajax_voicero_save_ai_features', 'voicero_save_ai_features_ajax');
+
+function voicero_save_ai_features_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get the features data from request
+    $features = isset($_REQUEST['features']) ? $_REQUEST['features'] : [];
+    if (empty($features) || !is_array($features)) {
+        wp_send_json_error(['message' => esc_html__('No feature data provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 5) Log the request for debugging
+    error_log('Original save AI features handler called with features: ' . json_encode($features));
+
+    // 6) Map to the API feature names - ensure they are explicit booleans
+    $api_features = [];
+    
+    // Use strict comparisons for explicit boolean values
+    if (isset($features['ai_redirect'])) {
+        $api_features['allowAutoRedirect'] = ($features['ai_redirect'] === true || $features['ai_redirect'] === 'true' || $features['ai_redirect'] === '1' || $features['ai_redirect'] === 1);
+    }
+    
+    if (isset($features['ai_scroll'])) {
+        $api_features['allowAutoScroll'] = ($features['ai_scroll'] === true || $features['ai_scroll'] === 'true' || $features['ai_scroll'] === '1' || $features['ai_scroll'] === 1);
+    }
+    
+    if (isset($features['ai_highlight'])) {
+        $api_features['allowAutoHighlight'] = ($features['ai_highlight'] === true || $features['ai_highlight'] === 'true' || $features['ai_highlight'] === '1' || $features['ai_highlight'] === 1);
+    }
+    
+    if (isset($features['ai_click'])) {
+        $api_features['allowAutoClick'] = ($features['ai_click'] === true || $features['ai_click'] === 'true' || $features['ai_click'] === '1' || $features['ai_click'] === 1);
+    }
+    
+    if (isset($features['ai_forms'])) {
+        $api_features['allowAutoFillForm'] = ($features['ai_forms'] === true || $features['ai_forms'] === 'true' || $features['ai_forms'] === '1' || $features['ai_forms'] === 1);
+    }
+    
+    if (isset($features['ai_cancel_orders'])) {
+        $api_features['allowAutoCancel'] = ($features['ai_cancel_orders'] === true || $features['ai_cancel_orders'] === 'true' || $features['ai_cancel_orders'] === '1' || $features['ai_cancel_orders'] === 1);
+    }
+    
+    if (isset($features['ai_track_orders'])) {
+        $api_features['allowAutoTrackOrder'] = ($features['ai_track_orders'] === true || $features['ai_track_orders'] === 'true' || $features['ai_track_orders'] === '1' || $features['ai_track_orders'] === 1);
+    }
+    
+    if (isset($features['ai_order_history'])) {
+        $api_features['allowAutoGetUserOrders'] = ($features['ai_order_history'] === true || $features['ai_order_history'] === 'true' || $features['ai_order_history'] === '1' || $features['ai_order_history'] === 1);
+    }
+    
+    if (isset($features['ai_update_account'])) {
+        $api_features['allowAutoUpdateUserInfo'] = ($features['ai_update_account'] === true || $features['ai_update_account'] === 'true' || $features['ai_update_account'] === '1' || $features['ai_update_account'] === 1);
+    }
+    
+    if (isset($features['ai_logout'])) {
+        $api_features['allowAutoLogout'] = ($features['ai_logout'] === true || $features['ai_logout'] === 'true' || $features['ai_logout'] === '1' || $features['ai_logout'] === 1);
+    }
+    
+    if (isset($features['ai_login'])) {
+        $api_features['allowAutoLogin'] = ($features['ai_login'] === true || $features['ai_login'] === 'true' || $features['ai_login'] === '1' || $features['ai_login'] === 1);
+    }
+    
+    error_log('Mapped features to API format: ' . json_encode($api_features));
+
+    // 7) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 8) Get the website ID by making a request to the connect endpoint
+    error_log('Legacy handler: Getting website ID from API connect endpoint');
+    
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Legacy handler: Error getting website info: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    if ($response_code !== 200) {
+        error_log('Legacy handler: API returned error: ' . $response_code . ' - ' . $body);
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($response_code)
+            ),
+            'body' => wp_kses_post($body)
+        ]);
+        return;
+    }
+    
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['website']) || !isset($data['website']['id'])) {
+        error_log('Legacy handler: Invalid response structure from server: ' . $body);
+        wp_send_json_error([
+            'message' => esc_html__('Invalid response structure from server.', 'voicero-ai')
+        ]);
+        return;
+    }
+    
+    $website_id = $data['website']['id'];
+    error_log('Legacy handler: Found website ID: ' . $website_id);
+
+    // 9) Call the API directly since we have all the data we need
+    $api_url = VOICERO_API_URL . '/wordpress/updateWebsiteAutos';
+    
+    // Prepare payload - start with websiteId to ensure proper structure
+    $payload = [
+        'websiteId' => $website_id
+    ];
+    
+    // Add each feature value from our mapped array
+    foreach ($api_features as $key => $value) {
+        // Ensure every value is a true boolean
+        $payload[$key] = (bool)$value;
+    }
+    
+    error_log('Legacy handler: Updating website auto features: ' . json_encode($payload));
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 10) Handle API errors
+    if (is_wp_error($response)) {
+        error_log('Legacy handler: Error updating website auto features: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 11) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+    
+    error_log('Legacy handler: API response code: ' . $status_code);
+    error_log('Legacy handler: API response body: ' . substr($response_body, 0, 500)); // Log first 500 chars
+    
+    if ($status_code !== 200 || !$data || !isset($data['success']) || !$data['success']) {
+        $error_message = isset($data['error']) ? $data['error'] : esc_html__('Unknown error occurred', 'voicero-ai');
+        wp_send_json_error([
+            'message' => $error_message,
+            'status' => $status_code,
+            'details' => $data
+        ], $status_code >= 400 ? $status_code : 500);
+        return;
+    }
+
+    // 12) Store the updated settings in WordPress options for later use
+    if (isset($data['settings']) && is_array($data['settings'])) {
+        update_option('voicero_ai_features', $data['settings'], false);
+    }
+
+    // 13) Return success response to browser
+    wp_send_json_success([
+        'message' => isset($data['message']) ? $data['message'] : esc_html__('AI features updated successfully', 'voicero-ai'),
+        'settings' => isset($data['settings']) ? $data['settings'] : []
+    ]);
+}
+
+/**
+ * Handle AJAX requests for website information update
+ */
+add_action('wp_ajax_voicero_update_website', 'voicero_update_website_ajax');
+
+function voicero_update_website_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get the website data
+    $website_data = isset($_REQUEST['website_data']) ? $_REQUEST['website_data'] : [];
+    if (empty($website_data) || !is_array($website_data)) {
+        wp_send_json_error(['message' => esc_html__('No website data provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 5) Validate required fields
+    if (empty($website_data['name']) && empty($website_data['url']) && empty($website_data['customInstructions'])) {
+        wp_send_json_error(['message' => esc_html__('At least one field (name, url, or customInstructions) must be provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 6) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 7) Get the website ID by making a request to the connect endpoint
+    error_log('Getting website ID from API connect endpoint');
+    
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Error getting website info: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    if ($response_code !== 200) {
+        error_log('API returned error: ' . $response_code . ' - ' . $body);
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($response_code)
+            ),
+            'body' => wp_kses_post($body)
+        ]);
+        return;
+    }
+    
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['website']) || !isset($data['website']['id'])) {
+        error_log('Invalid response structure from server: ' . $body);
+        wp_send_json_error([
+            'message' => esc_html__('Invalid response structure from server.', 'voicero-ai')
+        ]);
+        return;
+    }
+    
+    $website_id = $data['website']['id'];
+    error_log('Found website ID: ' . $website_id);
+
+    // 8) Prepare request payload
+    $payload = $website_data;
+    $payload['websiteId'] = $website_id;
+    
+    error_log('Updating website with payload: ' . json_encode($payload));
+    
+    // 9) Make the API request to updateWebsite endpoint
+    $api_url = VOICERO_API_URL . '/wordpress/updateWebsite';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 10) Handle API errors
+    if (is_wp_error($response)) {
+        error_log('Error updating website: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 11) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+    
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . substr($response_body, 0, 500)); // Log first 500 chars
+    
+    if ($status_code !== 200 || !$data || !isset($data['success']) || !$data['success']) {
+        $error_message = isset($data['error']) ? $data['error'] : esc_html__('Unknown error occurred', 'voicero-ai');
+        wp_send_json_error([
+            'message' => $error_message,
+            'status' => $status_code,
+            'details' => $data
+        ], $status_code >= 400 ? $status_code : 500);
+        return;
+    }
+
+    // 12) Store the updated settings in WordPress options for later use
+    if (isset($data['website']) && is_array($data['website'])) {
+        update_option('voicero_website_name', $data['website']['name'], false);
+        update_option('voicero_website_url', $data['website']['url'], false);
+        if (isset($data['website']['customInstructions'])) {
+            update_option('voicero_custom_instructions', $data['website']['customInstructions'], false);
+        }
+    }
+
+    // 13) Also update the original website info to maintain backward compatibility
+    if (isset($website_data['name'])) {
+        update_option('voicero_website_name', $website_data['name']);
+    }
+    if (isset($website_data['url'])) {
+        update_option('voicero_website_url', $website_data['url']);
+    }
+    if (isset($website_data['customInstructions'])) {
+        update_option('voicero_custom_instructions', $website_data['customInstructions']);
+    }
+
+    // 14) Return success
+    wp_send_json_success([
+        'message' => isset($data['message']) ? $data['message'] : esc_html__('Website information updated successfully', 'voicero-ai'),
+        'website' => isset($data['website']) ? $data['website'] : []
+    ]);
+}
+
+/**
+ * Handle the original AJAX request for website info (backward compatibility)
+ */
+add_action('wp_ajax_voicero_save_website_info', 'voicero_save_website_info_ajax');
+
+function voicero_save_website_info_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get website data from the original format
+    $website_name = isset($_REQUEST['website_name']) ? sanitize_text_field(wp_unslash($_REQUEST['website_name'])) : '';
+    $website_url = isset($_REQUEST['website_url']) ? esc_url_raw(wp_unslash($_REQUEST['website_url'])) : '';
+    $custom_instructions = isset($_REQUEST['custom_instructions']) ? sanitize_textarea_field(wp_unslash($_REQUEST['custom_instructions'])) : '';
+    
+    // 5) Log the request
+    error_log('Legacy website info handler called with name: ' . $website_name . ', URL: ' . $website_url);
+    
+    // 6) Convert to the new format
+    $_REQUEST['website_data'] = [
+        'name' => $website_name,
+        'url' => $website_url,
+        'customInstructions' => $custom_instructions
+    ];
+    
+    // 7) Delegate to the new handler
+    return voicero_update_website_ajax();
+}
+
+/**
+ * Handle AJAX requests for user settings update
+ */
+add_action('wp_ajax_voicero_update_user_settings', 'voicero_update_user_settings_ajax');
+
+function voicero_update_user_settings_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get the user data
+    $user_data = isset($_REQUEST['user_data']) ? $_REQUEST['user_data'] : [];
+    if (empty($user_data) || !is_array($user_data)) {
+        wp_send_json_error(['message' => esc_html__('No user data provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 5) Validate required fields
+    if (empty($user_data['name']) && empty($user_data['username']) && empty($user_data['email'])) {
+        wp_send_json_error(['message' => esc_html__('At least one field (name, username, or email) must be provided', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 6) Get the access key
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        wp_send_json_error(['message' => esc_html__('No access key configured', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 7) Get the website ID by making a request to the connect endpoint
+    error_log('Getting website ID from API connect endpoint');
+    
+    $response = wp_remote_get(VOICERO_API_URL . '/connect', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'timeout' => 15,
+        'sslverify' => false
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('Error getting website info: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    if ($response_code !== 200) {
+        error_log('API returned error: ' . $response_code . ' - ' . $body);
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %d: HTTP status code */
+                esc_html__('Server returned error: %d', 'voicero-ai'),
+                intval($response_code)
+            ),
+            'body' => wp_kses_post($body)
+        ]);
+        return;
+    }
+    
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['website']) || !isset($data['website']['id'])) {
+        error_log('Invalid response structure from server: ' . $body);
+        wp_send_json_error([
+            'message' => esc_html__('Invalid response structure from server.', 'voicero-ai')
+        ]);
+        return;
+    }
+    
+    $website_id = $data['website']['id'];
+    error_log('Found website ID: ' . $website_id);
+
+    // 8) Prepare request payload
+    $payload = $user_data;
+    $payload['websiteId'] = $website_id;
+    
+    error_log('Updating user settings with payload: ' . json_encode($payload));
+    
+    // 9) Make the API request to updateUserSettings endpoint
+    $api_url = VOICERO_API_URL . '/wordpress/updateUserSettings';
+    
+    $response = wp_remote_post($api_url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+        'sslverify' => false // Only for local development
+    ]);
+
+    // 10) Handle API errors
+    if (is_wp_error($response)) {
+        error_log('Error updating user settings: ' . $response->get_error_message());
+        wp_send_json_error([
+            'message' => sprintf(
+                /* translators: %s: detailed error message */
+                esc_html__('Connection failed: %s', 'voicero-ai'),
+                esc_html($response->get_error_message())
+            )
+        ], 500);
+        return;
+    }
+
+    // 11) Process the response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $data = json_decode($response_body, true);
+    
+    error_log('API response code: ' . $status_code);
+    error_log('API response body: ' . substr($response_body, 0, 500)); // Log first 500 chars
+    
+    if ($status_code !== 200 || !$data || !isset($data['success']) || !$data['success']) {
+        $error_message = isset($data['error']) ? $data['error'] : esc_html__('Unknown error occurred', 'voicero-ai');
+        wp_send_json_error([
+            'message' => $error_message,
+            'status' => $status_code,
+            'details' => $data
+        ], $status_code >= 400 ? $status_code : 500);
+        return;
+    }
+
+    // 12) Store the updated settings in WordPress options for later use
+    if (isset($data['user']) && is_array($data['user'])) {
+        update_option('voicero_user_name', $data['user']['name'], false);
+        update_option('voicero_username', $data['user']['username'], false);
+        update_option('voicero_email', $data['user']['email'], false);
+    }
+
+    // 13) Also update the local user settings to maintain backward compatibility
+    if (isset($user_data['name'])) {
+        update_option('voicero_user_name', $user_data['name']);
+    }
+    if (isset($user_data['username'])) {
+        update_option('voicero_username', $user_data['username']);
+    }
+    if (isset($user_data['email'])) {
+        update_option('voicero_email', $user_data['email']);
+    }
+
+    // 14) Return success
+    wp_send_json_success([
+        'message' => isset($data['message']) ? $data['message'] : esc_html__('User settings updated successfully', 'voicero-ai'),
+        'user' => isset($data['user']) ? $data['user'] : []
+    ]);
+}
+
+/**
+ * Handle the original AJAX request for user settings (backward compatibility)
+ */
+add_action('wp_ajax_voicero_save_user_settings', 'voicero_save_user_settings_ajax');
+
+function voicero_save_user_settings_ajax() {
+    // 1) Must be AJAX
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        wp_send_json_error(['message' => esc_html__('Invalid request type', 'voicero-ai')], 400);
+        return;
+    }
+
+    // 2) Verify nonce
+    $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+    if (!check_ajax_referer('voicero_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error(['message' => esc_html__('Invalid nonce', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 3) Check admin capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => esc_html__('Insufficient permissions', 'voicero-ai')], 403);
+        return;
+    }
+
+    // 4) Get user data from the original format
+    $user_name = isset($_REQUEST['user_name']) ? sanitize_text_field(wp_unslash($_REQUEST['user_name'])) : '';
+    $username = isset($_REQUEST['username']) ? sanitize_text_field(wp_unslash($_REQUEST['username'])) : '';
+    $email = isset($_REQUEST['email']) ? sanitize_email(wp_unslash($_REQUEST['email'])) : '';
+    
+    // 5) Log the request
+    error_log('Legacy user settings handler called with name: ' . $user_name . ', username: ' . $username . ', email: ' . $email);
+    
+    // 6) Convert to the new format
+    $_REQUEST['user_data'] = [
+        'name' => $user_name,
+        'username' => $username,
+        'email' => $email
+    ];
+    
+    // 7) Delegate to the new handler
+    return voicero_update_user_settings_ajax();
 }

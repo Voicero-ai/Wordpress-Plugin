@@ -410,8 +410,11 @@ function voicero_render_settings_page() {
                     <div class="voicero-field-value">5/31/2025, 10:24:40 PM</div>
                 </div>
                 
-                <div class="voicero-subscription-actions">
-                    <a href="#" class="button button-primary">
+                <div class="voicero-subscription-actions" id="subscription-button-container">
+                    <a href="<?php 
+                        $website_id = get_option('voicero_website_id', ''); 
+                        echo esc_url('http://localhost:3000/app/websites/website?id=' . $website_id);
+                    ?>" class="button button-primary" target="_blank">
                         <?php esc_html_e('Update Subscription', 'voicero-ai'); ?>
                     </a>
                 </div>
@@ -424,6 +427,20 @@ function voicero_render_settings_page() {
         ?>
         <script type="text/javascript">
         jQuery(document).ready(function($) {
+            // FIXED: Set the subscription link with proper debugging to ensure it works
+            console.log("Setting subscription link...");
+            console.log("voiceroConfig:", window.voiceroConfig);
+            
+            // Force set the link with the correct website ID
+            var websiteId = "<?php echo esc_js(get_option('voicero_website_id', '')); ?>";
+            console.log("Website ID from PHP:", websiteId);
+            
+            // Always set the link, using the PHP value directly
+            var subscriptionUrl = "http://localhost:3000/app/websites/website?id=" + websiteId;
+            console.log("Setting subscription URL to:", subscriptionUrl);
+            $('#update-subscription-link').attr('href', subscriptionUrl);
+            
+            // Clear connection handler
             $('#clear-connection').on('click', function() {
                 if (confirm('<?php esc_html_e('Are you sure you want to clear the connection? Your AI assistant will stop working until you reconnect.', 'voicero-ai'); ?>')) {
                     // Create a config object with fallbacks if voiceroConfig isn't defined

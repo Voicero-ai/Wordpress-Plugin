@@ -638,12 +638,7 @@ jQuery(document).ready(function ($) {
                 <p style="margin: 4px 0 0; color: #666; font-size: 14px;">Your store's AI-ready content</p>
               </div>
               <div style="padding: 20px;">
-                <div style="text-align: right; margin-bottom: 15px;">
-                  <button class="button sync-content-btn" id="sync-button">
-                    <span class="dashicons dashicons-update" style="margin-right: 5px;"></span>
-                    Sync Content
-                  </button>
-                </div>
+                
                 
                 <!-- Content Type Tabs - Only 3 buttons -->
                 <div style="display: flex; flex-wrap: wrap; margin: 0 -10px 20px;">

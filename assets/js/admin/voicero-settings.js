@@ -441,6 +441,8 @@
     // Show spinner or loading state
     showSavingState();
 
+    console.log("Save Website Info triggered");
+
     // Get form data
     const websiteName = $("#website-name").val();
     const websiteUrl = $("#website-url").val();
@@ -455,18 +457,29 @@
             nonce: $("#voicero_nonce").val(),
           };
 
-    // Send AJAX request
+    console.log("Using AJAX URL:", config.ajaxUrl);
+    console.log("Using nonce:", config.nonce);
+
+    // Prepare the data for API in the exact format expected
+    const websiteData = {
+      name: websiteName,
+      url: websiteUrl,
+      customInstructions: customInstructions,
+    };
+
+    console.log("Sending website data:", websiteData);
+
+    // Send AJAX request to our new proxy endpoint
     $.ajax({
       url: config.ajaxUrl,
       type: "POST",
       data: {
-        action: "voicero_save_website_info",
+        action: "voicero_update_website",
         nonce: config.nonce,
-        website_name: websiteName,
-        website_url: websiteUrl,
-        custom_instructions: customInstructions,
+        website_data: websiteData,
       },
       success: function (response) {
+        console.log("AJAX Success Response:", response);
         hideSavingState();
 
         if (response.success) {
@@ -490,13 +503,16 @@
           // Show success message
           showSuccessMessage("Website information updated successfully.");
         } else {
+          console.error("AJAX Error Response:", response);
           // Show error message
           showErrorMessage(
-            response.data.message || "An error occurred while saving."
+            response.data?.message || "An error occurred while saving."
           );
         }
       },
-      error: function () {
+      error: function (xhr, status, error) {
+        console.error("AJAX Request Failed:", status, error);
+        console.error("Response Text:", xhr.responseText);
         hideSavingState();
         showErrorMessage("An error occurred while saving. Please try again.");
       },
@@ -509,6 +525,8 @@
   function saveUserSettings() {
     // Show spinner or loading state
     showSavingState();
+
+    console.log("Save User Settings triggered");
 
     // Get form data
     const userName = $("#user-name").val();
@@ -524,18 +542,29 @@
             nonce: $("#voicero_nonce").val(),
           };
 
-    // Send AJAX request
+    console.log("Using AJAX URL:", config.ajaxUrl);
+    console.log("Using nonce:", config.nonce);
+
+    // Prepare the data for API in the exact format expected
+    const userData = {
+      name: userName,
+      username: username,
+      email: email,
+    };
+
+    console.log("Sending user data:", userData);
+
+    // Send AJAX request to our new proxy endpoint
     $.ajax({
       url: config.ajaxUrl,
       type: "POST",
       data: {
-        action: "voicero_save_user_settings",
+        action: "voicero_update_user_settings",
         nonce: config.nonce,
-        user_name: userName,
-        username: username,
-        email: email,
+        user_data: userData,
       },
       success: function (response) {
+        console.log("AJAX Success Response:", response);
         hideSavingState();
 
         if (response.success) {
@@ -550,13 +579,16 @@
           // Show success message
           showSuccessMessage("User settings updated successfully.");
         } else {
+          console.error("AJAX Error Response:", response);
           // Show error message
           showErrorMessage(
-            response.data.message || "An error occurred while saving."
+            response.data?.message || "An error occurred while saving."
           );
         }
       },
-      error: function () {
+      error: function (xhr, status, error) {
+        console.error("AJAX Request Failed:", status, error);
+        console.error("Response Text:", xhr.responseText);
         hideSavingState();
         showErrorMessage("An error occurred while saving. Please try again.");
       },
@@ -569,6 +601,8 @@
   function saveAIFeatures() {
     // Show spinner or loading state
     showSavingState();
+
+    console.log("Save AI Features triggered");
 
     // Get all toggle states
     const features = {};
@@ -621,16 +655,38 @@
             nonce: $("#voicero_nonce").val(),
           };
 
-    // Send AJAX request
+    console.log("Using AJAX URL:", config.ajaxUrl);
+    console.log("Using nonce:", config.nonce);
+
+    // Map WordPress feature names to API expected names
+    // Ensure each value is explicitly converted to boolean with !!
+    const apiFeatures = {
+      allowAutoRedirect: !!features.ai_redirect,
+      allowAutoScroll: !!features.ai_scroll,
+      allowAutoHighlight: !!features.ai_highlight,
+      allowAutoClick: !!features.ai_click,
+      allowAutoFillForm: !!features.ai_forms,
+      allowAutoCancel: !!features.ai_cancel_orders,
+      allowAutoTrackOrder: !!features.ai_track_orders,
+      allowAutoGetUserOrders: !!features.ai_order_history,
+      allowAutoUpdateUserInfo: !!features.ai_update_account,
+      allowAutoLogout: !!features.ai_logout,
+      allowAutoLogin: !!features.ai_login,
+    };
+
+    console.log("Sending API features:", apiFeatures);
+
+    // Send AJAX request to our new proxy endpoint
     $.ajax({
       url: config.ajaxUrl,
       type: "POST",
       data: {
-        action: "voicero_save_ai_features",
+        action: "voicero_update_website_autos",
         nonce: config.nonce,
-        features: features,
+        features: apiFeatures,
       },
       success: function (response) {
+        console.log("AJAX Success Response:", response);
         hideSavingState();
 
         if (response.success) {
@@ -643,13 +699,16 @@
           // Show success message
           showSuccessMessage("AI features updated successfully.");
         } else {
+          console.error("AJAX Error Response:", response);
           // Show error message
           showErrorMessage(
-            response.data.message || "An error occurred while saving."
+            response.data?.message || "An error occurred while saving."
           );
         }
       },
-      error: function () {
+      error: function (xhr, status, error) {
+        console.error("AJAX Request Failed:", status, error);
+        console.error("Response Text:", xhr.responseText);
         hideSavingState();
         showErrorMessage("An error occurred while saving. Please try again.");
       },
@@ -708,57 +767,76 @@
   function toggleStatus() {
     const isActive = $("#toggle-status").text().trim() === "Deactivate";
 
-    // Create a config object with fallbacks if voiceroConfig isn't defined
-    const config =
-      typeof voiceroConfig !== "undefined"
-        ? voiceroConfig
-        : {
-            ajaxUrl: ajaxurl,
-            nonce: $("#voicero_nonce").val(),
-          };
+    // Show loading overlay
+    showLoadingOverlay("Updating status...");
 
-    // Send AJAX request
-    $.ajax({
-      url: config.ajaxUrl,
-      type: "POST",
-      data: {
-        action: "voicero_toggle_status",
-        nonce: config.nonce,
-        status: !isActive,
+    // Get website ID from the page if available
+    let websiteId = "";
+    if (typeof voiceroConfig !== "undefined" && voiceroConfig.websiteId) {
+      websiteId = voiceroConfig.websiteId;
+    }
+
+    // Use apiUrl from voiceroConfig or fallback to localhost
+    const apiUrl =
+      typeof voiceroConfig !== "undefined" && voiceroConfig.apiUrl
+        ? voiceroConfig.apiUrl
+        : "http://localhost:3000/api";
+
+    // Get access key from config
+    const accessKey =
+      typeof voiceroConfig !== "undefined" && voiceroConfig.accessKey
+        ? voiceroConfig.accessKey
+        : $("#voicero_access_key").val();
+
+    // Send fetch request to toggle status API
+    fetch(apiUrl + "/websites/toggle-status", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-      success: function (response) {
-        if (response.success) {
-          if (isActive) {
-            // Update to deactivated state
-            $(".voicero-status-active")
-              .text("Inactive")
-              .removeClass("voicero-status-active")
-              .addClass("voicero-status-inactive");
-            $("#toggle-status").text("Activate");
-          } else {
-            // Update to activated state
-            $(".voicero-status-inactive")
-              .text("Active")
-              .removeClass("voicero-status-inactive")
-              .addClass("voicero-status-active");
-            $("#toggle-status").text("Deactivate");
-          }
+      body: JSON.stringify({
+        websiteId: websiteId || undefined,
+        accessKey: accessKey || undefined,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        hideLoadingOverlay();
 
-          // Show success message
-          showSuccessMessage(
-            `Voicero AI has been ${
-              isActive ? "deactivated" : "activated"
-            } successfully.`
-          );
-        } else {
-          // Show error message
-          showErrorMessage(response.data.message || "An error occurred.");
+        if (data.error) {
+          throw new Error(data.error);
         }
-      },
-      error: function () {
-        showErrorMessage("An error occurred. Please try again.");
-      },
-    });
+
+        if (isActive) {
+          // Update to deactivated state
+          $(".voicero-status-active")
+            .text("Inactive")
+            .removeClass("voicero-status-active")
+            .addClass("voicero-status-inactive");
+          $("#toggle-status").text("Activate");
+        } else {
+          // Update to activated state
+          $(".voicero-status-inactive")
+            .text("Active")
+            .removeClass("voicero-status-inactive")
+            .addClass("voicero-status-active");
+          $("#toggle-status").text("Deactivate");
+        }
+
+        // Show success message
+        showSuccessMessage(
+          `Voicero AI has been ${
+            isActive ? "deactivated" : "activated"
+          } successfully.`
+        );
+      })
+      .catch((error) => {
+        hideLoadingOverlay();
+        showErrorMessage(
+          error.message ||
+            "An error occurred while updating status. Please try again."
+        );
+      });
   }
 
   /**
@@ -880,5 +958,55 @@
                 }
             </style>
         `);
+
+    // Create and inject the subscription button
+    function createSubscriptionButton() {
+      console.log("Creating subscription button...");
+
+      // Get website ID from multiple possible sources
+      let websiteId = "";
+
+      // Try to get from voiceroConfig
+      if (typeof voiceroConfig !== "undefined" && voiceroConfig.websiteId) {
+        websiteId = voiceroConfig.websiteId;
+        console.log("Got websiteId from voiceroConfig:", websiteId);
+      }
+      // Try to get from voiceroAdminConfig
+      else if (
+        typeof voiceroAdminConfig !== "undefined" &&
+        voiceroAdminConfig.websiteId
+      ) {
+        websiteId = voiceroAdminConfig.websiteId;
+        console.log("Got websiteId from voiceroAdminConfig:", websiteId);
+      }
+
+      console.log("Final websiteId:", websiteId);
+
+      // ALWAYS create the button, even without websiteId
+      const subscriptionUrl = websiteId
+        ? "http://localhost:3000/app/websites/website?id=" + websiteId
+        : "http://localhost:3000/app/websites";
+
+      console.log("Creating button with URL:", subscriptionUrl);
+
+      const button = $("<a></a>")
+        .attr("href", subscriptionUrl)
+        .attr("class", "button button-primary")
+        .attr("target", "_blank")
+        .text("Update Subscription");
+
+      // Add the button to the container
+      $("#subscription-button-container").html(button);
+      console.log("Subscription button created and added to page");
+
+      // For debugging, log if container exists
+      console.log(
+        "Container exists:",
+        $("#subscription-button-container").length > 0
+      );
+    }
+
+    // Call the function to create the button with slight delay to ensure DOM is ready
+    setTimeout(createSubscriptionButton, 500);
   });
 })(jQuery);
