@@ -147,6 +147,17 @@ add_action('rest_api_init', function() {
         ]
     );
 
+    // 10) Second Look analysis endpoint
+    register_rest_route(
+        'voicero/v1',
+        '/wordpress/secondLook',
+        [
+            'methods'             => 'POST',
+            'callback'            => 'voicero_second_look_proxy',
+            'permission_callback' => '__return_true', // Allow all users to use the second look feature
+        ]
+    );
+
     // Register the websites/get endpoint
     register_rest_route(
         'voicero/v1',
@@ -418,6 +429,114 @@ function voicero_chat_proxy($request) {
     // Return the API response
     $status_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
+    
+    return new WP_REST_Response(json_decode($response_body, true), $status_code);
+}
+
+/**
+ * Proxy for the SecondLook feature that analyzes forms and product pages
+ * 
+ * @param WP_REST_Request $request The incoming request
+ * @return WP_REST_Response The response from the API
+ */
+function voicero_second_look_proxy($request) {
+    // Get the access key from options (server-side only)
+    $access_key = voicero_get_access_key();
+    if (empty($access_key)) {
+        return new WP_REST_Response(['error' => 'No access key configured'], 403);
+    }
+    
+    // Get the request body
+    $body = $request->get_body();
+    
+    // Decode the body to validate it has the required fields
+    $decoded_body = json_decode($body, true);
+    if (!isset($decoded_body['sessionId'])) {
+        return new WP_REST_Response(['error' => 'Session ID is required'], 400);
+    }
+    
+    // Check for either websitePageData or formData (backward compatibility)
+    if (!isset($decoded_body['websitePageData']) && (!isset($decoded_body['formData']) || !is_array($decoded_body['formData']))) {
+        return new WP_REST_Response(['error' => 'Website page data is required'], 400);
+    }
+    
+    // Construct the API endpoint
+    $endpoint = VOICERO_API_URL . '/wordpress/secondLook';
+    
+    // Log the request for debugging
+    error_log('VoiceroSecondLook: Forwarding request to ' . $endpoint);
+    error_log('VoiceroSecondLook: Original request body (first 1000 chars): ' . substr($body, 0, 1000));
+    
+    // If we got websitePageData, ensure it's correctly handled before forwarding
+    if (isset($decoded_body['websitePageData'])) {
+        // Convert websitePageData to formData format according to the API's expectations
+        $formData = [
+            'forms' => [],
+            'url' => $decoded_body['url'] ?? $decoded_body['websitePageData']['url'] ?? ''
+        ];
+        
+        // Extract forms from websitePageData if they exist
+        if (isset($decoded_body['websitePageData']['forms']) && is_array($decoded_body['websitePageData']['forms'])) {
+            foreach ($decoded_body['websitePageData']['forms'] as $idx => $form) {
+                // Structure the form data according to the expected API format
+                $formFields = [];
+                
+                // Try to extract input fields if available
+                if (isset($decoded_body['websitePageData']['inputs']) && is_array($decoded_body['websitePageData']['inputs'])) {
+                    foreach ($decoded_body['websitePageData']['inputs'] as $input) {
+                        $formFields[] = [
+                            'name' => $input['name'] ?? $input['id'] ?? 'field_' . rand(1000, 9999),
+                            'type' => $input['type'] ?? 'text',
+                            'label' => $input['label'] ?? $input['placeholder'] ?? '',
+                            'placeholder' => $input['placeholder'] ?? '',
+                            'required' => false
+                        ];
+                    }
+                }
+                
+                $formData['forms'][] = [
+                    'form_id' => $form['id'] ?? 'form_' . ($idx + 1),
+                    'title' => 'Form ' . ($idx + 1),
+                    'fields' => $formFields,
+                    'submit_text' => 'Submit'
+                ];
+            }
+        }
+        
+        // Replace the old formData with our new structure
+        $decoded_body['formData'] = $formData;
+        
+        // Re-encode the body with the new structure
+        $body = json_encode($decoded_body);
+        
+        // Log the transformed request for debugging
+        error_log('VoiceroSecondLook: Transformed request body: ' . substr($body, 0, 1000));
+    }
+    
+    // Make the POST request with the key (server-side)
+    $response = wp_remote_post($endpoint, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $access_key,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ],
+        'body' => $body,
+        'timeout' => 30, // Longer timeout for analysis
+        'sslverify' => false // Only for local development
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log('VoiceroSecondLook: API request failed: ' . $response->get_error_message());
+        return new WP_REST_Response([
+            'error' => 'API request failed: ' . $response->get_error_message()
+        ], 500);
+    }
+    
+    // Return the API response
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    error_log('VoiceroSecondLook: API response status: ' . $status_code);
     
     return new WP_REST_Response(json_decode($response_body, true), $status_code);
 }

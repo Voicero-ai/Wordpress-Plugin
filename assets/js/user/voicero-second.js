@@ -870,7 +870,7 @@
 
       console.log("VoiceroSecond: Using API base URL:", apiBaseUrl);
 
-      const apiUrl = `${apiBaseUrl}/api/shopify/chat/secondLook`;
+      const apiUrl = `/wp-json/voicero/v1/wordpress/secondLook`;
       console.log("VoiceroSecond: Full API URL:", apiUrl);
 
       // Get auth headers from config if available

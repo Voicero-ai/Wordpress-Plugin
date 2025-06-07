@@ -190,6 +190,20 @@ const VoiceroVoice = {
     }
   },
 
+  // Setup container references for the voice chat interface
+  setupContainers: function () {
+    // Initialize references to important containers
+    this.messagesContainer = document.getElementById("voice-messages");
+    this.interfaceContainer = document.getElementById("voice-chat-interface");
+    this.inputContainer = document.getElementById("voice-input-wrapper");
+
+    // Log status of container initialization
+    console.log("VoiceroVoice: Setting up container references");
+
+    // If the interface doesn't exist yet, these will be null
+    // They'll be properly set after createVoiceChatInterface() runs
+  },
+
   // Create voice chat interface (HTML structure)
   createVoiceChatInterface: function () {
     // Check if the interface already exists
@@ -4312,6 +4326,11 @@ Feel free to ask me anything, and I'll do my best to assist you!`;
         window.VoiceroCore.session.voiceWelcome !== undefined
           ? window.VoiceroCore.session.voiceWelcome
           : false;
+
+      // Disable any further state updates for a short period to prevent conflicts
+      if (window.VoiceroCore.disableStateUpdates) {
+        window.VoiceroCore.disableStateUpdates(1000); // Disable for 1 second
+      }
 
       window.VoiceroCore.updateWindowState({
         textOpen: true,

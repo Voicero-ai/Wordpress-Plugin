@@ -40,6 +40,67 @@
     // Queue for pending session operations
     pendingSessionOperations: [],
 
+    // Flag to track if state updates are disabled
+    stateUpdatesDisabled: false,
+    stateUpdateDisableTimer: null,
+
+    // Function to temporarily disable state updates
+    disableStateUpdates: function (duration = 1000) {
+      console.log(`VoiceroCore: Disabling state updates for ${duration}ms`);
+
+      // Set the disabled flag
+      this.stateUpdatesDisabled = true;
+
+      // Clear any existing timer
+      if (this.stateUpdateDisableTimer) {
+        clearTimeout(this.stateUpdateDisableTimer);
+      }
+
+      // Set a timer to re-enable updates after the specified duration
+      this.stateUpdateDisableTimer = setTimeout(() => {
+        console.log("VoiceroCore: Re-enabling state updates");
+        this.stateUpdatesDisabled = false;
+        this.stateUpdateDisableTimer = null;
+
+        // Process any queued updates
+        if (
+          this.pendingWindowStateUpdates &&
+          this.pendingWindowStateUpdates.length > 0
+        ) {
+          console.log(
+            `VoiceroCore: Processing ${this.pendingWindowStateUpdates.length} queued updates`
+          );
+
+          // Take only the most recent update for each property to avoid conflicts
+          const latestUpdate = {};
+
+          // Process updates in reverse order (newest first)
+          for (let i = this.pendingWindowStateUpdates.length - 1; i >= 0; i--) {
+            const update = this.pendingWindowStateUpdates[i];
+
+            // Add each property from this update to the latest update if not already present
+            Object.keys(update).forEach((key) => {
+              if (latestUpdate[key] === undefined) {
+                latestUpdate[key] = update[key];
+              }
+            });
+          }
+
+          // Apply the combined update
+          if (Object.keys(latestUpdate).length > 0) {
+            console.log(
+              "VoiceroCore: Applying queued state update:",
+              latestUpdate
+            );
+            this.updateWindowState(latestUpdate);
+          }
+
+          // Clear the queue
+          this.pendingWindowStateUpdates = [];
+        }
+      }, duration);
+    },
+
     // Initialize on page load
     init: function () {
       console.log("VoiceroCore: Initializing");
@@ -1827,6 +1888,38 @@
     updateWindowState: function (windowState) {
       console.log("VoiceroCore: Updating window state", windowState);
 
+      // Check if state updates are disabled
+      if (this.stateUpdatesDisabled) {
+        console.log("VoiceroCore: State updates are disabled, queueing update");
+
+        // Add to pending updates queue to be processed when re-enabled
+        this.pendingWindowStateUpdates = this.pendingWindowStateUpdates || [];
+        this.pendingWindowStateUpdates.push(windowState);
+
+        // Return a resolved promise to maintain API consistency
+        return Promise.resolve({ success: false, reason: "updates_disabled" });
+      }
+
+      // Check if there's already an update in progress
+      if (this.isUpdateInProgress) {
+        console.log(
+          "VoiceroCore: Another update is in progress, queueing update"
+        );
+
+        // Add to pending updates queue
+        this.pendingWindowStateUpdates = this.pendingWindowStateUpdates || [];
+        this.pendingWindowStateUpdates.push(windowState);
+
+        // Return a resolved promise to maintain API consistency
+        return Promise.resolve({
+          success: false,
+          reason: "update_in_progress",
+        });
+      }
+
+      // Set the lock flag
+      this.isUpdateInProgress = true;
+
       // Check for redundant chooserOpen updates but NEVER skip them
       if (windowState.chooserOpen !== undefined && this.session) {
         if (windowState.chooserOpen === this.session.chooserOpen) {
@@ -2046,12 +2139,48 @@
 
             this.isSessionOperationInProgress = false;
             this.lastSessionOperationTime = Date.now();
+
+            // Reset the update lock flag
+            this.isUpdateInProgress = false;
+
+            // Process any pending updates
+            if (
+              this.pendingWindowStateUpdates &&
+              this.pendingWindowStateUpdates.length > 0 &&
+              !this.stateUpdatesDisabled
+            ) {
+              console.log(
+                `VoiceroCore: Processing next queued update (${this.pendingWindowStateUpdates.length} remaining)`
+              );
+              const nextUpdate = this.pendingWindowStateUpdates.shift();
+              setTimeout(() => {
+                this.updateWindowState(nextUpdate);
+              }, 100); // Small delay to prevent tight loops
+            }
           })
           .catch((error) => {
             console.error("VoiceroCore: Window state update failed:", error);
 
             this.isSessionOperationInProgress = false;
             this.lastSessionOperationTime = Date.now();
+
+            // Reset the update lock flag even on error
+            this.isUpdateInProgress = false;
+
+            // Process any pending updates even after an error
+            if (
+              this.pendingWindowStateUpdates &&
+              this.pendingWindowStateUpdates.length > 0 &&
+              !this.stateUpdatesDisabled
+            ) {
+              console.log(
+                `VoiceroCore: Processing next queued update after error (${this.pendingWindowStateUpdates.length} remaining)`
+              );
+              const nextUpdate = this.pendingWindowStateUpdates.shift();
+              setTimeout(() => {
+                this.updateWindowState(nextUpdate);
+              }, 100); // Small delay to prevent tight loops
+            }
           });
       }, 0);
     },

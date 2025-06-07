@@ -4136,6 +4136,11 @@ Feel free to ask me anything, and I'll do my best to assist you!`;
           ? window.VoiceroCore.session.voiceWelcome
           : false;
 
+      // Disable any further state updates for a short period to prevent conflicts
+      if (window.VoiceroCore.disableStateUpdates) {
+        window.VoiceroCore.disableStateUpdates(1000); // Disable for 1 second
+      }
+
       const updateResult = window.VoiceroCore.updateWindowState({
         voiceOpen: true,
         voiceOpenWindowUp: true, // Explicitly set to true to ensure maximized
